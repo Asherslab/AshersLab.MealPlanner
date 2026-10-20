@@ -23,6 +23,8 @@ Present tense, kept current, no dates.
 
 - [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
+- [The browser database](modules/sync/browser-database.md) — EF Core SQLite in OPFS, the `wasm-tools`
+  workload trap, starting it after the first render, local migrations, and what it costs.
 
 ## The other three directories
 
@@ -47,8 +49,8 @@ Present tense, kept current, no dates.
 
 ### Open
 
-- [SQLite in the browser](open-questions/sqlite-in-the-browser.md) — does an EF Core SQLite database
-  survive a reload on Safari iOS? Slice 1.
+- [SQLite in the browser](open-questions/sqlite-in-the-browser.md) — proven in Chrome; waiting on the
+  owner's iPhone check, whose steps it lists.
 - [Blazor WASM behind Home Assistant ingress](open-questions/home-assistant-ingress.md) — base path,
   gRPC-Web, identity headers, the Pi. Slice 3.
 - [Reading Costco receipts with OCR in the browser](open-questions/costco-ocr.md) — is tesseract.js

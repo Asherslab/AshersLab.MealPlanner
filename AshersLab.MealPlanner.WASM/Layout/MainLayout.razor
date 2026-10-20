@@ -4,6 +4,8 @@
 <MudPopoverProvider/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
+@* Opens the browser database after the first render, whichever page loads first. Renders nothing. *@
+<SqliteWasmBlazor.SqliteWasmDatabaseInitializer/>
 
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">

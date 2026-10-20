@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AshersLab.MealPlanner.WASM"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AshersLab.MealPlanner.Tests", "AshersLab.MealPlanner.Tests\AshersLab.MealPlanner.Tests.csproj", "{4E453A75-8158-4217-A352-18BA535FB5F6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AshersLab.MealPlanner.LocalData", "AshersLab.MealPlanner.LocalData\AshersLab.MealPlanner.LocalData.csproj", "{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{FBEB0265-1454-4FE6-9879-C7C7E8AE6883}"
 	ProjectSection(SolutionItems) = preProject
 		docs\AGENTS.md = docs\AGENTS.md
@@ -28,6 +30,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{F5CEBEAF-8131-46D3-BF40-5BD5B8E554B1}"
 	ProjectSection(SolutionItems) = preProject
 		docs\modules\infrastructure\hosting.md = docs\modules\infrastructure\hosting.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sync", "sync", "{40EBDCC4-B806-496B-A5E1-F709430AC2AB}"
+	ProjectSection(SolutionItems) = preProject
+		docs\modules\sync\browser-database.md = docs\modules\sync\browser-database.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "open-questions", "open-questions", "{9F36046B-D670-48EE-8A95-18FFAED4C4BF}"
@@ -47,12 +54,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "work", "work", "{E246D070-6
 	EndProjectSection
 EndProject
 Global
-	GlobalSection(NestedProjects) = preSolution
-		{331AE102-A8F0-47ED-9C68-E28C98929852} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
-		{F5CEBEAF-8131-46D3-BF40-5BD5B8E554B1} = {331AE102-A8F0-47ED-9C68-E28C98929852}
-		{9F36046B-D670-48EE-8A95-18FFAED4C4BF} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
-		{E246D070-6AAB-4CF7-B7DE-F885A8F04473} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Debug|x64 = Debug|x64
@@ -146,8 +147,27 @@ Global
 		{4E453A75-8158-4217-A352-18BA535FB5F6}.Release|x64.Build.0 = Release|Any CPU
 		{4E453A75-8158-4217-A352-18BA535FB5F6}.Release|x86.ActiveCfg = Release|Any CPU
 		{4E453A75-8158-4217-A352-18BA535FB5F6}.Release|x86.Build.0 = Release|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Debug|x64.Build.0 = Debug|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Debug|x86.Build.0 = Debug|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Release|x64.ActiveCfg = Release|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Release|x64.Build.0 = Release|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Release|x86.ActiveCfg = Release|Any CPU
+		{ACD2C0FD-8D46-4614-B535-8DA59EA6E21E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{331AE102-A8F0-47ED-9C68-E28C98929852} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
+		{F5CEBEAF-8131-46D3-BF40-5BD5B8E554B1} = {331AE102-A8F0-47ED-9C68-E28C98929852}
+		{40EBDCC4-B806-496B-A5E1-F709430AC2AB} = {331AE102-A8F0-47ED-9C68-E28C98929852}
+		{9F36046B-D670-48EE-8A95-18FFAED4C4BF} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
+		{E246D070-6AAB-4CF7-B7DE-F885A8F04473} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
 	EndGlobalSection
 EndGlobal

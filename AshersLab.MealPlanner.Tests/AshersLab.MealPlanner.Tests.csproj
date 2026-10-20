@@ -22,6 +22,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\AshersLab.MealPlanner.Grpc\AshersLab.MealPlanner.Grpc.csproj" />
+        <ProjectReference Include="..\AshersLab.MealPlanner.LocalData\AshersLab.MealPlanner.LocalData.csproj" />
         <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Domain\AshersLab.MealPlanner.Shared.Domain.csproj" />
     </ItemGroup>
 

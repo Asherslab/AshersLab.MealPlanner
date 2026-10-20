@@ -1,9 +1,13 @@
+using AshersLab.MealPlanner.LocalData;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server;
 using AshersLab.MealPlanner.WASM;
+using AshersLab.MealPlanner.WASM.Data;
 using AshersLab.MealPlanner.WASM.Extensions;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
+using SqliteWasmBlazor;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -17,5 +21,15 @@ Uri api = new(builder.HostEnvironment.BaseAddress);
 // A page injecting an unregistered service fails at RUNTIME, not at build, so a new service contract needs
 // a line here as well as a MapGrpcService on the server.
 builder.Services.AddCodeFirstClient<IServerInfoService>(api);
+
+// The browser's own SQLite, in OPFS. Registration only: nothing opens it until after the first render, when
+// LocalDatabase.ReadyAsync starts the worker and migrates (docs/modules/sync/browser-database.md). BaseHref
+// is set because under Home Assistant ingress the app is not at "/", and the worker script is fetched
+// relative to it.
+builder.Services.AddDbContextFactory<LocalDbContext>(options =>
+    options.UseSqliteWasm(new SqliteWasmConnection("Data Source=mealplanner.db")));
+builder.Services.AddSqliteWasm(options => options.BaseHref = api.AbsolutePath);
+builder.Services.AddSqliteWasmDbContext<LocalDbContext>();
+builder.Services.AddScoped<LocalDatabase>();
 
 await builder.Build().RunAsync();

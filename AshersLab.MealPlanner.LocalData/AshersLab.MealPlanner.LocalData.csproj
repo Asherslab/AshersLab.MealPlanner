@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        The browser's own database: the EF model and its migrations, referenced by the WASM app, which opens
+        it through SqliteWasmBlazor (OPFS). A separate project rather than a folder in the WASM app because
+        `dotnet ef` cannot use a browser-wasm project as its startup project - it has to load the assembly in
+        a normal .NET process, which this plain class library allows.
+
+        Only the EF Core packages, at the version SqliteWasmBlazor is built against: everything here is
+        downloaded by every phone on first load.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+        <!-- Design-time only. Without these asset limits it is published into the WASM app and breaks it. -->
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+            <IncludeAssets>runtime; analyzers</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>

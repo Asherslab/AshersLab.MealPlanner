@@ -47,7 +47,8 @@ How to *run* it locally is in `.claude/app-local.md`; why it is one image is in 
 | `AshersLab.MealPlanner.Shared.Contracts` | protobuf-net records and code-first service interfaces. Rules in its `AGENTS.md`. |
 | `AshersLab.MealPlanner.Shared.Domain` | Pure rules both ends run — costing, units, merge rules. No packages, no I/O. Empty until slice 2. |
 | `AshersLab.MealPlanner.Grpc` | The one production process: gRPC-Web, the WASM files, EF Core over SQLite. References the WASM project so its files are this project's static web assets. |
-| `AshersLab.MealPlanner.WASM` | Blazor WebAssembly + MudBlazor. References only the two `Shared` projects — never the server. |
+| `AshersLab.MealPlanner.WASM` | Blazor WebAssembly + MudBlazor. References the two `Shared` projects and `LocalData` — never the server. |
+| `AshersLab.MealPlanner.LocalData` | The browser database's EF model and migrations — see [the browser database](../sync/browser-database.md). Its own project only so `dotnet ef` can load it. |
 | `AshersLab.MealPlanner.Tests` | xunit v3. Hosts the real `Program` in process (`WebApplicationFactory`) and calls it over **gRPC-Web**, the protocol the browser uses — a plain-gRPC test would pass for a service the browser cannot reach. |
 
 Compared with the GSBC repos this drops the YARP BFF, the nginx WASM image, the separate WASM dev-server

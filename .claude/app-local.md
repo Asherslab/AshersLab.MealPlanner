@@ -107,7 +107,55 @@ The host migrates at startup, so a missing table means the host has not started,
 migration job is pending. Nothing in it is worth keeping until the household uses the app — delete
 the folder to start over (stop the app first; SQLite holds `-wal`/`-shm` files beside it).
 
-The browser's own SQLite arrives in slice 1; how to read it will be written here then.
+## The browser database
+
+How it works is in `docs/modules/sync/browser-database.md`. How to look at it:
+
+- **In the page** — the home page's "This device" card (`data-testid` `device-id`, `device-open-count`,
+  `device-storage`, or `local-db-state` when it could not open) reads the `Device` row through EF.
+- **Independently, with `sqlite3`** — copy the file out of OPFS. The Chrome extension's output filter
+  refuses base64 *and* hex, so the bytes cannot come back through `javascript_tool`'s result; the page
+  POSTs them to a receiver on 127.0.0.1 instead:
+
+  ```bash
+  python3 -I .claude/tools/opfs-receive.py <scratch>/opfs      # run_in_background
+  ```
+
+  then run `.claude/tools/opfs-dump.js` in the page with `javascript_tool` (set its `label`), and:
+
+  ```bash
+  mkdir -p <scratch>/read && cp <scratch>/opfs/<label>-mealplanner.db <scratch>/read/m.db \
+    && cp <scratch>/opfs/<label>-mealplanner.db-wal <scratch>/read/m.db-wal \
+    && sqlite3 <scratch>/read/m.db 'select * from Device;'
+  ```
+
+  Copy the `-wal` too: committed rows usually live there until a checkpoint.
+- **Across a browser restart** — never quit the user's Chrome. `.claude/tools/chrome-restart-check.mjs`
+  launches a separate headless Chrome on a throwaway profile, reads the card, and ends the browser with
+  `Browser.close` or `SIGKILL`; run it repeatedly on the same profile directory.
+- **Wiping it** — DevTools → Application → Storage → "Clear site data", or in the page
+  `await (await navigator.storage.getDirectory()).removeEntry('databases', {recursive: true})` with every
+  app tab closed but one, then reload.
+
+Browser-database migrations are generated in `AshersLab.MealPlanner.LocalData`, not the host:
+
+```bash
+cd AshersLab.MealPlanner.LocalData && dotnet ef migrations add <WhatItDoes> -o Migrations
+```
+
+## The `wasm-tools` workload
+
+The WASM project relinks the .NET runtime (`WasmBuildNative`), which needs `wasm-tools`. This machine's
+SDK is Homebrew's 10.0.401 (runtime 10.0.12), which lags the newest workload set, so the workload is pinned
+to the SDK's own set:
+
+```bash
+dotnet workload install wasm-tools
+dotnet workload update --version 10.0.401    # after any SDK upgrade, use the new SDK's version
+```
+
+The symptom of a mismatch is a successful build and a page stuck on "Loading…" with
+`RuntimeError: function signature mismatch` in the console.
 
 ## Migrations
 

@@ -5,7 +5,8 @@
 
 @*
     The scaffold's proof of wiring: one gRPC-Web call from the browser to the host, which answers from its
-    SQLite database. Replaced by the real landing page once there is something to plan.
+    SQLite database, and the browser's own SQLite below it. Replaced by the real landing page once there is
+    something to plan.
 *@
 
 <PageTitle>Meal Planner</PageTitle>
@@ -53,6 +54,10 @@
         }
     </MudCardContent>
 </MudCard>
+
+<div class="mt-4">
+    <ThisDeviceCard/>
+</div>
 
 @code {
     private ServerInfo? _info;

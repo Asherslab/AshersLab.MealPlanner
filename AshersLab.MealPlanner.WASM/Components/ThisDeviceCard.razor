@@ -1,0 +1,77 @@
+@using AshersLab.MealPlanner.WASM.Data
+@using SqliteWasmBlazor
+@inject LocalDatabase Database
+
+@*
+    The browser database's proof of life: the Device row it keeps for this browser profile. The id staying put
+    and the count going up across reloads and browser restarts is what "the database persists" looks like.
+*@
+
+<MudCard Outlined="true">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h6">This device</MudText>
+        </CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent>
+        @if (_start is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
+        }
+        else if (_start.State == DbInitState.TAB_LOCKED)
+        {
+            <MudAlert Severity="Severity.Warning" data-testid="local-db-state">
+                The meal planner is already open in another tab. Close this one and use that.
+            </MudAlert>
+        }
+        else if (_start.Device is not { } device)
+        {
+            <MudAlert Severity="Severity.Error" data-testid="local-db-state">
+                This browser could not open its copy of the data (@_start.State): @_start.Failure
+            </MudAlert>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0">
+                <tbody>
+                <tr>
+                    <th scope="row">Device</th>
+                    <td data-testid="device-id">@device.Id</td>
+                </tr>
+                <tr>
+                    <th scope="row">First opened</th>
+                    <td data-testid="device-first-opened">@device.FirstOpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                </tr>
+                <tr>
+                    <th scope="row">Opened</th>
+                    <td data-testid="device-open-count">@device.OpenCount @(device.OpenCount == 1 ? "time" : "times")</td>
+                </tr>
+                <tr>
+                    <th scope="row">Storage</th>
+                    <td data-testid="device-storage">@StorageText(_start.StoragePersisted)</td>
+                </tr>
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private LocalDatabaseStart? _start;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _start = await Database.StartAsync();
+        StateHasChanged();
+    }
+
+    private static string StorageText(bool? persisted) => persisted switch
+    {
+        true  => "Kept by the browser",
+        false => "May be cleared by the browser if unused - the server copy restores it",
+        null  => "This browser cannot promise to keep it",
+    };
+}

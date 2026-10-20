@@ -10,6 +10,13 @@
             fingerprint blazor.webassembly.js without rewriting index.html's reference to it, and the
             published site was a blank page - while the dev server, which does not fingerprint, worked fine.
         -->
+
+        <!--
+            The browser database (SqliteWasmBlazor) links its SQLite stub into dotnet.native.wasm, so the
+            runtime is relinked on every build. Needs the `wasm-tools` workload - on a dev machine and in the
+            Dockerfile's build stage. See docs/modules/sync/browser-database.md.
+        -->
+        <WasmBuildNative>true</WasmBuildNative>
     </PropertyGroup>
 
     <ItemGroup>
@@ -20,10 +27,14 @@
         <PackageReference Include="Grpc.Net.Client.Web" Version="2.71.0" />
         <PackageReference Include="Grpc.Net.ClientFactory" Version="2.71.0" />
         <PackageReference Include="protobuf-net.Grpc.ClientFactory" Version="1.2.2" />
+
+        <!-- Pre-1.0. EF Core over the official sqlite-wasm in a Web Worker, stored in OPFS. -->
+        <PackageReference Include="SqliteWasmBlazor" Version="0.9.4-pre" />
     </ItemGroup>
 
     <!-- Never the Grpc project: the client only ever sees the wire contract and the shared pure rules. -->
     <ItemGroup>
+        <ProjectReference Include="..\AshersLab.MealPlanner.LocalData\AshersLab.MealPlanner.LocalData.csproj" />
         <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Contracts\AshersLab.MealPlanner.Shared.Contracts.csproj" />
         <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Domain\AshersLab.MealPlanner.Shared.Domain.csproj" />
     </ItemGroup>
