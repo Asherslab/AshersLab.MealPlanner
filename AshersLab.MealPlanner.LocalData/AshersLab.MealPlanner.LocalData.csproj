@@ -24,4 +24,13 @@
         </PackageReference>
     </ItemGroup>
 
+    <!--
+        Shared.Data: the synced tables and the op applier, shared with the server's database. Contracts: for
+        SyncRound, which talks to the server - here rather than in the WASM app so tests can run it.
+    -->
+    <ItemGroup>
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Contracts\AshersLab.MealPlanner.Shared.Contracts.csproj" />
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Data\AshersLab.MealPlanner.Shared.Data.csproj" />
+    </ItemGroup>
+
 </Project>

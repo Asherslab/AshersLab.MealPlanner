@@ -28,6 +28,7 @@
     <ItemGroup>
         <ProjectReference Include="..\AshersLab.MealPlanner.ServiceDefaults\AshersLab.MealPlanner.ServiceDefaults.csproj" />
         <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Contracts\AshersLab.MealPlanner.Shared.Contracts.csproj" />
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Data\AshersLab.MealPlanner.Shared.Data.csproj" />
         <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Domain\AshersLab.MealPlanner.Shared.Domain.csproj" />
         <ProjectReference Include="..\AshersLab.MealPlanner.WASM\AshersLab.MealPlanner.WASM.csproj" />
     </ItemGroup>

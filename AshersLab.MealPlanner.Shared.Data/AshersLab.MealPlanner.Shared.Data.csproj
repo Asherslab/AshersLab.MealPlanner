@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        The synced entities' EF model and the code that applies an op to them - referenced by BOTH databases:
+        the server's (Grpc) and the browser's (LocalData). One applier, so a browser and the server cannot
+        disagree about what an op does; the merge decision inside it is Shared.Domain's OpMerge.
+
+        Only EF Core itself, at the version SqliteWasmBlazor is built against - no provider. Each side brings
+        its own SQLite provider, and the phone already downloads EF Core for LocalData.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Domain\AshersLab.MealPlanner.Shared.Domain.csproj" />
+    </ItemGroup>
+
+</Project>

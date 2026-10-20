@@ -18,7 +18,7 @@ code:
 # The browser database
 
 Each browser keeps its own SQLite database, which the app reads and writes while offline; the server's
-copy is the master (see the [offline sync design](../../work/2026-10-offline-sync.md)). Read this before
+copy is the master (see [offline sync](offline-sync.md)). Read this before
 adding a local table, a local migration, or anything that waits on the local database.
 
 ## Traps first
@@ -39,12 +39,20 @@ adding a local table, a local migration, or anything that waits on the local dat
   creates; anything that starts SqliteWasmBlazor earlier gets an unshared worker, and every other window
   of the app then fails with `TAB_LOCKED`. The script is not a `<script>` tag on purpose: a script tag whose
   download is dropped fails silently, and that exact failure was seen (see "Several windows").
+- **One context at a time in a window - get them only from `LocalDatabase.Contexts`.** Every context in a
+  window shares SqliteWasmBlazor's one connection object, so two alive at once break each other: overlapping
+  transactions fail with `cannot start a transaction within a transaction`, and a plain read in a second
+  context can close the connection under the first (`Connection must be Open`) or join its transaction. Seen in
+  Chrome with a sync round and two quick adds. `Contexts` is a `SerialLocalDbContextFactory`
+  (`LocalData/SerialLocalDbContextFactory.cs`): the next `CreateDbContextAsync` waits until the last context is
+  disposed. So never hold a context across a network call or a wait on the user, and never open a second while
+  holding one - that waits forever. The sync-free `CreateDbContext` throws; there is no blocking wait on the
+  browser's one thread. `SyncEndToEndTests.Overlapping_writes_and_a_round_in_one_window_do_not_collide` fails
+  without it - its test browser yields before every statement, because in-memory SQLite never interleaves.
 - **Every window of the app shares one SQLite connection.** Two `BEGIN`s cannot overlap: the shim holds
   other windows' statements while one window's transaction is open. A transaction that waits on another
-  window, or on the user, holds up every window — keep them short, and never await UI inside one.
-- **A model change needs a migration.** The browser applies migrations, never `EnsureCreated`, and a model
-  change without one builds and then fails in every browser that already has the database.
-  `LocalDbContextTests.Every_model_change_has_a_migration` catches it.
+  window, or on the user, holds up every window — keep them short, and never await UI inside one. (The shim
+  queues *other* windows; the trap above is about a window's own contexts.)
 - **`shared-database.js` is coupled to SqliteWasmBlazor's bridge ↔ worker messages** (`{type:'init'}`,
   `{id, data:{type:'execute', sql}}`, `{type:'ready'|'error'}`, `streamId`). Re-run
   `.claude/tools/chrome-multiwindow-check.mjs` after upgrading the package.
@@ -60,6 +68,7 @@ adding a local table, a local migration, or anything that waits on the local dat
 | The provider | [SqliteWasmBlazor](https://github.com/b-straub/SqliteWasmBlazor) 0.9.4-pre (MIT): EF Core's ADO.NET calls are sent to the official sqlite-wasm in a Web Worker |
 | The storage | The Origin Private File System, through sqlite-wasm's **SAHPool** VFS |
 | The file | `mealplanner.db` (`Program.cs`), journal mode WAL, `synchronous = FULL` |
+| Its tables | `Device` (this browser, below); the synced tables `Ingredient` and `FieldClock`, defined once in `Shared.Data` and identical to the server's; `Outbox` and `SyncState`, this browser's own - see [offline sync](offline-sync.md) |
 
 Chosen because it is plain EF Core over a real file-backed SQLite: no copy of the whole database to
 IndexedDB or the Cache API after each write (Bit.Besql's approach), and so no window in which a closed tab
@@ -91,8 +100,8 @@ the same.
 
 The result is cached, so a start is counted once however many components ask.
 
-`Device` (`LocalData/Device.cs`) is one row per browser profile: its `Id` is the device id every op will
-carry. It is also the visible proof that the database persists — the home page's "This device" card shows
+`Device` (`LocalData/Device.cs`) is one row per browser profile: its `Id` is the device id every op
+carries, and what starts the sync loop (`WASM/Sync/SyncStatusChip.razor`, once the start is `READY`). It is also the visible proof that the database persists — the home page's "This device" card shows
 the id, when it was first opened, how many starts it has seen, and which window holds the database. A new
 id, or the count back at 1, means the browser lost the storage.
 

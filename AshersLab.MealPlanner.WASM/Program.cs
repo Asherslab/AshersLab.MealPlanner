@@ -1,8 +1,10 @@
 using AshersLab.MealPlanner.LocalData;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server;
+using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
 using AshersLab.MealPlanner.WASM;
 using AshersLab.MealPlanner.WASM.Data;
 using AshersLab.MealPlanner.WASM.Extensions;
+using AshersLab.MealPlanner.WASM.Sync;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +23,7 @@ Uri api = new(builder.HostEnvironment.BaseAddress);
 // A page injecting an unregistered service fails at RUNTIME, not at build, so a new service contract needs
 // a line here as well as a MapGrpcService on the server.
 builder.Services.AddCodeFirstClient<IServerInfoService>(api);
+builder.Services.AddCodeFirstClient<ISyncService>(api);
 
 // The browser's own SQLite, in OPFS. Registration only: nothing opens it until after the first render, when
 // LocalDatabase.ReadyAsync starts the worker and migrates (docs/modules/sync/browser-database.md). BaseHref
@@ -31,5 +34,8 @@ builder.Services.AddDbContextFactory<LocalDbContext>(options =>
 builder.Services.AddSqliteWasm(options => options.BaseHref = api.AbsolutePath);
 builder.Services.AddSqliteWasmDbContext<LocalDbContext>();
 builder.Services.AddScoped<LocalDatabase>();
+
+// One per window, started by the app bar's SyncStatusChip once the local database is ready.
+builder.Services.AddScoped<SyncLoop>();
 
 await builder.Build().RunAsync();

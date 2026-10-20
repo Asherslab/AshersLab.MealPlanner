@@ -3,7 +3,7 @@ title: How the app is hosted
 kind: reference
 status: current
 module: infrastructure
-verified: 2026-10-20
+verified: 2026-10-21
 code:
   - AshersLab.MealPlanner.AppHost/AppHost.cs
   - AshersLab.MealPlanner.Grpc/Program.cs
@@ -45,10 +45,11 @@ How to *run* it locally is in `.claude/app-local.md`; why it is one image is in 
 | `AshersLab.MealPlanner.AppHost` | Aspire, **local development only**. One resource: the gRPC host. |
 | `AshersLab.MealPlanner.ServiceDefaults` | OpenTelemetry, health checks, service discovery. Inert in production: the OTLP exporter needs `OTEL_EXPORTER_OTLP_ENDPOINT` and `/health` exists only in Development. |
 | `AshersLab.MealPlanner.Shared.Contracts` | protobuf-net records and code-first service interfaces. Rules in its `AGENTS.md`. |
-| `AshersLab.MealPlanner.Shared.Domain` | Pure rules both ends run — costing, units, merge rules. No packages, no I/O. Empty until slice 2. |
+| `AshersLab.MealPlanner.Shared.Domain` | Pure rules both ends run — the sync clock and merge rules, entity validation; later costing and units. No packages, no I/O. |
+| `AshersLab.MealPlanner.Shared.Data` | The synced entities' EF model and the code that applies an op to them, referenced by both databases so they cannot disagree — see [offline sync](../sync/offline-sync.md). EF Core only, no provider. |
 | `AshersLab.MealPlanner.Grpc` | The one production process: gRPC-Web, the WASM files, EF Core over SQLite. References the WASM project so its files are this project's static web assets. |
 | `AshersLab.MealPlanner.WASM` | Blazor WebAssembly + MudBlazor. References the two `Shared` projects and `LocalData` — never the server. |
-| `AshersLab.MealPlanner.LocalData` | The browser database's EF model and migrations — see [the browser database](../sync/browser-database.md). Its own project only so `dotnet ef` can load it. |
+| `AshersLab.MealPlanner.LocalData` | The browser database's EF model and migrations — see [the browser database](../sync/browser-database.md) — and the browser's side of sync (outbox, one sync round), here rather than in the WASM app so tests can run it. Its own project so `dotnet ef` can load it. |
 | `AshersLab.MealPlanner.Tests` | xunit v3. Hosts the real `Program` in process (`WebApplicationFactory`) and calls it over **gRPC-Web**, the protocol the browser uses — a plain-gRPC test would pass for a service the browser cannot reach. |
 
 Compared with the GSBC repos this drops the YARP BFF, the nginx WASM image, the separate WASM dev-server
@@ -60,7 +61,8 @@ files gives it for free, so there is no CORS and no service-discovery address in
 `Grpc/Program.cs`:
 
 1. **Migrate**, before the host listens. SQLite and one process, so there is no job to wait for; a
-   migration that fails stops startup rather than serving a half-migrated database.
+   migration that fails stops startup rather than serving a half-migrated database. Then the sync epoch is
+   minted on a new database and the newest op seq read (`Features/Sync/SyncStartup.cs`).
 2. `UseBlazorFrameworkFiles` — `_framework/` in its own branch, plus the `Blazor-Environment` header the
    client reads its environment from (`Development` locally).
 3. `UseRouting` — see the trap above.

@@ -4,7 +4,7 @@ namespace AshersLab.MealPlanner.LocalData;
 /// This browser profile, created the first time the app opens in it. Local only - never synced.
 /// </summary>
 /// <remarks>
-/// <see cref="Id"/> is the device id every op will carry (docs/work/2026-10-offline-sync.md), so it must
+/// <see cref="Id"/> is the device id every op carries (docs/modules/sync/offline-sync.md), so it must
 /// outlive reloads and browser restarts. That makes this row the first evidence that the database persists:
 /// a reload that shows a new id, or an <see cref="OpenCount"/> back at 1, means the storage was lost.
 /// </remarks>

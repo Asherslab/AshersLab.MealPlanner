@@ -7,7 +7,11 @@
 
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">
-        <MudText Typo="Typo.h6">Meal Planner</MudText>
+        <MudLink Href="" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
+        <MudButton Href="ingredients" Color="Color.Inherit" Variant="Variant.Text" Class="ml-4"
+                   data-testid="nav-ingredients">Ingredients</MudButton>
+        <MudSpacer/>
+        <SyncStatusChip/>
     </MudAppBar>
     <MudMainContent Class="pt-14">
         <MudContainer MaxWidth="MaxWidth.Medium" Class="py-4">

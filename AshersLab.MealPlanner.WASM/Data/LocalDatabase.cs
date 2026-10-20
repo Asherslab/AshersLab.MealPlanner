@@ -29,8 +29,13 @@ public sealed class LocalDatabase(
 {
     private Task<LocalDatabaseStart>? _start;
 
-    /// <summary>Short-lived contexts, one per operation - never hold one across renders.</summary>
-    public IDbContextFactory<LocalDbContext> Contexts => contexts;
+    private readonly SerialLocalDbContextFactory _serial = new(contexts);
+
+    /// <summary>
+    /// Short-lived contexts, one per operation - never hold one across renders, a network call, or while opening
+    /// another. One at a time per window: see <see cref="SerialLocalDbContextFactory"/>.
+    /// </summary>
+    public IDbContextFactory<LocalDbContext> Contexts => _serial;
 
     /// <summary>Another window of the app committed a change. Re-read what you show.</summary>
     public event Func<Task>? ChangedElsewhere;
@@ -64,7 +69,7 @@ public sealed class LocalDatabase(
 
         await js.InvokeVoidAsync("mealPlannerDatabase.subscribe", DotNetObjectReference.Create(this));
 
-        await using LocalDbContext db     = await contexts.CreateDbContextAsync();
+        await using LocalDbContext db     = await _serial.CreateDbContextAsync();
         Device                     device = await DeviceRegistration.RecordOpenAsync(db, DateTimeOffset.UtcNow);
 
         return new LocalDatabaseStart(DbInitState.READY, null, device, await RequestPersistentStorage());

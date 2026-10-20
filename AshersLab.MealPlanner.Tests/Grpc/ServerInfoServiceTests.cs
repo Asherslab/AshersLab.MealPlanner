@@ -1,4 +1,7 @@
+using AshersLab.MealPlanner.Grpc.Data;
 using AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Server;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server;
 
 namespace AshersLab.MealPlanner.Tests.Grpc;
@@ -15,7 +18,9 @@ public class ServerInfoServiceTests
 
         Assert.False(string.IsNullOrWhiteSpace(info.Version));
         Assert.NotNull(info.LatestMigration);
-        Assert.EndsWith("_CreateDatabase", info.LatestMigration);
+        // The newest migration the host knows, read back from the database it migrated.
+        using IServiceScope scope = host.Services.CreateScope();
+        Assert.Equal(scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Database.GetMigrations().Last(), info.LatestMigration);
         Assert.InRange(info.ServerTimeUtc, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1));
     }
 

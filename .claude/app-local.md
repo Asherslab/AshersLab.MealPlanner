@@ -88,6 +88,30 @@ server again") repeats the call — the server time changing is the evidence tha
 
 In the network panel the call is `POST https://localhost:7283/gRPC/AshersLab.MealPlanner.ServerInfo/Get`.
 
+**Ingredients** (`/ingredients`, "Ingredients" in the app bar) is the op log's page: the "New ingredient" box
+(`InputId` `ingredient-new-name`, Enter or `data-testid` `ingredient-add`), and per row (`ingredient-row`, its
+`data-id` the ingredient id) a pencil (`ingredient-rename`) opening `ingredient-rename-input` and
+`ingredient-rename-save`. The sync chip at the right of the app bar is `data-testid` `sync-status`, with
+`data-state` (`connecting|online|offline|refused`) and `data-pending` (outbox count). Sync calls are
+`/gRPC/AshersLab.MealPlanner.Sync/Push|Pull|Changes`; `Changes` stays open.
+
+Typing into a MudTextField from a script needs the native `value` setter and an `input` event (see
+`typeInto` in `.claude/tools/chrome-sync-check.mjs`); assigning `.value` alone is not seen by Blazor.
+
+### Two profiles, offline, concurrent edits
+
+```bash
+node .claude/tools/chrome-sync-check.mjs <scratch>/sync     # about 40 s, prints PASS/FAIL per check
+```
+
+Two separate headless Chromes on fresh profiles under `<scratch>/sync` (ports 19341/19342 - if taken, a
+previous run's Chrome is alive: `pkill -f "user-data-dir=<scratch>/sync"`). Offline is the DevTools protocol's
+`Network.emulateNetworkConditions`, the same switch as DevTools' Offline. It checks create → other profile,
+an offline rename syncing on reconnect, and two concurrent offline renames ending on the later one, then copies
+each profile's SQLite out of OPFS (directly over the DevTools protocol - no receiver needed) and prints its rows
+beside the server's. Ingredients are named with the run id, so runs pile up in the database; wipe it when that
+matters. The Chrome extension cannot do this: it has no offline switch and drives only one profile.
+
 ## Database
 
 **SQLite, one file, outside the repo:**
@@ -104,7 +128,8 @@ sqlite3 "$HOME/Library/Application Support/AshersLab.MealPlanner/mealplanner.db"
 ```
 
 The host migrates at startup, so a missing table means the host has not started, not that a
-migration job is pending. Nothing in it is worth keeping until the household uses the app — delete
+migration job is pending. Sync's tables: `Op` (the log, by `Seq`), `Ingredient`, `FieldClock`, `SyncEpoch`
+(one row - a new value after a wipe means every browser takes a snapshot on its next pull). Nothing in it is worth keeping until the household uses the app — delete
 the folder to start over (stop the app first; SQLite holds `-wal`/`-shm` files beside it).
 
 ## The browser database

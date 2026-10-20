@@ -4,6 +4,10 @@
     color: #666;
 }
 
+.ingredient-row + .ingredient-row {
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
 #blazor-error-ui {
     background: lightyellow;
     bottom: 0;

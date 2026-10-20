@@ -1,0 +1,74 @@
+@using AshersLab.MealPlanner.WASM.Data
+@using SqliteWasmBlazor
+@implements IDisposable
+@inject SyncLoop Sync
+@inject LocalDatabase Database
+
+@*
+    Whether this browser's edits have reached the server. In the app bar, so it is visible on every page - the
+    planner in a shop with no signal needs to know their ticks are waiting, not lost. Tapping it syncs now.
+*@
+
+<MudTooltip Text="@(Sync.Status.Note ?? Tooltip(Sync.Status))">
+    @* Outlined, and the app bar's own text colour when nothing is wrong: a Text chip's default is dark on the bar. *@
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorFor(Sync.Status)"
+             Style="@(ColorFor(Sync.Status) == Color.Inherit ? "color: inherit; border-color: currentColor" : null)"
+             Icon="@IconFor(Sync.Status)" OnClick="Sync.Kick"
+             data-testid="sync-status" data-state="@Sync.Status.Connection.ToString().ToLowerInvariant()"
+             data-pending="@Sync.Status.Pending">
+        @Label(Sync.Status)
+    </MudChip>
+</MudTooltip>
+
+@code {
+    protected override void OnInitialized() => Sync.StatusChanged += Changed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        // The layout is on every page, so this is where the loop starts. StartAsync is cached: every caller in
+        // this window waits on the same start.
+        LocalDatabaseStart start = await Database.StartAsync();
+        if (start is { State: DbInitState.READY, Device: { } device })
+            Sync.Start(device.Id);
+    }
+
+    private Task Changed() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Sync.StatusChanged -= Changed;
+
+    private static string Label(SyncStatus s) => s.Connection switch
+    {
+        SyncConnection.Refused                      => "Update needed",
+        SyncConnection.Offline when s.Pending > 0   => $"Offline · {s.Pending} waiting",
+        SyncConnection.Offline                      => "Offline",
+        _ when s.Pending > 0                        => $"Saving {s.Pending}",
+        SyncConnection.Connecting                   => "Connecting",
+        _                                           => "Synced",
+    };
+
+    private static string Tooltip(SyncStatus s) => s.Connection switch
+    {
+        SyncConnection.Offline => "Can't reach the server. Changes are kept on this device and sent when it can.",
+        _ when s.LastSyncedAt is { } at => $"Last synced {at:HH:mm:ss}. Tap to sync now.",
+        _ => "Tap to sync now.",
+    };
+
+    private static Color ColorFor(SyncStatus s) => s.Connection switch
+    {
+        SyncConnection.Refused => Color.Error,
+        SyncConnection.Offline => Color.Warning,
+        _ when s.Note is not null => Color.Warning,
+        _ => Color.Inherit,
+    };
+
+    private static string IconFor(SyncStatus s) => s.Connection switch
+    {
+        SyncConnection.Refused => Icons.Material.Filled.SystemUpdate,
+        SyncConnection.Offline => Icons.Material.Filled.CloudOff,
+        _ when s.Pending > 0   => Icons.Material.Filled.CloudUpload,
+        _                      => Icons.Material.Filled.CloudDone,
+    };
+}

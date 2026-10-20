@@ -2,7 +2,7 @@
 title: Documentation map
 kind: reference
 status: current
-verified: 2026-10-20
+verified: 2026-10-21
 ---
 
 # Documentation
@@ -24,8 +24,11 @@ Present tense, kept current, no dates.
 - [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
 - [The browser database](modules/sync/browser-database.md) — EF Core SQLite in OPFS, the `wasm-tools`
-  workload trap, starting it after the first render, sharing it across windows, local migrations, and what
-  it costs.
+  workload trap, starting it after the first render, sharing it across windows, one context at a time per
+  window, local migrations, and what it costs.
+- [Offline sync](modules/sync/offline-sync.md) — every edit is an op: the clock and merge rules, push, pull
+  and the change stream, the protocol version check, and where offline does and does not work. **Read before
+  any write path.**
 
 ## The other three directories
 
@@ -39,8 +42,6 @@ Present tense, kept current, no dates.
 
 - [Version 1 scope](work/2026-10-v1-scope.md) — what the app is, every decision already made, the
   domain model, how costs are computed, and the build order. **Start here.**
-- [Offline sync design](work/2026-10-offline-sync.md) — the op log, push/pull, merge rules, and where
-  offline does and does not work. Read before any write path.
 - [Receipt formats](work/2026-10-receipt-formats.md) — what a Woolworths invoice and a Costco receipt
   contain, their traps, and how lines match products.
 - [Deployment design](work/2026-10-deployment.md) — one image as a Home Assistant add-on and on k8s,

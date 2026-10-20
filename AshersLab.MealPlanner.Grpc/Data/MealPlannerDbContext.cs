@@ -7,9 +7,8 @@ namespace AshersLab.MealPlanner.Grpc.Data;
 /// Postgres stays a provider change rather than a rewrite.
 /// </summary>
 /// <remarks>
-/// No entities yet - the first arrives with the op log (slice 2). Split it by area the GSBC way when it
-/// grows: <c>MealPlannerDbContext.&lt;Area&gt;Model.cs</c> partials, each with its own <c>DbSet</c>s and a
-/// <c>Build&lt;Area&gt;Model</c> called from <see cref="OnModelCreating"/>.
+/// Split by area the GSBC way: <c>MealPlannerDbContext.&lt;Area&gt;Model.cs</c> partials, each with its own
+/// <c>DbSet</c>s and a <c>Build&lt;Area&gt;Model</c> called from <see cref="OnModelCreating"/>.
 /// </remarks>
 public partial class MealPlannerDbContext(
     DbContextOptions<MealPlannerDbContext> options
@@ -18,5 +17,7 @@ public partial class MealPlannerDbContext(
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        BuildSyncModel(modelBuilder);
     }
 }

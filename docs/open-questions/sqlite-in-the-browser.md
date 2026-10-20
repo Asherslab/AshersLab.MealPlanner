@@ -15,7 +15,7 @@ code:
 
 Can the Blazor WASM app keep an EF Core SQLite database that survives a reload, on Chrome desktop
 **and** Safari on iOS, without hurting load time on a phone? The offline design
-([offline sync](../work/2026-10-offline-sync.md)) assumes yes. Settled by slice 1 of
+([offline sync](../modules/sync/offline-sync.md)) assumes yes. Settled by slice 1 of
 [the v1 scope](../work/2026-10-v1-scope.md).
 
 **Answered for Chrome desktop; Safari on iOS still needs the owner's phone.** What was built and measured

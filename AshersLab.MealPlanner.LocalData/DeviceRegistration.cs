@@ -11,7 +11,7 @@ public static class DeviceRegistration
     /// start, otherwise counts one more start against the existing row and keeps its id.
     /// </summary>
     /// <remarks>
-    /// The id is a GUIDv7 like every other client-minted id (docs/work/2026-10-offline-sync.md).
+    /// The id is a GUIDv7 like every other client-minted id (docs/modules/sync/offline-sync.md).
     /// <para>
     /// Read and write in one IMMEDIATE transaction: two windows of the app starting together share the one
     /// database, and without it both could find no row and each insert one.

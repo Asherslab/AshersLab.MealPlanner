@@ -1,5 +1,6 @@
 using AshersLab.MealPlanner.Grpc.Data;
 using AshersLab.MealPlanner.Grpc.Features.Server;
+using AshersLab.MealPlanner.Grpc.Features.Sync;
 using AshersLab.MealPlanner.ServiceDefaults;
 using Microsoft.EntityFrameworkCore;
 using ProtoBuf.Grpc.Server;
@@ -16,13 +17,17 @@ builder.Services.AddGrpc();
 builder.Services.AddDbContext<MealPlannerDbContext>((sp, o) =>
     o.UseSqlite(DataDirectory.ConnectionString(sp.GetRequiredService<IConfiguration>())));
 
+builder.Services.AddSingleton<SyncSignal>();
+
 var app = builder.Build();
 
 // Migrate before serving. One process and a single-writer database, so there is no migrations Job to
 // wait on as in the GSBC repos: a migration that fails stops the host here, before it answers anything.
 using (IServiceScope scope = app.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Database.MigrateAsync();
+    MealPlannerDbContext db = scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>();
+    await db.Database.MigrateAsync();
+    await SyncStartup.InitialiseAsync(db, app.Services.GetRequiredService<SyncSignal>());
 }
 
 if (app.Environment.IsDevelopment())
@@ -48,6 +53,7 @@ app.MapDefaultEndpoints();
 
 // A service that compiles and is not mapped fails at the client as an unimplemented method, not at build.
 app.MapGrpcService<ServerInfoService>();
+app.MapGrpcService<SyncService>();
 
 app.MapStaticAssets();
 

@@ -1,3 +1,6 @@
+using AshersLab.MealPlanner.LocalData.Sync;
+using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace AshersLab.MealPlanner.LocalData;
@@ -18,9 +21,54 @@ public class LocalDbContext(
     /// <summary>One row: this browser. See <see cref="Device"/>.</summary>
     public DbSet<Device> Devices => Set<Device>();
 
+    /// <summary>Synced from the server. Read freely; write only through <see cref="LocalOps"/>.</summary>
+    public DbSet<Ingredient> Ingredients => Set<Ingredient>();
+
+    public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
+
+    /// <summary>This browser's edits the server has not confirmed. See <see cref="OutboxOp"/>.</summary>
+    public DbSet<OutboxOp> Outbox => Set<OutboxOp>();
+
+    public DbSet<SyncState> SyncStates => Set<SyncState>();
+
+    private Action? _onDisposed;
+
+    /// <summary>For <see cref="SerialLocalDbContextFactory"/>: lets the next context out once this one is gone.</summary>
+    internal void ReleaseOnDispose(Action release) => _onDisposed = release;
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        Interlocked.Exchange(ref _onDisposed, null)?.Invoke();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        Interlocked.Exchange(ref _onDisposed, null)?.Invoke();
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // The same synced tables as the server's database, defined once in Shared.Data.
+        SyncedEntities.BuildModel(modelBuilder);
+
+        modelBuilder.Entity<OutboxOp>(op =>
+        {
+            op.ToTable("Outbox");
+            op.HasKey(o => o.OpId);
+            op.Property(o => o.OpId).ValueGeneratedNever();
+            op.HasIndex(o => o.Hlc);
+        });
+
+        modelBuilder.Entity<SyncState>(state =>
+        {
+            state.ToTable("SyncState");
+            state.HasKey(s => s.Id);
+            state.Property(s => s.Id).ValueGeneratedNever();
+        });
 
         modelBuilder.Entity<Device>(device =>
         {

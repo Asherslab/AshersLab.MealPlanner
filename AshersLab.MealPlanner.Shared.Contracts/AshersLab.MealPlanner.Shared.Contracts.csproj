@@ -11,4 +11,9 @@
         <PackageReference Include="protobuf-net.Grpc" Version="1.2.2" />
     </ItemGroup>
 
+    <!-- For the op log's enums only (OpKind): the wire carries the same values the merge rules switch on. -->
+    <ItemGroup>
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Domain\AshersLab.MealPlanner.Shared.Domain.csproj" />
+    </ItemGroup>
+
 </Project>

@@ -35,6 +35,99 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
 
                     b.ToTable("Device", (string)null);
                 });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.LocalData.Sync.OutboxOp", b =>
+                {
+                    b.Property<Guid>("OpId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Entity")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FieldsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hlc")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("OpId");
+
+                    b.HasIndex("Hlc");
+
+                    b.ToTable("Outbox", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.LocalData.Sync.SyncState", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Clock")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastPulledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PulledThroughSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ServerEpoch")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SyncState", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Ingredients.Ingredient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Ingredient", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Sync.FieldClock", b =>
+                {
+                    b.Property<string>("Entity")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hlc")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Entity", "EntityId", "Field");
+
+                    b.ToTable("FieldClock", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }
