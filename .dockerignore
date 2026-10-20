@@ -1,0 +1,24 @@
+# Keep the local build out of the image build context.
+#
+# This matters more than it looks. Every Dockerfile here does `COPY . .` after restoring, so without
+# this file the host's `bin/` and `obj/` land in the container and the in-container restore reuses
+# them — with a project.assets.json written against the host's SDK and absolute host paths. The
+# symptom is a restore or publish that fails for reasons that have nothing to do with the change
+# being built, and only in CI or only locally depending on whose tree was dirtier.
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/.git/
+**/.gitignore
+**/.dockerignore
+**/*.user
+**/node_modules/
+
+# Nothing in the image needs these, and the WASM build context is the whole repo.
+docs/
+mockups/
+*.docx
+*.dump
+.claude/
+.nodeterm/
