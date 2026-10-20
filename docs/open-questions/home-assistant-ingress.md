@@ -52,10 +52,11 @@ It also found the one real bug: gRPC-Web calls dropped the prefix and 404'd. Fix
 
 In order — none of them can be done from the repo:
 
-1. The first CI run on `master` must be green (Actions tab, "Docker Build").
-2. Make the GHCR package `asherslab-mealplanner` **public** (package settings → Change visibility).
-3. Wait for the "Release add-on … [skip ci]" commit, which sets `version:` to an image that exists.
-4. In Home Assistant: Settings → Add-ons → Add-on store → ⋮ → Repositories → add
+1. Done 2026-10-21: the first CI run was green and published `0.0.1` for amd64 and arm64, and the
+   "Release add-on 0.0.1 [skip ci]" commit set `version:` to it.
+2. Confirm the GHCR package `asherslab-mealplanner` shows **Public**. An anonymous pull of the `0.0.1` index
+   already worked on 2026-10-21, so this is expected to need nothing.
+3. In Home Assistant: Settings → Add-ons → Add-on store → ⋮ → Repositories → add
    `https://github.com/Asherslab/AshersLab.MealPlanner`, then install and start **Meal Planner**, with "Show in
    sidebar" on.
 

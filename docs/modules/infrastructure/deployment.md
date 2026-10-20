@@ -34,8 +34,11 @@ or anything that builds a URL. Why it is one image and not the GSBC repos' four 
   ingress path differs per install, so nothing can bake it in at build time.
 - **`config.yaml`'s `version:` must name a tag that exists on GHCR.** Only CI writes it, after the push. A
   hand-bumped version makes Home Assistant offer an update that fails to pull.
-- **The GHCR package must be public** or the Supervisor cannot pull it — it has no registry credentials. A
-  new package is private; this is a one-time setting on the package page.
+- **The GHCR package must be public** or the Supervisor cannot pull it — it has no registry credentials.
+  After the first push (run 39451233134, 2026-10-21) an anonymous registry token could already fetch the
+  `0.0.1` index, so the package appears to have taken this public repository's visibility through its
+  `org.opencontainers.image.source` label. If an install ever fails to pull, check Package settings →
+  visibility first.
 - **Nothing in the image's final stage may `RUN`.** The arm64 image is assembled on an amd64 runner without
   QEMU; a `RUN` there fails with `exec format error`.
 
@@ -96,7 +99,8 @@ Behind any other proxy (Kubernetes) the image has **no auth** today; slice 14 ad
 
 ## CI
 
-`.github/workflows/docker-publish.yml`, on a push to `master`, one run at a time:
+`.github/workflows/docker-publish.yml`, on a push to `master` that touches more than `docs/`, `.claude/` or
+markdown, one run at a time (the first run, 2026-10-21, took 2 m 23 s to build both platforms):
 
 1. **version** — `paulhatch/semantic-version` over the tag history (`fetch-depth: 0`), pushes `v<version>`.
 2. **build** — `linux/amd64,linux/arm64` to `ghcr.io/asherslab/asherslab-mealplanner:<version>` and `:latest`,
@@ -112,9 +116,9 @@ works with the repository's default read-only token setting.
 
 ## Installing it (owner, once)
 
-1. After the first green run, make the package public: GitHub → profile → Packages →
-   `asherslab-mealplanner` → Package settings → Change visibility → Public.
-2. Wait for the "Release add-on … [skip ci]" commit on `master`.
+1. Confirm the package is public: GitHub → profile → Packages → `asherslab-mealplanner` → it should say
+   Public; if not, Package settings → Change visibility → Public.
+2. Make sure a "Release add-on … [skip ci]" commit is on `master` (the first was `0.0.1`).
 3. Home Assistant → Settings → Add-ons → Add-on store → ⋮ → Repositories → add
    `https://github.com/Asherslab/AshersLab.MealPlanner`.
 4. Install **Meal Planner**, start it, and turn on "Show in sidebar". It opens as **Meals**.

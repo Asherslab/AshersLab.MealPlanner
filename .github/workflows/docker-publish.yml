@@ -11,6 +11,11 @@ on:
   workflow_dispatch:
   push:
     branches: [ "master" ]
+    # A doc or agent-tooling change is not a release: it would only cut a new version of the same image.
+    paths-ignore:
+      - "docs/**"
+      - ".claude/**"
+      - "**/*.md"
 
 # One release at a time. Two overlapping runs would race to push the add-on version bump to master.
 concurrency:
