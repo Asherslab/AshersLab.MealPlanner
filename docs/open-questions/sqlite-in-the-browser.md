@@ -4,10 +4,11 @@ kind: investigation
 status: open
 module: sync
 opened: 2026-10-20
-verified: 2026-10-20
+verified: 2026-10-21
 code:
   - AshersLab.MealPlanner.WASM/Data/LocalDatabase.cs
   - AshersLab.MealPlanner.WASM/Components/ThisDeviceCard.razor
+  - AshersLab.MealPlanner.WASM/wwwroot/js/shared-database.js
 ---
 
 # SQLite in the browser
@@ -37,11 +38,11 @@ below passes, moving its result into that doc.
 
 ## Found along the way
 
-- **One tab per browser profile.** OPFS access handles are exclusive, so a second tab cannot open the
-  database (`TAB_LOCKED`). The owner wants two windows of the app open side by side, so a follow-up slice
-  shares the one database across tabs.
-- iOS may freeze a backgrounded Safari tab while it still holds the database. Whether a new tab can then
-  open it is part of the check below.
+- **One tab per browser profile, on its own.** OPFS access handles are exclusive. The owner wants two
+  windows side by side, so the app now shares the database across windows — see "Several windows" in
+  [the browser database](../modules/sync/browser-database.md). Proven in Chrome only.
+- iOS may freeze a backgrounded Safari tab while it is the window running the database. Other tabs' requests
+  would then wait on it. Whether that happens is part of the check below.
 
 ## The iOS check — for the owner
 
@@ -62,13 +63,17 @@ to the internet).
 5. Pull down to reload. **Pass:** same id, count +1.
 6. Swipe Safari away in the app switcher, reopen it, open the address again. **Pass:** same id, count +1.
 7. Restart the phone, open the address again. **Pass:** same id, count +1.
-8. Open the address in a **second Safari tab** while the first is still open. Expected today: "already
-   open in another tab". Then close the first tab and reload the second. **Pass:** the second tab opens it.
+8. Open the address in a **second Safari tab** while the first is still open. **Pass:** same id, count +1,
+   and "Held by" says "Another window of the app - shared". Switch back to the first tab: its count shows
+   the same number. Then close the first tab and reload the second. **Pass:** count +1, "Held by" says
+   "This window".
+8a. Leave the first tab in the background for a few minutes (lock the phone), then open the second tab.
+   **Pass:** its card fills. If it hangs, note how long and whether switching to the first tab unsticks it.
 9. Optional: Share → **Add to Home Screen**, open it from there, and check the **Storage** row says "Kept
    by the browser". (A home-screen app has its own storage, so expect a new device id there.)
 10. Turn it off: `/Applications/Tailscale.app/Contents/MacOS/Tailscale serve reset`.
 
-Report back the pass/fail of steps 5–8, the load time from step 4, and the Storage row.
+Report back the pass/fail of steps 5–8a, the load time from step 4, and the Storage row.
 
 ## If it does not work
 

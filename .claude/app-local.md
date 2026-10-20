@@ -112,7 +112,9 @@ the folder to start over (stop the app first; SQLite holds `-wal`/`-shm` files b
 How it works is in `docs/modules/sync/browser-database.md`. How to look at it:
 
 - **In the page** — the home page's "This device" card (`data-testid` `device-id`, `device-open-count`,
-  `device-storage`, or `local-db-state` when it could not open) reads the `Device` row through EF.
+  `device-storage`, `device-role`, or `local-db-state` when it could not open) reads the `Device` row
+  through EF. In the console, `mealPlannerDatabase.role()` and `mealPlannerDatabase.events` show what the
+  cross-window shim did.
 - **Independently, with `sqlite3`** — copy the file out of OPFS. The Chrome extension's output filter
   refuses base64 *and* hex, so the bytes cannot come back through `javascript_tool`'s result; the page
   POSTs them to a receiver on 127.0.0.1 instead:
@@ -130,6 +132,16 @@ How it works is in `docs/modules/sync/browser-database.md`. How to look at it:
   ```
 
   Copy the `-wal` too: committed rows usually live there until a checkpoint.
+- **Several windows** — `node .claude/tools/chrome-multiwindow-check.mjs <scratch>/profile` drives a
+  separate headless Chrome through sharing, leader hand-overs, reloads, simultaneous starts and dropped
+  downloads, and prints PASS/FAIL per check (about a minute; give each run a fresh profile directory). A
+  failure is classified `boot-download`, `boot-unknown` or `shim-stall`; only `shim-stall` is a bug in
+  `shared-database.js`, and it prints that window's shim events and Web Locks. A brand-new headless profile
+  drops requests (`ERR_CERT_VERIFIER_CHANGED`) for about its first second, so the script waits 3 s first
+  (`FAST_FIRST=1 WARMUP_MS=0` reproduces it). If it says the port is taken, a headless Chrome from an earlier
+  run is still alive: `pkill -f "user-data-dir=<scratch>"`.
+  The Chrome extension cannot do this: closing the first tab of its tab group drops the whole group, and
+  the other tabs can no longer be driven.
 - **Across a browser restart** — never quit the user's Chrome. `.claude/tools/chrome-restart-check.mjs`
   launches a separate headless Chrome on a throwaway profile, reads the card, and ends the browser with
   `Browser.close` or `SIGKILL`; run it repeatedly on the same profile directory.

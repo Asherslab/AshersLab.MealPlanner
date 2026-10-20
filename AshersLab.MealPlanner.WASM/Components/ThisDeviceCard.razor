@@ -1,10 +1,14 @@
+@using AshersLab.MealPlanner.LocalData
 @using AshersLab.MealPlanner.WASM.Data
+@using Microsoft.EntityFrameworkCore
 @using SqliteWasmBlazor
+@implements IDisposable
 @inject LocalDatabase Database
 
 @*
     The browser database's proof of life: the Device row it keeps for this browser profile. The id staying put
     and the count going up across reloads and browser restarts is what "the database persists" looks like.
+    Every window of the app shares the row, so opening a second window updates the count shown in the first.
 *@
 
 <MudCard Outlined="true">
@@ -21,10 +25,11 @@
         else if (_start.State == DbInitState.TAB_LOCKED)
         {
             <MudAlert Severity="Severity.Warning" data-testid="local-db-state">
-                The meal planner is already open in another tab. Close this one and use that.
+                Another window is holding this browser's copy of the data and not sharing it. Close the other
+                windows of the meal planner, then reload this one.
             </MudAlert>
         }
-        else if (_start.Device is not { } device)
+        else if (_device is null)
         {
             <MudAlert Severity="Severity.Error" data-testid="local-db-state">
                 This browser could not open its copy of the data (@_start.State): @_start.Failure
@@ -36,19 +41,23 @@
                 <tbody>
                 <tr>
                     <th scope="row">Device</th>
-                    <td data-testid="device-id">@device.Id</td>
+                    <td data-testid="device-id">@_device.Id</td>
                 </tr>
                 <tr>
                     <th scope="row">First opened</th>
-                    <td data-testid="device-first-opened">@device.FirstOpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td data-testid="device-first-opened">@_device.FirstOpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
                 </tr>
                 <tr>
                     <th scope="row">Opened</th>
-                    <td data-testid="device-open-count">@device.OpenCount @(device.OpenCount == 1 ? "time" : "times")</td>
+                    <td data-testid="device-open-count">@_device.OpenCount @(_device.OpenCount == 1 ? "time" : "times")</td>
                 </tr>
                 <tr>
                     <th scope="row">Storage</th>
                     <td data-testid="device-storage">@StorageText(_start.StoragePersisted)</td>
+                </tr>
+                <tr>
+                    <th scope="row">Held by</th>
+                    <td data-testid="device-role">@RoleText(_role)</td>
                 </tr>
                 </tbody>
             </MudSimpleTable>
@@ -58,20 +67,45 @@
 
 @code {
     private LocalDatabaseStart? _start;
+    private Device?             _device;
+    private string?             _role;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
             return;
 
-        _start = await Database.StartAsync();
+        _start  = await Database.StartAsync();
+        _device = _start.Device;
+        if (_device is not null)
+        {
+            _role                     =  await Database.RoleAsync();
+            Database.ChangedElsewhere += Refresh;
+        }
         StateHasChanged();
     }
+
+    private async Task Refresh()
+    {
+        await using LocalDbContext db = await Database.Contexts.CreateDbContextAsync();
+        _device = await db.Devices.AsNoTracking().SingleAsync();
+        _role   = await Database.RoleAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Database.ChangedElsewhere -= Refresh;
 
     private static string StorageText(bool? persisted) => persisted switch
     {
         true  => "Kept by the browser",
         false => "May be cleared by the browser if unused - the server copy restores it",
         null  => "This browser cannot promise to keep it",
+    };
+
+    private static string RoleText(string? role) => role switch
+    {
+        "leader"   => "This window",
+        "follower" => "Another window of the app - shared",
+        _          => "Not yet known",
     };
 }

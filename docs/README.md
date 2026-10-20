@@ -24,7 +24,8 @@ Present tense, kept current, no dates.
 - [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
 - [The browser database](modules/sync/browser-database.md) — EF Core SQLite in OPFS, the `wasm-tools`
-  workload trap, starting it after the first render, local migrations, and what it costs.
+  workload trap, starting it after the first render, sharing it across windows, local migrations, and what
+  it costs.
 
 ## The other three directories
 

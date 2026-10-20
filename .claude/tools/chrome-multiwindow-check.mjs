@@ -1,0 +1,244 @@
+// Several windows of the app on one browser database, in a separate headless Chrome on a throwaway
+// profile (never the user's Chrome). Checks that windows share the database and see each other's changes,
+// that the database survives the leading window closing or reloading, and that windows starting at once
+// each count their start exactly once.
+//
+//   node .claude/tools/chrome-multiwindow-check.mjs <profileDir>
+//
+// Every failure is classified, so a flaky run says *what* flaked:
+//   boot-download  A request was dropped at the network level and the page never fully started. Retried
+//                  once by reloading, unless NO_RETRY=1. See "a fresh profile drops requests" below.
+//   boot-unknown   Blazor never rendered, with nothing recorded to say why.
+//   shim-stall     Blazor rendered but the window never got a database: a real shared-database.js bug.
+//                  Prints the window's shim events and the origin's Web Locks.
+//
+// A fresh profile drops requests: for the first second or so after a brand-new headless profile starts,
+// Chrome aborts in-flight requests with net::ERR_CERT_VERIFIER_CHANGED while its certificate verifier is
+// set up. Measured 2026-10-21: first window opened the instant Chrome answered, 6 of 10 runs lost a request;
+// after an 8 s wait, 0 of 10. A harness artefact, not the app - so the script waits WARMUP_MS (default
+// 3000) and attaches DevTools before loading the app. FAST_FIRST=1 WARMUP_MS=0 reproduces it.
+//
+// APP_URL overrides the address (default https://localhost:7283/).
+import { spawn } from 'node:child_process';
+
+const [profile] = process.argv.slice(2);
+const PORT = 19334;
+const APP = process.env.APP_URL ?? 'https://localhost:7283/';
+const NO_RETRY = process.env.NO_RETRY === '1';
+const WARMUP_MS = Number(process.env.WARMUP_MS ?? 3000);
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// A Chrome left over from an earlier run still owning the port would answer instead of this one - on another
+// profile, with other state. Refuse rather than test the wrong browser.
+if (await fetch(`http://127.0.0.1:${PORT}/json/version`).then(() => true, () => false)) {
+  console.error(`port ${PORT} is already taken - kill the leftover headless Chrome first`);
+  process.exit(2);
+}
+
+const chrome = spawn(CHROME, [
+  `--user-data-dir=${profile}`, `--remote-debugging-port=${PORT}`, '--headless=new',
+  '--ignore-certificate-errors', '--no-first-run', '--no-default-browser-check', 'about:blank',
+], { stdio: 'ignore' });
+process.on('exit', () => chrome.kill('SIGKILL'));
+setTimeout(() => { console.error('FAIL gave up after 4 minutes'); process.exit(3); }, 240_000).unref();
+
+async function json(path, method = 'GET') {
+  for (let i = 0; i < 100; i++) {
+    try { return await (await fetch(`http://127.0.0.1:${PORT}${path}`, { method })).json(); } catch { await sleep(100); }
+  }
+  throw new Error('no devtools endpoint');
+}
+
+function cdp(url) {
+  const ws = new WebSocket(url);
+  let id = 0; const pending = new Map(); const errors = []; const failedLoads = []; const urls = new Map(); const handlers = {};
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
+    if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text);
+    else if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description).join(' '));
+    else if (m.method === 'Network.requestWillBeSent') urls.set(m.params.requestId, m.params.request.url);
+    else if (m.method === 'Network.loadingFailed') failedLoads.push(`${urls.get(m.params.requestId)} (${m.params.errorText})`);
+    handlers[m.method]?.(m.params);
+  };
+  const opened = new Promise(r => ws.onopen = r);
+  // A call to a page that never answers resolves empty after 5 s instead of hanging the run.
+  return { opened, errors, failedLoads, on: (method, fn) => handlers[method] = fn, send: (method, params = {}) => new Promise(r => {
+    const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params }));
+    setTimeout(() => { if (pending.delete(i)) r({ timedOut: true }); }, 5000);
+  }) };
+}
+
+const read = `(() => {
+  const t = s => document.querySelector('[data-testid=' + s + ']')?.textContent.trim();
+  return { id: t('device-id'), count: t('device-open-count'), role: t('device-role'), state: t('local-db-state'),
+           shim: globalThis.mealPlannerDatabase?.role?.() ?? null };
+})()`;
+const evaluate = async (w, expression) =>
+  (await w.page.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.result?.value;
+
+// Opens a window on the app. `before` runs after DevTools is attached and before the app is requested, so
+// it can set up request interception.
+async function open(before, direct = false) {
+  // `direct` requests the app the moment the window exists, as the first versions of this script did -
+  // kept to reproduce ERR_CERT_VERIFIER_CHANGED on a fresh profile (FAST_FIRST=1).
+  if (direct) {
+    const target = await json(`/json/new?${APP}`, 'PUT');
+    const page = cdp(target.webSocketDebuggerUrl);
+    await page.opened;
+    await page.send('Runtime.enable');
+    await page.send('Network.enable');
+    return { target, page };
+  }
+  const target = await json('/json/new?about:blank', 'PUT');
+  const page = cdp(target.webSocketDebuggerUrl);
+  await page.opened;
+  await page.send('Runtime.enable');
+  await page.send('Network.enable');
+  const w = { target, page };
+  if (before) await before(w);
+  await page.send('Page.navigate', { url: APP });
+  return w;
+}
+
+const bootFailed = w => w.page.errors.some(e => /Failed to start platform|mono_download_assets/.test(e))
+  || w.page.failedLoads.some(f => /ERR_CERT_VERIFIER_CHANGED/.test(f));
+const notes = [];
+
+async function card(w, until = c => c.count || c.state, label = 'card') {
+  let c, reloaded = false;
+  for (let i = 0; i < 300; i++) {
+    c = await evaluate(w, read);
+    if (c && until(c)) return c;
+    if (bootFailed(w) && !reloaded && !NO_RETRY) {
+      notes.push(`boot-download (retried): ${w.page.failedLoads.join(' | ')}`);
+      w.page.failedLoads.length = 0;
+      reloaded = true;
+      w.page.errors.length = 0;
+      await w.page.send('Page.reload');
+    }
+    await sleep(100);
+  }
+  // Classify the failure.
+  if (bootFailed(w)) {
+    throw new Error(`CLASS boot-download (${label}): a download was dropped\n  failed loads: ${w.page.failedLoads.join(' | ')}`);
+  }
+  // Blazor rendered the server card but the database never came: that, and only that, is the shim's fault.
+  const rendered = await evaluate(w, '!!document.querySelector("[data-testid=server-version], .mud-card")');
+  const events = await evaluate(w, 'JSON.stringify(globalThis.mealPlannerDatabase?.events ?? null)');
+  const locks = await evaluate(w, 'navigator.locks.query().then(q => JSON.stringify(q))');
+  const body = await evaluate(w, 'location.href + " | " + (document.body?.innerText ?? "").slice(0, 160)');
+  throw new Error(`CLASS ${rendered ? 'shim-stall' : 'boot-unknown'} (${label}): ${JSON.stringify(c)}\n  page: ${body}\n`
+    + `  events: ${events}\n  locks: ${locks}\n`
+    + `  failed loads: ${w.page.failedLoads.join(' | ')}\n`
+    + `  errors: ${w.page.errors.map(e => e.slice(0, 300)).join(' | ')}`);
+}
+
+const close = w => fetch(`http://127.0.0.1:${PORT}/json/close/${w.target.id}`).then(r => r.text());   // plain text
+const count = c => parseInt(c.count, 10);
+let failures = 0;
+const check = (label, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label} ${JSON.stringify(detail)}`); if (!ok) failures++; };
+async function leaderOf(windows) {
+  for (let i = 0; i < 100; i++) {
+    for (const w of windows) if ((await evaluate(w, read))?.shim === 'leader') return w;
+    await sleep(100);
+  }
+  return null;
+}
+
+try {
+  await json('/json/version');
+  if (WARMUP_MS > 0) await sleep(WARMUP_MS);
+
+  const a = await open(undefined, process.env.FAST_FIRST === '1');
+  const ca = await card(a, undefined, 'first window');
+  check('first window leads', ca.shim === 'leader', ca);
+
+  const b = await open();
+  const cb = await card(b, undefined, 'second window');
+  check('second window follows, same device, counted', cb.shim === 'follower' && cb.id === ca.id && count(cb) === count(ca) + 1, cb);
+  const ca2 = await card(a, c => count(c) === count(cb), 'first window refresh');
+  check('first window shows the second window\'s start', count(ca2) === count(cb), ca2);
+
+  // Hand the database over five times: close whoever leads, open a replacement.
+  let windows = [a, b], last = count(cb);
+  for (let round = 1; round <= 5; round++) {
+    const leader = await leaderOf(windows);
+    await close(leader);
+    windows = windows.filter(w => w !== leader);
+    const next = await leaderOf(windows);
+    check(`failover ${round}: a remaining window takes over`, next !== null, null);
+    const fresh = await open();
+    const cf = await card(fresh, undefined, `failover ${round} new window`);
+    check(`failover ${round}: a new window is counted`, cf.shim === 'follower' && count(cf) === last + 1, cf);
+    last = count(cf);
+    windows.push(fresh);
+  }
+
+  // Reload the leading window while a follower is open: it must come back, as follower or leader.
+  for (let round = 1; round <= 3; round++) {
+    const leader = await leaderOf(windows);
+    leader.page.errors.length = 0;
+    await leader.page.send('Page.reload');
+    await sleep(300);
+    const cr = await card(leader, c => (c.count && count(c) === last + 1) || c.state, `leader reload ${round}`);
+    check(`leader reload ${round}: the reloaded window gets the database back`, count(cr) === last + 1 && cr.shim !== null, cr);
+    last = count(cr);
+  }
+
+  // Down to one window, then reload it: nobody else can hold the database while it comes back.
+  for (const w of windows.slice(1)) await close(w);
+  windows = windows.slice(0, 1);
+  for (let round = 1; round <= 3; round++) {
+    const only = windows[0];
+    await sleep(500);
+    only.page.errors.length = 0;
+    await only.page.send('Page.reload');
+    await sleep(300);
+    const cr = await card(only, c => (c.count && count(c) === last + 1) || c.state, `sole window reload ${round}`);
+    check(`sole window reload ${round}: comes back leading`, count(cr) === last + 1 && cr.shim === 'leader', cr);
+    last = count(cr);
+  }
+
+  const many = await Promise.all([open(), open(), open()]);
+  const cards = await Promise.all(many.map((w, i) => card(w, undefined, `simultaneous window ${i + 1}`)));
+  const after = await card(windows[0], x => count(x) >= last + 3, 'after simultaneous starts');
+  check('three windows starting at once each count once, one device row', count(after) === last + 3 && cards.every(x => x.id === ca.id), { after, started: cards.map(x => x.count) });
+  last += 3;
+
+  // Fault injection, with no other window open so this one must lead: drop its first request for the
+  // cross-window script and its first request for the worker script. Both are retried; the database must
+  // still open, shared, and count the start once.
+  for (const w of [...windows, ...many]) await close(w);
+  await sleep(1000);
+  const dropped = { script: 0, worker: 0 };
+  const faulty = await open(async w => {
+    w.page.on('Fetch.requestPaused', p => {
+      const kind = p.request.url.includes('shared-database.js') ? 'script' : p.request.url.includes('sqlite-wasm-worker.js') ? 'worker' : null;
+      if (kind && dropped[kind] === 0) {
+        dropped[kind]++;
+        w.page.send('Fetch.failRequest', { requestId: p.requestId, errorReason: 'ConnectionReset' });
+      } else {
+        w.page.send('Fetch.continueRequest', { requestId: p.requestId });
+      }
+    });
+    await w.page.send('Fetch.enable', { patterns: [{ urlPattern: '*shared-database.js*' }, { urlPattern: '*sqlite-wasm-worker.js*' }] });
+  });
+  const cfault = await card(faulty, undefined, 'fault-injected window');
+  const faultEvents = JSON.parse(await evaluate(faulty, 'JSON.stringify(globalThis.mealPlannerDatabase?.events ?? [])'));
+  check('cross-window script dropped once: retried, database shared', dropped.script === 1 && cfault.shim === 'leader' && count(cfault) === last + 1, { dropped, cfault });
+  if (dropped.worker === 1) {
+    check('worker script dropped once: the leader retries and gets ready',
+      faultEvents.some(e => /worker failed \(attempt 1\)/.test(e)) && faultEvents.some(e => /worker ready \(attempt 2\)/.test(e)), faultEvents);
+  } else {
+    console.log('NOTE the worker script request was not intercepted - its retry is untested in this run');
+  }
+} catch (error) {
+  console.log(`FAIL ${error.message}`);
+  failures++;
+}
+
+for (const n of notes) console.log(`NOTE ${n}`);
+console.log(failures === 0 ? 'ALL PASS' : `${failures} FAILED`);
+process.exit(failures === 0 ? 0 : 1);

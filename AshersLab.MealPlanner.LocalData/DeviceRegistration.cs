@@ -1,4 +1,6 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace AshersLab.MealPlanner.LocalData;
 
@@ -10,6 +12,10 @@ public static class DeviceRegistration
     /// </summary>
     /// <remarks>
     /// The id is a GUIDv7 like every other client-minted id (docs/work/2026-10-offline-sync.md).
+    /// <para>
+    /// Read and write in one IMMEDIATE transaction: two windows of the app starting together share the one
+    /// database, and without it both could find no row and each insert one.
+    /// </para>
     /// </remarks>
     public static async Task<Device> RecordOpenAsync(
         LocalDbContext    db,
@@ -17,6 +23,10 @@ public static class DeviceRegistration
         CancellationToken cancellationToken = default
     )
     {
+        // Serializable is how both SQLite providers spell BEGIN IMMEDIATE.
+        await using IDbContextTransaction transaction =
+            await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+
         Device? device = await db.Devices.SingleOrDefaultAsync(cancellationToken);
 
         if (device is null)
@@ -33,6 +43,7 @@ public static class DeviceRegistration
         device.OpenCount    += 1;
 
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return device;
     }
