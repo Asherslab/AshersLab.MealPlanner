@@ -7,4 +7,5 @@ Costco receipts.
 Blazor WebAssembly + MudBlazor, code-first gRPC, offline-first with SQLite in the browser. Runs as a
 Home Assistant add-on or as a plain container.
 
-Not built yet. The design is in [docs/](docs/README.md).
+Being built in vertical slices; only the scaffold exists so far. The design and the build order are in
+[docs/](docs/README.md).

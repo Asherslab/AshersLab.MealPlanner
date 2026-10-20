@@ -48,8 +48,8 @@ member number, order number or URL from them into code, docs, tests or commit me
 Every doc has front-matter with `kind`, `status`, `code:` and `verified:`. **Writing, moving or
 folding a doc — or changing code a doc describes — follow [docs/AGENTS.md](docs/AGENTS.md).**
 
-`./update-sln-docs.sh` regenerates the docs solution folders. It needs `AshersLab.MealPlanner.sln`
-to exist; run it for the first time once the solution is scaffolded.
+`./update-sln-docs.sh` regenerates the docs solution folders in `AshersLab.MealPlanner.sln`. Run it
+after any add, move or delete under `docs/`.
 
 ## Where to read about the inherited architecture
 
@@ -67,8 +67,9 @@ Do not copy the GSBC repos' docs into this one. Read them there (siblings under
 
 **Never `dotnet run`.** Run configurations only — `mcp__rider__execute_run_configuration`, per the
 global `run-and-inspect-app` skill plus `.claude/app-local.md`, which resolves that skill's
-placeholders for this repo. **`.claude/app-local.md` does not exist yet** — write it in the first
-slice, modelled on `GSBC.Accounting/.claude/app-local.md`, once the AppHost and its ports exist.
+placeholders for this repo — and says where this stack is smaller than the one the skill assumes (no
+YARP, no containers, SQLite). The run configurations are shared files in `.run/`; the tests run through
+the `AshersLab.MealPlanner.Tests` configuration.
 
 Build through Rider rather than the CLI:
 

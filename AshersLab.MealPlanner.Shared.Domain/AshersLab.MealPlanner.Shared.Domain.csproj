@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Pure domain rules, referenced by the gRPC host AND the WASM client: the browser costs meals offline
+        from its own SQLite, so the arithmetic has to be the same code on both ends. No package references,
+        on purpose - see AGENTS.md.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+</Project>

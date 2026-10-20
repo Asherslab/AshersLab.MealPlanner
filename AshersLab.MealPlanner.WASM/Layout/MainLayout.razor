@@ -1,0 +1,17 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<MudLayout>
+    <MudAppBar Elevation="1" Dense="true">
+        <MudText Typo="Typo.h6">Meal Planner</MudText>
+    </MudAppBar>
+    <MudMainContent Class="pt-14">
+        <MudContainer MaxWidth="MaxWidth.Medium" Class="py-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

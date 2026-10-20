@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <title>Meal Planner</title>
+    <!--
+        Static "/" for now. Under Home Assistant ingress the app lives at /api/hassio_ingress/<token>/, and
+        this has to be rewritten per request from X-Ingress-Path - slice 3, see
+        docs/open-questions/home-assistant-ingress.md. Nothing else in the app may assume "/".
+    -->
+    <base href="/"/>
+    <!--
+        No web font link, unlike the MudBlazor template. The shopping list is used in a shop with poor
+        reception, so the app makes no third-party request; MudBlazor falls back to the system sans-serif.
+    -->
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet"/>
+    <link href="css/app.css" rel="stylesheet"/>
+</head>
+
+<body>
+<div id="app">
+    <div class="boot">Loading…</div>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">x</span>
+</div>
+
+<!-- Plain name, no fingerprint marker - see OverrideHtmlAssetPlaceholders in the csproj. -->
+<script src="_framework/blazor.webassembly.js"></script>
+<script src="_content/MudBlazor/MudBlazor.min.js"></script>
+</body>
+
+</html>

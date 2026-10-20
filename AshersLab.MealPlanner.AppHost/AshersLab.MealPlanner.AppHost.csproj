@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.2.2">
+
+    <!-- Local development only. Production is the gRPC host alone, in one image. -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <UserSecretsId>3ed666a5-e4c7-4c56-a93b-04d7d048b415</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AshersLab.MealPlanner.Grpc\AshersLab.MealPlanner.Grpc.csproj" />
+    </ItemGroup>
+
+</Project>

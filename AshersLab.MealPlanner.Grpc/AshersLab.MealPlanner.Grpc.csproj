@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <!--
+        The one process in production. It serves the gRPC-Web API AND the Blazor WASM app from the same
+        origin, which is why it references the WASM project: there is no YARP, no nginx image and no
+        migrations Job (docs/work/2026-10-deployment.md). The WASM files reach the browser as this
+        project's static web assets.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+        <PackageReference Include="Grpc.AspNetCore.Web" Version="2.76.0" />
+        <!-- 10.0.13 at least: <= 10.0.12 carries two RCE advisories (CVE-2026-102870, CVE-2026-96230). -->
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.13" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="protobuf-net.Grpc.AspNetCore" Version="1.2.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AshersLab.MealPlanner.ServiceDefaults\AshersLab.MealPlanner.ServiceDefaults.csproj" />
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Contracts\AshersLab.MealPlanner.Shared.Contracts.csproj" />
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Domain\AshersLab.MealPlanner.Shared.Domain.csproj" />
+        <ProjectReference Include="..\AshersLab.MealPlanner.WASM\AshersLab.MealPlanner.WASM.csproj" />
+    </ItemGroup>
+
+</Project>

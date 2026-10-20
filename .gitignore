@@ -528,6 +528,10 @@ $RECYCLE.BIN/
 *.db-wal
 *.sqlite
 
+# The gRPC host's fallback data directory when DataDirectory is not configured (a bare `dotnet ef`, a
+# test host). The AppHost points it outside the repo; see .claude/app-local.md.
+app-data/
+
 # Stray home-directory artefact created by a tool that expanded `~` as a literal path.
 /~/
 

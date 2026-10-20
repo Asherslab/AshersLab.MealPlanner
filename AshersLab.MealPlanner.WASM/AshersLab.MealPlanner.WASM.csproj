@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+
+        <!--
+            OverrideHtmlAssetPlaceholders is deliberately NOT set. In GSBC.Accounting it made `dotnet publish`
+            fingerprint blazor.webassembly.js without rewriting index.html's reference to it, and the
+            published site was a blank page - while the dev server, which does not fingerprint, worked fine.
+        -->
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
+        <PackageReference Include="MudBlazor" Version="9.4.0" />
+
+        <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+        <PackageReference Include="Grpc.Net.Client.Web" Version="2.71.0" />
+        <PackageReference Include="Grpc.Net.ClientFactory" Version="2.71.0" />
+        <PackageReference Include="protobuf-net.Grpc.ClientFactory" Version="1.2.2" />
+    </ItemGroup>
+
+    <!-- Never the Grpc project: the client only ever sees the wire contract and the shared pure rules. -->
+    <ItemGroup>
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Contracts\AshersLab.MealPlanner.Shared.Contracts.csproj" />
+        <ProjectReference Include="..\AshersLab.MealPlanner.Shared.Domain\AshersLab.MealPlanner.Shared.Domain.csproj" />
+    </ItemGroup>
+
+</Project>

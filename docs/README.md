@@ -14,15 +14,15 @@ Writing or moving a doc rather than reading one? [AGENTS.md](AGENTS.md) is the p
 directory, what front-matter, and how a doc leaves `work/`.
 
 Operating the repo — running the app, driving the browser, reading the database — is not here. That
-is the global `run-and-inspect-app` skill plus this repo's `.claude/app-local.md` (written in the
-first slice), and the repo-wide rules are in [../AGENTS.md](../AGENTS.md).
+is the global `run-and-inspect-app` skill plus this repo's `.claude/app-local.md`, and the repo-wide
+rules are in [../AGENTS.md](../AGENTS.md).
 
 ## For how something works, read `modules/` only
 
 Present tense, kept current, no dates.
 
-Nothing yet — no code exists. Module docs are created as slices land, by folding the `work/` docs
-below.
+- [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
+  gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
 
 ## The other three directories
 
