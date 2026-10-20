@@ -11,6 +11,7 @@ code:
   - AshersLab.MealPlanner.Grpc/AshersLab.MealPlanner.Grpc.csproj
   - AshersLab.MealPlanner.WASM/Extensions/GrpcServiceExtensions.cs
   - AshersLab.MealPlanner.WASM/wwwroot/index.html
+  - AshersLab.MealPlanner.Grpc/Features/Ingress
 ---
 
 # How the app is hosted
@@ -32,8 +33,12 @@ How to *run* it locally is in `.claude/app-local.md`; why it is one image is in 
 - **gRPC clients use the app's base URI, never `/` and never a host name**
   (`WASM/Extensions/GrpcServiceExtensions.cs`, fed from `HostEnvironment.BaseAddress`). Under Home
   Assistant ingress the app lives below `/api/hassio_ingress/<token>/`; a root-relative call leaves the
-  add-on. `index.html` still has a static `<base href="/">` — rewriting it from `X-Ingress-Path` is
-  slice 3, tracked in [home-assistant-ingress](../../open-questions/home-assistant-ingress.md).
+  add-on. The base comes from `<base href>`, which the host rewrites per request (below).
+- **`index.html` is never served as a static file.** Its `<base href="/"/>` line is replaced per request
+  with the ingress prefix (`Grpc/Features/Ingress/AppShell.cs`), for `/`, `/index.html` and every deep link.
+  Change that exact line in `WASM/wwwroot/index.html` and the rewrite throws — `IngressTests` pins it. A
+  route or middleware that hands out the static file instead serves a shell whose every URL leaves the
+  add-on: a blank panel in Home Assistant, and fine everywhere else.
 - **A service that compiles and is not mapped answers "unimplemented"** at the client, and a contract
   with no `AddCodeFirstClient<T>` line in `WASM/Program.cs` fails when a page injects it — both at
   runtime, neither at build.
@@ -63,13 +68,19 @@ files gives it for free, so there is no CORS and no service-discovery address in
 1. **Migrate**, before the host listens. SQLite and one process, so there is no job to wait for; a
    migration that fails stops startup rather than serving a half-migrated database. Then the sync epoch is
    minted on a new database and the newest op seq read (`Features/Sync/SyncStartup.cs`).
-2. `UseBlazorFrameworkFiles` — `_framework/` in its own branch, plus the `Blazor-Environment` header the
+2. `UseHomeAssistantIngress` (`Features/Ingress/IngressRequest.cs`) — first, so it covers files and services
+   alike. Inert unless `Ingress:TrustedProxy` is set; the add-on sets it. Then it refuses any other peer
+   with 403, and takes the base path and the user from the Supervisor's headers — see
+   [deployment](deployment.md).
+3. `UseBlazorFrameworkFiles` — `_framework/` in its own branch, plus the `Blazor-Environment` header the
    client reads its environment from (`Development` locally).
-3. `UseRouting` — see the trap above.
-4. `UseGrpcWeb(DefaultEnabled = true)` — browsers cannot speak HTTP/2 gRPC framing.
-5. Endpoints: health (Development only), gRPC services under `/gRPC/AshersLab.MealPlanner.<Service>/`
-   (the `[Service]` attribute's string), static assets, then `MapFallbackToFile("index.html")` for deep
-   links — lowest priority, so it never shadows a gRPC or file route.
+4. `/index.html` by name → the app shell. A middleware: an endpoint ordered ahead of `MapStaticAssets`'
+   own one still lost to the static file in the test host.
+5. `UseRouting` — see the trap above.
+6. `UseGrpcWeb(DefaultEnabled = true)` — browsers cannot speak HTTP/2 gRPC framing.
+7. Endpoints: health (Development only), gRPC services under `/gRPC/AshersLab.MealPlanner.<Service>/`
+   (the `[Service]` attribute's string), static assets, then `MapFallback(AppShell.Serve)` for `/` and deep
+   links — lowest priority, so it never shadows a gRPC or file route. The shell goes out `no-cache`.
 
 ## Where the data lives
 
@@ -79,7 +90,7 @@ One setting, `DataDirectory` (`Grpc/Data/DataDirectory.cs`); the database is
 | Where | `DataDirectory` |
 |---|---|
 | Local, via the AppHost | `~/Library/Application Support/AshersLab.MealPlanner` — outside the repo |
-| Home Assistant add-on | `/data` (in HA backups) — set in slice 3 |
+| The image (Home Assistant add-on) | `/data` — the image's `ENV`; in HA backups |
 | Kubernetes | a PVC mount — slice 14 |
 | Unset (bare `dotnet ef`, a project-only launch) | `app-data/` under the working directory, git-ignored |
 

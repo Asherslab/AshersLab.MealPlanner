@@ -17,4 +17,13 @@ public record ServerInfo
     /// from the assembly. Null only if the database has never been migrated, which startup prevents.
     /// </summary>
     public string? LatestMigration { get; init; }
+
+    /// <summary>
+    /// The Home Assistant login name the call arrived with, from ingress. Null outside Home Assistant (local
+    /// development), where nobody is signed in.
+    /// </summary>
+    public string? UserName { get; init; }
+
+    /// <summary>The same user's display name in Home Assistant, when it has one.</summary>
+    public string? UserDisplayName { get; init; }
 }

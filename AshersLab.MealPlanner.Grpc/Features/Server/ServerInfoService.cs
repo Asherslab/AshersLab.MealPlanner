@@ -1,7 +1,10 @@
 using System.Reflection;
+using System.Security.Claims;
 using AshersLab.MealPlanner.Grpc.Data;
+using AshersLab.MealPlanner.Grpc.Features.Ingress;
 using AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Server;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server;
+using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
 using ProtoBuf.Grpc;
 
@@ -21,11 +24,16 @@ public class ServerInfoService(
         // prove this call reached the database, so the answer has to come out of it.
         IEnumerable<string> applied = await db.Database.GetAppliedMigrationsAsync(context.CancellationToken);
 
+        // Set by UseHomeAssistantIngress from the Supervisor's X-Remote-User-* headers, and only from them.
+        ClaimsPrincipal? user = context.ServerCallContext?.GetHttpContext().User;
+
         return new ServerInfo
         {
             Version = Version,
             ServerTimeUtc = DateTime.UtcNow,
-            LatestMigration = applied.LastOrDefault()
+            LatestMigration = applied.LastOrDefault(),
+            UserName = user?.FindFirst(ClaimTypes.Name)?.Value,
+            UserDisplayName = user?.FindFirst(IngressRequest.DisplayNameClaim)?.Value
         };
     }
 }

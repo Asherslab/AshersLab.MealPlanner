@@ -15,7 +15,22 @@
 **/*.user
 **/node_modules/
 
+# Real household data (receipts, the spreadsheet, local notes) - never in a build context, even one whose
+# stage is thrown away: the layer still sits in the local build cache. Local databases likewise.
+private/
+**/app-data/
+*.db
+*.db-shm
+*.db-wal
+*.pdf
+*.xlsx
+
 # Nothing in the image needs these, and the WASM build context is the whole repo.
+.github/
+.run/
+mealplanner/
+AshersLab.MealPlanner.Tests/
+AshersLab.MealPlanner.AppHost/
 docs/
 mockups/
 *.docx

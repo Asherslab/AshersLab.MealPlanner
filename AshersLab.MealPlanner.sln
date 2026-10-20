@@ -36,7 +36,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "modules", "modules", "{331A
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{F5CEBEAF-8131-46D3-BF40-5BD5B8E554B1}"
 	ProjectSection(SolutionItems) = preProject
+		docs\modules\infrastructure\deployment.md = docs\modules\infrastructure\deployment.md
 		docs\modules\infrastructure\hosting.md = docs\modules\infrastructure\hosting.md
+		docs\modules\infrastructure\README.md = docs\modules\infrastructure\README.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sync", "sync", "{40EBDCC4-B806-496B-A5E1-F709430AC2AB}"

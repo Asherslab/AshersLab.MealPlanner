@@ -112,6 +112,25 @@ each profile's SQLite out of OPFS (directly over the DevTools protocol - no rece
 beside the server's. Ingredients are named with the run id, so runs pile up in the database; wipe it when that
 matters. The Chrome extension cannot do this: it has no offline switch and drives only one profile.
 
+## The image, behind a simulated Home Assistant ingress
+
+The AppHost serves the app at `/`, which hides every base-path bug. To see what the add-on sees, build the
+image and run it behind nginx playing the Supervisor (why and what it proves: `docs/modules/infrastructure/deployment.md`):
+
+```bash
+docker buildx build --platform linux/arm64 -t mealplanner:local --load .     # ~80 s cold
+DATA_DIR=<scratch>/sim-data sh .claude/tools/ingress-sim/run.sh               # --down to stop
+```
+
+| Port | What |
+|---|---|
+| 18299 | the fake Supervisor — open `http://localhost:18299/api/hassio_ingress/sImUlAtEdToKeN/` |
+| 18298 | the app's own port — must answer 403 |
+
+The server database is `<scratch>/sim-data/mealplanner.db`. The two-profile check runs against it with
+`APP_URL=http://localhost:18299/api/hassio_ingress/sImUlAtEdToKeN/ SERVER_DB=<scratch>/sim-data/mealplanner.db`.
+After a rebuild, `--down` and start again; a page left open on the old container logs 503s/404s until reloaded.
+
 ## Database
 
 **SQLite, one file, outside the repo:**

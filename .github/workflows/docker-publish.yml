@@ -1,0 +1,118 @@
+# The whole release. One push to master produces a version, one multi-arch image on GHCR, and a commit that
+# tells Home Assistant there is an update - nothing is deployed by hand.
+#
+# Same shape as GSBC.Accounting's workflow of the same name (semantic version -> images), with the differences
+# recorded in docs/modules/infrastructure/deployment.md: GHCR instead of Docker Hub, so no repository secret;
+# one image instead of four; no QEMU (the Dockerfile cross-builds); and the last step bumps the Home Assistant
+# add-on's version instead of an Argo app.
+name: Docker Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master" ]
+
+# One release at a time. Two overlapping runs would race to push the add-on version bump to master.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # GHCR names must be lower case.
+  IMAGE: ghcr.io/asherslab/asherslab-mealplanner
+
+jobs:
+  version:
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # semantic-version reads the tag history to work out the next number. A shallow clone gives it
+          # nothing and every run then claims to be the first.
+          fetch-depth: 0
+
+      - name: Generate Semantic Version
+        id: version
+        uses: paulhatch/semantic-version@v5.4.0
+
+      - name: Push Release Tag
+        run: |
+          git tag v${{ steps.version.outputs.version }}
+          git push origin v${{ steps.version.outputs.version }}
+
+  build:
+    needs: version
+    permissions:
+      contents: read
+      # GITHUB_TOKEN can push to this repository's own packages. No secret to create.
+      packages: write
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No setup-qemu-action, on purpose: the Dockerfile's build stage runs on the runner's own platform and the
+      # arm64 stage only copies files, so nothing needs emulating. If a RUN ever lands in the final stage, the
+      # arm64 build fails with "exec format error" rather than silently crawling - add QEMU then, knowingly.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ needs.version.outputs.version }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}:latest
+          cache-to: type=inline
+          # Links the package to this repository, so it shows on the repo page and inherits its access.
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          push: true
+          tags: ${{ env.IMAGE }}:latest,${{ env.IMAGE }}:${{ needs.version.outputs.version }}
+
+  # Last, and only after the push succeeded. Home Assistant offers an update when config.yaml's version changes,
+  # and then pulls exactly that tag - committed before the image exists, the update fails to pull.
+  addon-version:
+    needs:
+      - version
+      - build
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Bump the add-on version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sed -i -E "s/^version: .*/version: \"${VERSION}\"/" mealplanner/config.yaml
+          grep -q "^version: \"${VERSION}\"$" mealplanner/config.yaml
+
+          if git diff --quiet; then
+            echo "config.yaml already at ${VERSION}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release add-on ${VERSION} [skip ci]"
+          # A push to master since checkout (a human, between build and here) would reject this; rebase onto it.
+          git pull --rebase origin master
+          git push origin HEAD:master

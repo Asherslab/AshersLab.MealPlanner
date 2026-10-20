@@ -6,9 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
     <title>Meal Planner</title>
     <!--
-        Static "/" for now. Under Home Assistant ingress the app lives at /api/hassio_ingress/<token>/, and
-        this has to be rewritten per request from X-Ingress-Path - slice 3, see
-        docs/open-questions/home-assistant-ingress.md. Nothing else in the app may assume "/".
+        Rewritten per request. Under Home Assistant ingress the app lives at /api/hassio_ingress/<token>/, and
+        the host replaces this exact line from X-Ingress-Path (Grpc/Features/Ingress/AppShell.cs - change one,
+        change both; a test fails if they drift). Nothing else in the app may assume "/".
     -->
     <base href="/"/>
     <!--

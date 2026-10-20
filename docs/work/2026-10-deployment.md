@@ -1,11 +1,14 @@
 ---
 title: Deployment design
 kind: plan
-status: accepted
+status: in-progress
 module: infrastructure
 opened: 2026-10-20
-verified: 2026-10-20
-code: []
+verified: 2026-10-21
+code:
+  - Dockerfile
+  - mealplanner/config.yaml
+  - .github/workflows/docker-publish.yml
 ---
 
 # Deployment design
@@ -13,6 +16,13 @@ code: []
 How one image runs as a Home Assistant add-on on a Raspberry Pi and as a plain container on
 Kubernetes, and how CI produces it. Expands the "Hosting", "Images" and "Storage" rows of
 [the v1 scope](2026-10-v1-scope.md).
+
+**The image, the add-on and CI landed in slice 3 (2026-10-21)** and are described as built in
+[deployment](../modules/infrastructure/deployment.md) — read that, not the sections below, for how they work.
+Differences from this plan: the add-on folder is `mealplanner/`; the Actual Budget options are not reserved
+yet (an empty `options:` until version 2 needs them); no icon or logo yet. What remains here is the
+standalone (Kubernetes) section, slice 14, and `actual-http-api`, version 2. Fold this doc when slice 14
+lands.
 
 ## Why one image, and why that departs from the GSBC repos
 

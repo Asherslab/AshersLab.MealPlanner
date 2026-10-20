@@ -1,0 +1,5 @@
+# Makes this repository a Home Assistant add-on repository: Settings -> Add-ons -> Add-on store -> ⋮ ->
+# Repositories, then add this repository's GitHub URL. The add-on itself is in mealplanner/.
+name: AshersLab Meal Planner
+url: https://github.com/Asherslab/AshersLab.MealPlanner
+maintainer: Asherslab

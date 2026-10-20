@@ -23,6 +23,9 @@ Present tense, kept current, no dates.
 
 - [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
+- [How the app is deployed](modules/infrastructure/deployment.md) — the one image, the Home Assistant add-on,
+  ingress (base path, the gRPC-Web prefix trap, who may connect, the HA user), CI to GHCR, and the owner's
+  install steps.
 - [The browser database](modules/sync/browser-database.md) — EF Core SQLite in OPFS, the `wasm-tools`
   workload trap, starting it after the first render, sharing it across windows, one context at a time per
   window, local migrations, and what it costs.
@@ -44,8 +47,8 @@ Present tense, kept current, no dates.
   domain model, how costs are computed, and the build order. **Start here.**
 - [Receipt formats](work/2026-10-receipt-formats.md) — what a Woolworths invoice and a Costco receipt
   contain, their traps, and how lines match products.
-- [Deployment design](work/2026-10-deployment.md) — one image as a Home Assistant add-on and on k8s,
-  why there is no YARP, and the CI pipeline to GHCR.
+- [Deployment design](work/2026-10-deployment.md) — why one image and no YARP; the add-on and CI parts
+  have landed in [deployment](modules/infrastructure/deployment.md). Left: standalone k8s, slice 14.
 - [Version 2 integrations](work/2026-10-version-2-integrations.md) — Actual Budget and Woolworths live
   prices. Not to be built yet.
 
@@ -53,8 +56,8 @@ Present tense, kept current, no dates.
 
 - [SQLite in the browser](open-questions/sqlite-in-the-browser.md) — proven in Chrome; waiting on the
   owner's iPhone check, whose steps it lists.
-- [Blazor WASM behind Home Assistant ingress](open-questions/home-assistant-ingress.md) — base path,
-  gRPC-Web, identity headers, the Pi. Slice 3.
+- [Blazor WASM behind Home Assistant ingress](open-questions/home-assistant-ingress.md) — proven against a
+  simulated Supervisor; waiting on the owner to install the add-on on the Pi, whose steps it lists.
 - [Reading Costco receipts with OCR in the browser](open-questions/costco-ocr.md) — is tesseract.js
   accurate enough? Slice 13.
 

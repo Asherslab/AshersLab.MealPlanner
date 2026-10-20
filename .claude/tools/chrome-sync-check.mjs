@@ -16,7 +16,8 @@ const [scratch] = process.argv.slice(2);
 if (!scratch) { console.error('usage: chrome-sync-check.mjs <scratchDir>'); process.exit(2); }
 const APP = (process.env.APP_URL ?? 'https://localhost:7283/') + 'ingredients';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const SERVER_DB = join(homedir(), 'Library/Application Support/AshersLab.MealPlanner/mealplanner.db');
+// SERVER_DB: the image under .claude/tools/ingress-sim keeps it in its DATA_DIR instead.
+const SERVER_DB = process.env.SERVER_DB ?? join(homedir(), 'Library/Application Support/AshersLab.MealPlanner/mealplanner.db');
 const RUN = Date.now().toString(36);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;

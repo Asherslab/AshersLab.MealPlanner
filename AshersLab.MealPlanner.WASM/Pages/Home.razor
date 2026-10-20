@@ -49,6 +49,19 @@
                     <th scope="row">Database</th>
                     <td data-testid="server-migration">@(_info.LatestMigration ?? "not migrated")</td>
                 </tr>
+                <tr>
+                    <th scope="row">Signed in as</th>
+                    <td data-testid="server-user">
+                        @if (_info.UserName is null)
+                        {
+                            <span>nobody - not opened through Home Assistant</span>
+                        }
+                        else
+                        {
+                            <span>@(_info.UserDisplayName ?? _info.UserName) (@_info.UserName)</span>
+                        }
+                    </td>
+                </tr>
                 </tbody>
             </MudSimpleTable>
         }

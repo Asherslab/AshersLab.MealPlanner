@@ -1,0 +1,36 @@
+# The Home Assistant add-on. Reference: https://developers.home-assistant.io/docs/add-ons/configuration
+# Why it looks like this: docs/modules/infrastructure/deployment.md.
+
+name: Meal Planner
+description: Plan the household's meals, the shopping list and what it all costs.
+slug: mealplanner
+url: https://github.com/Asherslab/AshersLab.MealPlanner
+
+# Written by CI (.github/workflows/docker-publish.yml) AFTER the image with this tag is pushed - that commit is
+# what makes Home Assistant offer the update. Never edit by hand: a version with no image fails to install.
+version: "0.0.0"
+
+# One multi-arch manifest, pulled by platform; no {arch} in the name.
+image: ghcr.io/asherslab/asherslab-mealplanner
+arch:
+  - aarch64
+  - amd64
+
+startup: application
+boot: auto
+
+# Reachable only through Home Assistant's sidebar. No `ports:` - nothing is published on the host, so the only
+# client the app ever sees is the Supervisor.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:food
+panel_title: Meals
+
+# The host refuses every request not from this address and believes X-Ingress-Path and X-Remote-User-* only
+# from it (AshersLab.MealPlanner.Grpc/Features/Ingress). 172.30.32.2 is the Supervisor on the hassio network.
+environment:
+  Ingress__TrustedProxy: 172.30.32.2
+
+# The Actual Budget settings and S3 backup arrive with version 2; there is nothing to configure yet.
+options: {}
+schema: {}
