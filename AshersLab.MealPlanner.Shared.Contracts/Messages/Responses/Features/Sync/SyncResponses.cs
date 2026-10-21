@@ -7,6 +7,9 @@ public record PushResponse
 {
     /// <summary>One per pushed op, in the same order.</summary>
     public List<PushResult> Results { get; init; } = [];
+
+    /// <summary>The server database the seqs belong to.</summary>
+    public Guid ServerEpoch { get; init; }
 }
 
 /// <summary>What became of one pushed op. On the wire as its number - add at the end.</summary>
@@ -20,7 +23,8 @@ public enum PushOutcome
 
     /// <summary>
     /// Not logged: the server could not accept it (unknown entity, invalid field). The client drops it from its
-    /// outbox - a retry would be refused again - and says so.
+    /// outbox - a retry would be refused again - and says so. The edit stays applied in that browser: client
+    /// validation is a superset of the server's, so this is a bug, not a conflict (offline-sync.md).
     /// </summary>
     Rejected = 2,
 }
@@ -44,7 +48,7 @@ public record PullResponse
     /// <summary>Which server database these ops come from. The client keeps it with its cursor.</summary>
     public required Guid ServerEpoch { get; init; }
 
-    /// <summary>Set instead of <see cref="Ops"/> on a first pull, or when the epoch did not match.</summary>
+    /// <summary>Set instead of <see cref="Ops"/> when the cursor means nothing here; see <see cref="SyncSnapshot.Reason"/>.</summary>
     public SyncSnapshot? Snapshot { get; init; }
 
     /// <summary>Ops after the requested seq, ascending, including the client's own.</summary>

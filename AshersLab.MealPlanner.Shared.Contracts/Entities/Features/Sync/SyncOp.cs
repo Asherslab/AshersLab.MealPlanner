@@ -28,6 +28,12 @@ public record SyncOp
 
     /// <summary>The server's order. 0 on a push - the server assigns it.</summary>
     public long Seq { get; init; }
+
+    /// <summary>
+    /// The log's <see cref="Domain.Sync.LogChain"/> through this op. Null on a push. The browser sends it back
+    /// with its cursor, so the server can tell a log restored from a backup from the one the browser pulled.
+    /// </summary>
+    public string? Chain { get; init; }
 }
 
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]

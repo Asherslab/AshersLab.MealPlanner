@@ -52,6 +52,10 @@ public class SyncService(
         // upgrade from read to write with SQLITE_BUSY. One transaction for the batch, per the design.
         await using (IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
         {
+            // Read under the write lock, so no other push can log an op between this and the chain it extends.
+            string chain = await db.Ops.OrderByDescending(o => o.Seq).Select(o => o.Chain).FirstOrDefaultAsync(ct)
+                        ?? LogChain.Empty;
+
             foreach (SyncOp op in request.Ops)
             {
                 long? seen = await db.Ops.Where(o => o.OpId == op.OpId).Select(o => (long?)o.Seq).FirstOrDefaultAsync(ct);
@@ -72,10 +76,13 @@ public class SyncService(
 
                 await OpApplier.ApplyAsync(db, type!, op.EntityId, op.Kind, clock, fields, ct);
 
+                chain = LogChain.Next(chain, op.OpId);
+
                 // Logged whether or not it won its merge: every browser must see the same ops to reach the same
                 // answer, and a losing op is how they learn it lost.
                 DbOp row = new()
                 {
+                    Chain         = chain,
                     OpId          = op.OpId,
                     DeviceId      = op.DeviceId,
                     Hlc           = op.Hlc,
@@ -98,7 +105,7 @@ public class SyncService(
         if (latest > 0)
             signal.Published(latest);
 
-        return new PushResponse { Results = results };
+        return new PushResponse { Results = results, ServerEpoch = signal.Epoch };
     }
 
     public async Task<PullResponse> Pull(PullRequest request, CallContext context = default)
@@ -111,21 +118,27 @@ public class SyncService(
         // One read transaction: the snapshot and the seq it is "as of" must come from the same instant.
         await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
 
-        long latest = await db.Ops.MaxAsync(o => (long?)o.Seq, ct) ?? 0;
-
-        // No cursor yet (a first pull), a cursor from another database (wiped and recreated), or one past the end
-        // of this log (restored from an older backup) means nothing here: send everything, as of now.
-        if (request.ServerEpoch != signal.Epoch || request.SinceSeq > latest)
+        if (await SnapshotReasonAsync(request, ct) is { } reason)
         {
+            // Send everything, as of now.
+            var head = await db.Ops.OrderByDescending(o => o.Seq).Select(o => new { o.Seq, o.Chain }).FirstOrDefaultAsync(ct);
             List<SnapshotRow> rows = await OpApplier.SnapshotAsync(db, ct);
+
+            if (reason == SnapshotReason.HistoryLost)
+                logger.LogWarning(
+                    "A browser has pulled through seq {Seq}, and this log does not hold that history (head {Head}): the " +
+                    "database was restored from an older backup. Sending a snapshot it will push its lost edits back from.",
+                    request.SinceSeq, head?.Seq ?? 0);
 
             return new PullResponse
             {
                 ServerEpoch = signal.Epoch,
                 Snapshot = new SyncSnapshot
                 {
-                    AsOfSeq  = latest,
-                    Entities = [.. rows.Select(ToContract)],
+                    AsOfSeq   = head?.Seq ?? 0,
+                    AsOfChain = head?.Chain ?? LogChain.Empty,
+                    Entities  = [.. rows.Select(ToContract)],
+                    Reason    = reason,
                 },
             };
         }
@@ -159,6 +172,24 @@ public class SyncService(
         }
     }
 
+    /// <summary>
+    /// Null when the cursor is a point in this log: same database, and the op at its seq has the chain the browser
+    /// pulled with it - so the log up to there is exactly what the browser has seen.
+    /// </summary>
+    private async Task<SnapshotReason?> SnapshotReasonAsync(PullRequest request, CancellationToken ct)
+    {
+        if (request.ServerEpoch is null)
+            return SnapshotReason.FirstLoad;
+        if (request.ServerEpoch != signal.Epoch)
+            return SnapshotReason.NewDatabase;
+        if (request.SinceSeq == 0)
+            return null;
+
+        // Missing: the log ends before the cursor. Different: the seq was numbered again after a restore.
+        string? held = await db.Ops.Where(o => o.Seq == request.SinceSeq).Select(o => o.Chain).FirstOrDefaultAsync(ct);
+        return held is not null && held == request.SinceChain ? null : SnapshotReason.HistoryLost;
+    }
+
     private static void RefuseUnsupported(int version)
     {
         if (version is < SyncProtocol.OldestSupported or > SyncProtocol.Current)
@@ -178,14 +209,14 @@ public class SyncService(
 
         if (type is null)
             return $"Unknown entity '{op.Entity}'.";
-        if (op.OpId == Guid.Empty || op.EntityId == Guid.Empty || op.DeviceId == Guid.Empty)
-            return "An op needs an op id, an entity id and a device id.";
-        if (!Enum.IsDefined(op.Kind))
-            return $"Unknown op kind {(int)op.Kind}.";
+        // What LocalOps mints itself. Everything about the op's content is type.Problem, the same check the
+        // browser makes before it applies an edit.
+        if (op.OpId == Guid.Empty || op.DeviceId == Guid.Empty)
+            return "An op needs an op id and a device id.";
         if (!Hlc.TryParse(op.Hlc, out clock) || clock.DeviceId != op.DeviceId)
             return "The op's clock is unreadable or names another device.";
 
-        return type.OpProblem(op.Kind, fields);
+        return type.Problem(op.Kind, op.EntityId, fields);
     }
 
     private static SyncOp ToContract(DbOp op) => new()
@@ -198,6 +229,7 @@ public class SyncService(
         Kind     = op.Kind,
         Fields   = [.. OpFieldsJson.Read(op.FieldsJson).Select(f => new SyncField { Name = f.Name, Value = f.Value })],
         Seq      = op.Seq,
+        Chain    = op.Chain,
     };
 
     private static SnapshotEntity ToContract(SnapshotRow row) => new()

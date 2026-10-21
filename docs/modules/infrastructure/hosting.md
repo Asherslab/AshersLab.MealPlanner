@@ -97,6 +97,13 @@ One setting, `DataDirectory` (`Grpc/Data/DataDirectory.cs`); the database is
 The fallback is `app-data`, not `data`: macOS is case-insensitive, and `data` is the host project's
 `Data/` source folder.
 
+**Not proven: that a Home Assistant backup of `/data` is a usable SQLite database.** An add-on's backup is "hot"
+by default - its folder is copied while it runs - and SQLite in WAL mode keeps recent commits in
+`mealplanner.db-wal` beside the file, so a copy taken mid-write can be torn. `backup: cold` in
+`mealplanner/config.yaml` (the add-on stopped for the copy) or a `backup_pre` checkpoint would settle it; neither
+is set, and neither has been tried on the Pi. What a restore of a *good* backup does to the browsers is in
+[offline sync](../sync/offline-sync.md) - they give back what it lost.
+
 ## Package versions that are not the GSBC ones
 
 - `Microsoft.AspNetCore.Components.WebAssembly.Server` is **10.0.13 or later**: 10.0.0–10.0.12 carry two

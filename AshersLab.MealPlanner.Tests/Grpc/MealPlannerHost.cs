@@ -1,5 +1,7 @@
+using AshersLab.MealPlanner.Grpc.Data;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Web;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -16,6 +18,34 @@ public sealed class MealPlannerHost : WebApplicationFactory<Program>
 {
     private readonly string _dataDirectory =
         Path.Combine(Path.GetTempPath(), "mealplanner-tests", Guid.NewGuid().ToString("N"));
+
+    public MealPlannerHost()
+    {
+    }
+
+    /// <summary>
+    /// A host started on a copy of a backup taken with <see cref="BackupAsync"/> - the Pi after Home Assistant
+    /// restores the add-on's <c>/data</c>.
+    /// </summary>
+    public static MealPlannerHost RestoredFrom(string backupFile)
+    {
+        MealPlannerHost host = new();
+        Directory.CreateDirectory(host._dataDirectory);
+        File.Copy(backupFile, Path.Combine(host._dataDirectory, DataDirectory.DatabaseFileName));
+        return host;
+    }
+
+    /// <summary>A consistent copy of the server's database as it is now, as a backup would take it.</summary>
+    public async Task<string> BackupAsync()
+    {
+        string file = Path.Combine(Path.GetTempPath(), "mealplanner-tests", $"backup-{Guid.NewGuid():N}.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+
+        using IServiceScope scope = Services.CreateScope();
+        MealPlannerDbContext db = scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>();
+        await db.Database.ExecuteSqlRawAsync("VACUUM INTO '" + file + "'");
+        return file;
+    }
 
     /// <summary>
     /// The peer address a request claims, for the ingress tests. The test server has no socket, so it reports
@@ -35,6 +65,8 @@ public sealed class MealPlannerHost : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("DataDirectory", _dataDirectory);
+        // Every test starts a host; at Information each one prints its migrations and lifetime, burying failures.
+        builder.UseSetting("Logging:LogLevel:Default", "Warning");
 
         foreach ((string key, string? value) in _settings)
             builder.UseSetting(key, value);

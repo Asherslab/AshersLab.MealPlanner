@@ -27,7 +27,7 @@ or anything that builds a URL. Why it is one image and not the GSBC repos' four 
 
 - **A gRPC-Web client must be given the base path twice.** `GrpcChannel` keeps only the scheme, host and port
   of its address and sends every call to `/{service}/{method}` from the root. Under ingress that is a 404 —
-  the page loads, every call fails "Unimplemented", the sync chip says offline. `BasePathHandler` in
+  the page loads, every call fails "Unimplemented", the sync chip says "Sync problem". `BasePathHandler` in
   `WASM/Extensions/GrpcServiceExtensions.cs` puts the prefix back. At `/` (local development, the test host)
   the bug is invisible; only a run behind a prefix shows it. Found on 2026-10-21 by the simulation below.
 - **`index.html` is rewritten per request, never served static** — see [hosting](hosting.md). The token in the
@@ -93,7 +93,14 @@ set. When it is:
    (`IngressPath.TryParse`). Anything else, including `//host`, `..` and quotes, falls back to `/`.
 3. `X-Remote-User-*` becomes `HttpContext.User` (`Name` = the HA login, a `display_name` claim). The home
    page's Server card shows it, via `ServerInfo.UserName` / `UserDisplayName`. Linking it to a `Person` is a
-   later slice.
+   later slice. The Supervisor drops a browser's own copies of these headers before adding its own
+   (`supervisor/api/ingress.py`, `_REQUEST_HEADERS_FILTER`, read 2026-10-21); a header that still arrives twice
+   means something in between did not, and the request is treated as nobody's (`IngressRequest.UserFrom`).
+
+`Ingress:TrustedProxy` that is not an IP address stops the host at startup ("Ingress:TrustedProxy is not an IP
+address.", `ValidateOnStart` in `Program.cs`) rather than failing every request. Reviewed 2026-10-21 against the
+Supervisor's source: the only trusted input is the peer address, and the base path is held to plain path segments
+before it is written into HTML; no other defect found.
 
 Behind any other proxy (Kubernetes) the image has **no auth** today; slice 14 adds it.
 

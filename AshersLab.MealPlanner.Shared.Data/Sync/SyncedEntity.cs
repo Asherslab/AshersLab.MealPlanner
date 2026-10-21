@@ -24,6 +24,17 @@ public abstract class SyncedEntity
     /// <summary>Null when an op of this kind with these fields is acceptable; otherwise why not.</summary>
     public abstract string? OpProblem(OpKind kind, IReadOnlyList<OpField> fields);
 
+    /// <summary>
+    /// Every check on an op's content, run by <c>LocalOps.WriteAsync</c> before the edit is applied and by the
+    /// server before it is logged. One method, so the browser's validation is never narrower than the server's -
+    /// a rejected op stays applied in the browser that made it (docs/modules/sync/offline-sync.md). The server's
+    /// only other checks are on what <c>LocalOps</c> mints itself: the op id, the device id, the clock.
+    /// </summary>
+    public string? Problem(OpKind kind, Guid entityId, IReadOnlyList<OpField> fields) =>
+        entityId == Guid.Empty   ? "An op needs an entity id."
+        : !Enum.IsDefined(kind) ? $"Unknown op kind {(int)kind}."
+        : OpProblem(kind, fields);
+
     internal abstract ValueTask<ISyncedRow?> FindAsync(DbContext db, Guid id, CancellationToken cancellationToken);
 
     internal abstract ISyncedRow Add(DbContext db, Guid id);

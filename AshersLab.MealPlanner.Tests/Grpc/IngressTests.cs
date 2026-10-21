@@ -3,6 +3,8 @@ using AshersLab.MealPlanner.Grpc.Features.Ingress;
 using AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Server;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server;
 using Grpc.Core;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 
 namespace AshersLab.MealPlanner.Tests.Grpc;
 
@@ -129,6 +131,41 @@ public class IngressTests
 
         Assert.Equal("planner", info.UserName);
         Assert.Equal("The Planner", info.UserDisplayName);
+    }
+
+    [Theory]
+    [InlineData(IngressRequest.UserIdHeader)]
+    [InlineData(IngressRequest.UserNameHeader)]
+    [InlineData(IngressRequest.UserDisplayNameHeader)]
+    public void Believes_nobody_when_a_user_header_arrives_twice(string repeated)
+    {
+        // A proxy in between that did not strip the browser's own copy: neither value is trustworthy.
+        HeaderDictionary headers = new()
+        {
+            [IngressRequest.UserIdHeader]          = "8c2f0e5a",
+            [IngressRequest.UserNameHeader]        = "planner",
+            [IngressRequest.UserDisplayNameHeader] = "The Planner",
+        };
+        headers[repeated] = new Microsoft.Extensions.Primitives.StringValues(["forged", headers[repeated].ToString()]);
+
+        Assert.Null(IngressRequest.UserFrom(headers));
+        headers[repeated] = "fine";
+        Assert.NotNull(IngressRequest.UserFrom(headers));
+    }
+
+    [Fact]
+    public async Task Refuses_to_start_on_a_trusted_proxy_that_is_not_an_address()
+    {
+        await using MealPlannerHost host = new MealPlannerHost().BehindIngress("172.30.32.2.5");
+
+        Exception thrown = Assert.ThrowsAny<Exception>(() => host.CreateClient());
+
+        // However the factory wraps it, the reason is the options check, not a parse in the middleware.
+        Exception? cause = thrown;
+        while (cause is not null and not OptionsValidationException)
+            cause = cause.InnerException;
+        Assert.Contains("TrustedProxy", Assert.IsType<OptionsValidationException>(cause).Message);
+        await Task.CompletedTask;
     }
 
     [Fact]

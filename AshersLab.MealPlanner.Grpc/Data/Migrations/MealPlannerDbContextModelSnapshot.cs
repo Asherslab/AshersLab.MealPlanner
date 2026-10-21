@@ -23,6 +23,10 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Chain")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("DeviceId")
                         .HasColumnType("TEXT");
 

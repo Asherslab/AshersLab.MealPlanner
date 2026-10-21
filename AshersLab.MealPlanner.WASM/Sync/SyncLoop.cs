@@ -20,8 +20,9 @@ namespace AshersLab.MealPlanner.WASM.Sync;
 /// A round runs on start, after every local edit (<see cref="Kick"/>), whenever the change stream says the server
 /// has moved past this browser's cursor, when the stream comes back after a drop, on the browser's <c>online</c>
 /// event, every 5 s while rounds are failing, and every 30 s regardless.
-/// Every failure counts as "offline" and is retried - the outbox is in SQLite, so nothing is lost by waiting. The
-/// one exception is the server refusing this build's sync protocol version: the app reloads once to update.
+/// A failure to reach the server counts as "offline" and is retried every 5 s - the outbox is in SQLite, so nothing
+/// is lost by waiting. Any other failure is "failed": logged as an error, shown on the chip, retried every 30 s
+/// (<see cref="SyncFailure"/>). The server refusing this build's sync protocol version reloads the app once.
 /// <para>
 /// Every window of the app runs its own loop on the one shared database. That is safe because every step is
 /// idempotent - the server ignores an op id it already has, and a pulled op already applied changes nothing - so
@@ -107,6 +108,7 @@ public sealed class SyncLoop(
 
             try
             {
+                // Failed waits the 30 s fallback: retrying a broken pull every 5 s only fills the log.
                 await _wake.WaitAsync(Status.Connection == SyncConnection.Offline ? OfflineRetry : Fallback, _stopping.Token);
             }
             catch (OperationCanceledException)
@@ -129,9 +131,15 @@ public sealed class SyncLoop(
             string? note = null;
             if (result.Refused.Count > 0)
             {
-                logger.LogWarning("The server refused {Count} op(s): {Reason}", result.Refused.Count, result.Refused.FirstReason);
+                // A bug, not a conflict: this browser checks every edit with the server's own rules before applying
+                // it, so a refusal means the two builds disagree. The edit stays applied here (offline-sync.md).
+                logger.LogError("The server refused {Count} op(s): {Reason}", result.Refused.Count, result.Refused.FirstReason);
                 note = $"The server refused {result.Refused.Count} change{(result.Refused.Count == 1 ? "" : "s")}: {result.Refused.FirstReason}";
             }
+
+            if (result.PushedBack > 0)
+                logger.LogWarning("The server had lost {Count} edit(s) this browser holds (restored from a backup); pushed them back",
+                    result.PushedBack);
 
             await SetStatus(SyncConnection.Online, note, DateTimeOffset.Now);
             await js.InvokeVoidAsync("sessionStorage.removeItem", ReloadedKey);
@@ -147,11 +155,19 @@ public sealed class SyncLoop(
         {
             await Refused();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (SyncFailure.IsOffline(ex))
         {
             // Offline, the server restarting, a proxy timing out: all the same to the planner. Edits wait.
-            logger.LogInformation("Sync round failed, will retry: {Message}", ex.Message);
+            logger.LogInformation("Sync round could not reach the server, will retry: {Message}", ex.Message);
             await SetStatus(SyncConnection.Offline, null, Status.LastSyncedAt);
+        }
+        catch (Exception ex)
+        {
+            // Not the network: a pulled op that will not apply, a server error, a bug. Retrying does not fix it -
+            // a pull that fails keeps the cursor where it is, so nothing after it arrives - so it is shown.
+            logger.LogError(ex, "Sync round failed");
+            await SetStatus(SyncConnection.Failed, $"Sync is not working: {ex.Message}. Changes are kept on this device.",
+                Status.LastSyncedAt);
         }
     }
 
@@ -171,7 +187,8 @@ public sealed class SyncLoop(
                 {
                     backoff = TimeSpan.FromSeconds(1);
 
-                    if (Status.Connection != SyncConnection.Online || notice.ServerEpoch != _epoch || notice.LatestSeq > _pulledThrough)
+                    // != rather than >: a server restored from an older backup announces a seq below the cursor.
+                    if (Status.Connection != SyncConnection.Online || notice.ServerEpoch != _epoch || notice.LatestSeq != _pulledThrough)
                         Kick();
                 }
             }
@@ -187,7 +204,8 @@ public sealed class SyncLoop(
             catch (Exception ex)
             {
                 logger.LogInformation("Change stream dropped, reconnecting in {Seconds}s: {Message}", backoff.TotalSeconds, ex.Message);
-                if (Status.Connection != SyncConnection.Refused)
+                // Only the rounds say Failed; a dropped stream says nothing about whether they work.
+                if (Status.Connection is not (SyncConnection.Refused or SyncConnection.Failed))
                     await SetStatus(SyncConnection.Offline, null, Status.LastSyncedAt);
             }
 
@@ -251,6 +269,9 @@ public enum SyncConnection
 
     /// <summary>The server refused this build's sync protocol version.</summary>
     Refused,
+
+    /// <summary>The server was reachable and the round still failed - see <see cref="SyncFailure"/>.</summary>
+    Failed,
 }
 
 /// <param name="Pending">Edits in the outbox, not yet confirmed by the server.</param>

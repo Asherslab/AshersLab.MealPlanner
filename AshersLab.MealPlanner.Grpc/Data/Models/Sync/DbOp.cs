@@ -13,8 +13,19 @@ public class DbOp
     /// writer at a time: a push's ops are numbered and committed before the next push can number any. On a
     /// database with concurrent writers (Postgres) a later seq could commit first and a pull could skip the
     /// earlier one - revisit before moving.
+    /// <para>
+    /// Not AUTOINCREMENT, and it would not help: a restore from backup brings back the backup's
+    /// <c>sqlite_sequence</c> along with its rows, so seqs past the backup's head are numbered again either way.
+    /// <see cref="Chain"/> is what tells the two apart.
+    /// </para>
     /// </summary>
     public long Seq { get; set; }
+
+    /// <summary>
+    /// <c>LogChain.Next</c> of the previous op's chain and this op's id - a fingerprint of the whole log up to
+    /// here. Written once, in the push that logs the op.
+    /// </summary>
+    public required string Chain { get; set; }
 
     public Guid OpId { get; set; }
 

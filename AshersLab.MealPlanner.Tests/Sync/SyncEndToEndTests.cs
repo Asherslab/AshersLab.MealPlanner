@@ -5,6 +5,7 @@ using AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Sync;
 using AshersLab.MealPlanner.Shared.Contracts.Messages.Requests.Features.Sync;
 using AshersLab.MealPlanner.Shared.Contracts.Messages.Responses.Features.Sync;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
+using AshersLab.MealPlanner.Shared.Data.Sync;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using AshersLab.MealPlanner.Tests.Grpc;
 using Grpc.Core;
@@ -37,6 +38,19 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
         using IServiceScope scope = _host.Services.CreateScope();
         MealPlannerDbContext db = scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>();
         return await db.Ingredients.Where(i => !i.Deleted).ToDictionaryAsync(i => i.Id, i => i.Name, Ct);
+    }
+
+    private async Task<HashSet<Guid>> ServerTombstonesAsync()
+    {
+        using IServiceScope scope = _host.Services.CreateScope();
+        MealPlannerDbContext db = scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>();
+        return [.. await db.Ingredients.Where(i => i.Deleted).Select(i => i.Id).ToListAsync(Ct)];
+    }
+
+    private async Task<int> OpCountAsync()
+    {
+        using IServiceScope scope = _host.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Ops.CountAsync(Ct);
     }
 
     [Fact]
@@ -159,58 +173,165 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
     {
         await using TestBrowser a = await TestBrowser.OpenAsync(_server);
         Guid flour = await a.CreateIngredientAsync("flour");
-        await a.RenameAsync(flour, "plain flour");
         await a.SyncAsync();
 
-        await using TestBrowser fresh = await TestBrowser.OpenAsync(_server);
+        // The fresh browser's edits land while its first round is between push and pull - so they are queued and
+        // not on the server when the snapshot arrives, and the second push of the round is offline. What it shows
+        // afterwards is what the snapshot merge alone made of them.
+        HookedServer wire = new(_server);
+        await using TestBrowser fresh = await TestBrowser.OpenAsync(wire);
         fresh.Now = a.Now.AddMinutes(1);
-        Guid oil = await fresh.CreateIngredientAsync("olive oil");
+        Guid oil = Guid.Empty;
+        wire.BeforePull = async () =>
+        {
+            wire.BeforePull = null;
+            wire.PushesBeforeOffline = 0;
+            oil = await fresh.CreateIngredientAsync("olive oil");
+            await fresh.RenameAsync(flour, "plain flour");      // newer than the snapshot's "flour"
+        };
 
-        await fresh.SyncAsync();
+        await Assert.ThrowsAsync<RpcException>(() => fresh.SyncAsync());
 
+        Assert.Equal(SnapshotReason.FirstLoad, Assert.Single(wire.PullAnswers).Snapshot?.Reason);
         Dictionary<Guid, string> seen = await fresh.IngredientsAsync();
         Assert.Equal("plain flour", seen[flour]);
         Assert.Equal("olive oil", seen[oil]);
+        Assert.Equal(2, await fresh.PendingAsync());
+        Assert.Equal("flour", (await ServerIngredientsAsync())[flour]);
+
+        // Back online: both go up and come back.
+        wire.PushesBeforeOffline = null;
+        await fresh.SyncAsync();
+        await a.SyncAsync();
+
         Assert.Equal(0, await fresh.PendingAsync());
-        Assert.True((await fresh.StateAsync()).PulledThroughSeq >= 3);
+        Assert.Equal("plain flour", (await a.IngredientsAsync())[flour]);
+        Assert.Equal("olive oil", (await ServerIngredientsAsync())[oil]);
     }
 
     [Fact]
-    public async Task A_push_whose_answer_was_lost_is_not_applied_twice()
+    public async Task A_push_whose_answer_was_lost_stays_queued_and_is_confirmed_by_the_pull()
     {
-        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        HookedServer wire = new(_server);
+        await using TestBrowser a = await TestBrowser.OpenAsync(wire);
+        await a.SyncAsync();     // a cursor: otherwise the next pull is a first-load snapshot, a different path
         await a.CreateIngredientAsync("bagels");
 
-        List<OutboxOp> pending;
-        await using (LocalDbContext db = a.CreateDbContext())
-            pending = await LocalOps.PendingAsync(db, 10, Ct);
-        PushRequest request = new()
-        {
-            ProtocolVersion = SyncProtocol.Current,
-            Ops =
-            [
-                .. pending.Select(o => new SyncOp
-                {
-                    OpId = o.OpId, DeviceId = a.DeviceId, Hlc = o.Hlc, Entity = o.Entity, EntityId = o.EntityId, Kind = o.Kind,
-                    Fields = [new SyncField { Name = "Name", Value = "bagels" }],
-                }),
-            ],
-        };
+        // The server logs it; the answer never arrives.
+        wire.LoseNextPushAnswer = true;
+        await Assert.ThrowsAsync<RpcException>(() => a.SyncAsync());
+        Assert.Equal(1, await OpCountAsync());
+        Assert.Equal(1, await a.PendingAsync());
 
-        PushResponse first = await _server.Push(request, Ct);
-        PushResponse retry = await _server.Push(request, Ct);
-
-        Assert.Equal(PushOutcome.Accepted, Assert.Single(first.Results).Outcome);
-        Assert.Equal(PushOutcome.Duplicate, Assert.Single(retry.Results).Outcome);
-        Assert.Equal(first.Results[0].Seq, retry.Results[0].Seq);
-
-        // The outbox still holds it (the "answer" was lost); the next round pushes it again, harmlessly, and the
-        // pull confirms it.
+        // The next round pushes it again. The server answers "already have it" at a seq this browser has not
+        // pulled to, so it stays queued until the pull brings it back.
+        int pendingAtPull = -1;
+        wire.BeforePull = async () => pendingAtPull = await a.PendingAsync();
+        wire.PullAnswers.Clear();
         await a.SyncAsync();
-        Assert.Equal(0, await a.PendingAsync());
 
-        using IServiceScope scope = _host.Services.CreateScope();
-        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Ops.CountAsync(Ct));
+        Assert.All(wire.PullAnswers, p => Assert.Null(p.Snapshot));
+        Assert.Equal(PushOutcome.Duplicate, Assert.Single(Assert.Single(wire.PushAnswers).Results).Outcome);
+        Assert.Equal(1, pendingAtPull);
+        Assert.Equal(0, await a.PendingAsync());
+        Assert.Equal(1, await OpCountAsync());
+    }
+
+    [Fact]
+    public async Task An_accepted_op_stays_queued_until_the_pull_brings_it_back()
+    {
+        HookedServer wire = new(_server);
+        await using TestBrowser a = await TestBrowser.OpenAsync(wire);
+        await a.SyncAsync();
+        await a.CreateIngredientAsync("wraps");
+
+        int pendingAtPull = -1;
+        wire.BeforePull = async () => pendingAtPull = await a.PendingAsync();
+        await a.SyncAsync();
+
+        Assert.Equal(PushOutcome.Accepted, Assert.Single(Assert.Single(wire.PushAnswers).Results).Outcome);
+        Assert.Equal(1, pendingAtPull);
+        Assert.Equal(0, await a.PendingAsync());
+    }
+
+    [Fact]
+    public async Task A_delete_reaches_the_other_browser_and_a_later_offline_rename_cannot_bring_it_back()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+
+        Guid avocado = await a.CreateIngredientAsync("avocado");
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        // A deletes; B, offline and not having seen it, renames a minute later.
+        a.Now = a.Now.AddMinutes(1);
+        b.Now = a.Now.AddMinutes(1);
+        await a.DeleteAsync(avocado);
+        await b.RenameAsync(avocado, "avocados");
+        Assert.DoesNotContain(avocado, (await a.IngredientsAsync()).Keys);
+
+        await a.SyncAsync();
+        await b.SyncAsync();
+        await a.SyncAsync();
+
+        Assert.DoesNotContain(avocado, (await a.IngredientsAsync()).Keys);
+        Assert.DoesNotContain(avocado, (await b.IngredientsAsync()).Keys);
+        Assert.DoesNotContain(avocado, (await ServerIngredientsAsync()).Keys);
+        Assert.Contains(avocado, await b.TombstonesAsync());
+        Assert.Contains(avocado, await ServerTombstonesAsync());
+        Assert.Equal(0, await b.PendingAsync());
+
+        // A browser that arrives later gets the tombstone in its snapshot, not the ingredient.
+        await using TestBrowser fresh = await TestBrowser.OpenAsync(_server);
+        await fresh.SyncAsync();
+        Assert.Empty(await fresh.IngredientsAsync());
+        Assert.Contains(avocado, await fresh.TombstonesAsync());
+    }
+
+    [Fact]
+    public async Task A_delete_of_an_id_never_seen_leaves_a_tombstone_that_a_later_edit_cannot_fill()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+
+        // The delete arrives first - as it would from a device whose create is still in an outbox somewhere.
+        Guid id = Guid.CreateVersion7();
+        await a.DeleteAsync(id);
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        b.Now = b.Now.AddMinutes(1);
+        await b.RenameAsync(id, "ghost");
+        await b.SyncAsync();
+        await a.SyncAsync();
+
+        Assert.Contains(id, await a.TombstonesAsync());
+        Assert.Contains(id, await b.TombstonesAsync());
+        Assert.Empty(await b.IngredientsAsync());
+        Assert.Contains(id, await ServerTombstonesAsync());
+        Assert.DoesNotContain(id, (await ServerIngredientsAsync()).Keys);
+    }
+
+    [Fact]
+    public async Task Pulls_more_than_one_page_in_one_round()
+    {
+        HookedServer wire = new(_server);
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(wire);
+        await b.SyncAsync();     // a cursor, so what follows is ops, not a snapshot
+        wire.PullAnswers.Clear();
+
+        for (int i = 0; i < 7; i++)
+            await a.CreateIngredientAsync($"spice {i}");
+        await a.SyncAsync();
+
+        await b.SyncAsync(pullBatch: 3);
+
+        Assert.Equal(7, (await b.IngredientsAsync()).Count);
+        Assert.Equal([3, 3, 1], wire.PullAnswers.Select(p => p.Ops.Count));
+        Assert.Equal([true, true, false], wire.PullAnswers.Select(p => p.HasMore));
+        Assert.Equal(7, (await b.StateAsync()).PulledThroughSeq);
     }
 
     [Fact]
@@ -292,32 +413,61 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
         Assert.Equal(1, stream.Current.LatestSeq);
     }
 
-    [Fact]
-    public async Task A_cursor_from_another_server_database_gets_a_snapshot_and_keeps_queued_edits()
+    /// <summary>
+    /// A rejected op stays applied in the browser that made it, so the browser must refuse, before applying, every
+    /// op the server would reject. This is the guard: each case goes through LocalOps and, as a hand-built op with a
+    /// valid clock, straight to the server - and the two must agree.
+    /// </summary>
+    [Theory]
+    [InlineData(OpKind.Create, "Name", "beef mince", false)]
+    [InlineData(OpKind.Create, "Name", "", true)]
+    [InlineData(OpKind.Create, "Name", " untrimmed ", true)]
+    [InlineData(OpKind.Create, "Colour", "red", true)]
+    [InlineData(OpKind.Update, "Name", "x", false)]
+    [InlineData(OpKind.Update, null, null, true)]
+    [InlineData(OpKind.Delete, null, null, false)]
+    [InlineData(OpKind.Delete, "Name", "x", true)]
+    [InlineData((OpKind)7, "Name", "x", true)]
+    public async Task The_browser_refuses_exactly_what_the_server_would(OpKind kind, string? field, string? value, bool invalid)
     {
-        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
-        Guid old = await a.CreateIngredientAsync("from the old server");
-        await a.SyncAsync();
+        List<OpField> fields = field is null ? [] : [new OpField(field, value)];
+        Guid entityId = Guid.CreateVersion7();
 
-        // Pretend the server's database was replaced: the browser's cursor names an epoch this server never had.
-        await using (LocalDbContext db = a.CreateDbContext())
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        bool refusedHere;
+        try
         {
-            SyncState state = await db.SyncStates.SingleAsync(Ct);
-            state.ServerEpoch = Guid.CreateVersion7();
-            await db.SaveChangesAsync(Ct);
+            await using LocalDbContext db = await a.Contexts.CreateDbContextAsync(Ct);
+            await LocalOps.WriteAsync(db, a.DeviceId, a.Now, SyncedEntities.Ingredient, entityId, kind, fields, Ct);
+            refusedHere = false;
+        }
+        catch (ArgumentException)
+        {
+            refusedHere = true;
         }
 
-        // Still offline from the "new" server's point of view: one edit queued.
-        a.Now = a.Now.AddMinutes(1);
-        Guid queued = await a.CreateIngredientAsync("made while away");
+        Guid device = Guid.CreateVersion7();
+        PushResponse direct = await _server.Push(new PushRequest
+        {
+            ProtocolVersion = SyncProtocol.Current,
+            Ops =
+            [
+                new SyncOp
+                {
+                    OpId = Guid.CreateVersion7(), DeviceId = device, Hlc = new Hlc(1, 0, device).ToString(),
+                    Entity = "Ingredient", EntityId = entityId, Kind = kind,
+                    Fields = [.. fields.Select(f => new SyncField { Name = f.Name, Value = f.Value })],
+                },
+            ],
+        }, Ct);
 
-        await a.SyncAsync();
-
-        Dictionary<Guid, string> seen = await a.IngredientsAsync();
-        Assert.Equal("made while away", seen[queued]);
-        // This test's server is the same database, so the old row comes back in the snapshot; what matters is
-        // that the queued edit survived the reset and reached the server.
-        Assert.Equal("from the old server", seen[old]);
-        Assert.Equal("made while away", (await ServerIngredientsAsync())[queued]);
+        Assert.Equal(invalid, refusedHere);
+        Assert.Equal(invalid, Assert.Single(direct.Results).Outcome == PushOutcome.Rejected);
+        if (refusedHere)
+        {
+            Assert.Equal(0, await a.PendingAsync());
+            Assert.Empty(await a.IngredientsAsync());
+            Assert.Empty(await a.TombstonesAsync());
+        }
     }
 }

@@ -44,6 +44,9 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Entity")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -78,6 +81,10 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("LastPulledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PulledThroughChain")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<long>("PulledThroughSeq")

@@ -25,4 +25,10 @@ public sealed class IngressOptions
 
     public IPAddress? TrustedProxyAddress =>
         TrustedProxy is { Length: > 0 } configured ? IPAddress.Parse(configured) : null;
+
+    /// <summary>
+    /// At startup (<c>ValidateOnStart</c>): a typo in the add-on's environment stops the host with this message,
+    /// instead of answering every request with a 500 from a parse inside the middleware.
+    /// </summary>
+    public bool IsValid => TrustedProxy is not { Length: > 0 } configured || IPAddress.TryParse(configured, out _);
 }

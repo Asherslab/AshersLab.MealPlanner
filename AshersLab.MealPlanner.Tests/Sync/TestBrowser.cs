@@ -20,7 +20,9 @@ namespace AshersLab.MealPlanner.Tests.Sync;
 public sealed class TestBrowser : IDbContextFactory<LocalDbContext>, IAsyncDisposable
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
-    private readonly ISyncService     _server;
+
+    /// <summary>Where rounds go. A test moves it to another host to stand in for the server being replaced or restored.</summary>
+    public ISyncService Server { get; set; }
 
     public Guid DeviceId { get; }
 
@@ -29,7 +31,7 @@ public sealed class TestBrowser : IDbContextFactory<LocalDbContext>, IAsyncDispo
 
     private TestBrowser(ISyncService server, Guid deviceId)
     {
-        _server  = server;
+        Server   = server;
         DeviceId = deviceId;
         Contexts = new SerialLocalDbContextFactory(this);
     }
@@ -83,21 +85,33 @@ public sealed class TestBrowser : IDbContextFactory<LocalDbContext>, IAsyncDispo
         return id;
     }
 
-    public Task RenameAsync(Guid id, string name) => WriteAsync(id, OpKind.Update, name);
+    public Task RenameAsync(Guid id, string name) => WriteAsync(id, OpKind.Update, [new OpField(IngredientRules.NameField, name)]);
 
-    private async Task WriteAsync(Guid id, OpKind kind, string name)
+    public Task DeleteAsync(Guid id) => WriteAsync(id, OpKind.Delete, []);
+
+    private async Task WriteAsync(Guid id, OpKind kind, IReadOnlyList<OpField> fields)
     {
         await using LocalDbContext db = await Contexts.CreateDbContextAsync();
-        await LocalOps.WriteAsync(db, DeviceId, Now, SyncedEntities.Ingredient, id, kind,
-            [new OpField(IngredientRules.NameField, name)]);
+        await LocalOps.WriteAsync(db, DeviceId, Now, SyncedEntities.Ingredient, id, kind, fields);
     }
 
-    public Task<SyncRoundResult> SyncAsync() => SyncRound.RunAsync(Contexts, _server, DeviceId);
+    private Task WriteAsync(Guid id, OpKind kind, string name) => WriteAsync(id, kind, [new OpField(IngredientRules.NameField, name)]);
 
+    public Task<SyncRoundResult> SyncAsync(int pullBatch = SyncRound.PullBatch) =>
+        SyncRound.RunAsync(Contexts, Server, DeviceId, pullBatch: pullBatch);
+
+    /// <summary>Live ingredients only, as a page shows them.</summary>
     public async Task<Dictionary<Guid, string>> IngredientsAsync()
     {
         await using LocalDbContext db = CreateDbContext();
         return await db.Ingredients.Where(i => !i.Deleted).ToDictionaryAsync(i => i.Id, i => i.Name);
+    }
+
+    /// <summary>The ids of tombstones held here.</summary>
+    public async Task<HashSet<Guid>> TombstonesAsync()
+    {
+        await using LocalDbContext db = CreateDbContext();
+        return [.. await db.Ingredients.Where(i => i.Deleted).Select(i => i.Id).ToListAsync()];
     }
 
     public async Task<int> PendingAsync()

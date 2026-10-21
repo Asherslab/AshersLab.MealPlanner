@@ -20,7 +20,10 @@ builder.Services.AddDbContext<MealPlannerDbContext>((sp, o) =>
 
 builder.Services.AddSingleton<SyncSignal>();
 
-builder.Services.Configure<IngressOptions>(builder.Configuration.GetSection(IngressOptions.Section));
+builder.Services.AddOptions<IngressOptions>()
+    .Bind(builder.Configuration.GetSection(IngressOptions.Section))
+    .Validate(o => o.IsValid, $"{IngressOptions.Section}:TrustedProxy is not an IP address.")
+    .ValidateOnStart();
 
 var app = builder.Build();
 

@@ -35,7 +35,13 @@ host without the AppHost's `DataDirectory`, so it writes its database under `Ash
 The `AshersLab.MealPlanner.Tests` run configuration (Rider's project configuration — xunit v3 test
 projects are executables) runs the whole suite and prints a summary. Run it with
 `execute_run_configuration` and `waitForExit: true`. Rider's test-runner gutter points are not exposed
-through the MCP for this project, so this is the way.
+through the MCP for this project, so this is the way. It takes no arguments (no `-method` filter through the MCP).
+
+**`build_solution` can build from Rider's stale view of a file edited outside it** - "success", and the old code.
+Seen repeatedly on 2026-10-21 while mutation-testing: an edit made with the Edit tool, then a build seconds later
+that compiled nothing. Call `get_file_problems` on each edited file first (it makes Rider re-read it), then build,
+and when it matters check that `AshersLab.MealPlanner.Tests/bin/Debug/net10.0/<Project>.dll` is newer than the
+source (`[ dll -nt source ]`). A test run on a stale build reports the old code's result.
 
 ## Ports
 
@@ -92,7 +98,8 @@ In the network panel the call is `POST https://localhost:7283/gRPC/AshersLab.Mea
 (`InputId` `ingredient-new-name`, Enter or `data-testid` `ingredient-add`), and per row (`ingredient-row`, its
 `data-id` the ingredient id) a pencil (`ingredient-rename`) opening `ingredient-rename-input` and
 `ingredient-rename-save`. The sync chip at the right of the app bar is `data-testid` `sync-status`, with
-`data-state` (`connecting|online|offline|refused`) and `data-pending` (outbox count). Sync calls are
+`data-state` (`connecting|online|offline|failed|refused`) and `data-pending` (outbox count, including ops accepted
+but not yet pulled back). Sync calls are
 `/gRPC/AshersLab.MealPlanner.Sync/Push|Pull|Changes`; `Changes` stays open.
 
 Typing into a MudTextField from a script needs the native `value` setter and an `input` event (see
@@ -111,6 +118,21 @@ an offline rename syncing on reconnect, and two concurrent offline renames endin
 each profile's SQLite out of OPFS (directly over the DevTools protocol - no receiver needed) and prints its rows
 beside the server's. Ingredients are named with the run id, so runs pile up in the database; wipe it when that
 matters. The Chrome extension cannot do this: it has no offline switch and drives only one profile.
+
+### A server restore, with both profiles open
+
+```bash
+node .claude/tools/chrome-restore-check.mjs <scratch>/restore     # run_in_background; same ports as above
+```
+
+Halfway it backs up the server's SQLite (`sqlite3 .backup`), makes the edits the restore will lose, takes profile
+A offline and prints `RESTORE NOW` with a backup path and a signal file. Then, by hand: stop the app (the kill
+commands above), delete `mealplanner.db-wal` and `-shm`, copy the backup over `mealplanner.db`, start the AppHost
+run configuration, wait for `_framework/blazor.webassembly.js` to answer 200, and `touch` the signal file. About
+two minutes in all; prints PASS/FAIL per check. Profile B usually pushes back before you touch the file, which
+is why the script compares chains rather than the head seq. Read the backup with plain `sqlite3`, not
+`-readonly`: it is in WAL mode with no `-shm`, which a read-only open cannot create ("unable to open database
+file").
 
 ## The image, behind a simulated Home Assistant ingress
 
@@ -147,8 +169,9 @@ sqlite3 "$HOME/Library/Application Support/AshersLab.MealPlanner/mealplanner.db"
 ```
 
 The host migrates at startup, so a missing table means the host has not started, not that a
-migration job is pending. Sync's tables: `Op` (the log, by `Seq`), `Ingredient`, `FieldClock`, `SyncEpoch`
-(one row - a new value after a wipe means every browser takes a snapshot on its next pull). Nothing in it is worth keeping until the household uses the app — delete
+migration job is pending. Sync's tables: `Op` (the log, by `Seq`, each with its `Chain`), `Ingredient`,
+`FieldClock`, `SyncEpoch` (one row - a new value after a wipe means every browser forgets what it synced and takes a
+snapshot on its next pull). Nothing in it is worth keeping until the household uses the app — delete
 the folder to start over (stop the app first; SQLite holds `-wal`/`-shm` files beside it).
 
 ## The browser database

@@ -2,8 +2,8 @@ namespace AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Sync;
 
 /// <summary>
 /// Every synced entity as the server holds it, with the clock behind each field, so the browser can merge it
-/// with its own unsynced edits by the same rules as an op. Sent instead of ops on a first pull and whenever
-/// the browser's cursor belongs to a different server database.
+/// with its own unsynced edits by the same rules as an op. Sent instead of ops whenever the browser's cursor
+/// means nothing here - <see cref="Reason"/> says why, and what the browser does differs.
 /// </summary>
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
 public record SyncSnapshot
@@ -12,6 +12,11 @@ public record SyncSnapshot
     public required long AsOfSeq { get; init; }
 
     public List<SnapshotEntity> Entities { get; init; } = [];
+
+    /// <summary>The log's chain through <see cref="AsOfSeq"/>; empty for an empty log.</summary>
+    public string AsOfChain { get; init; } = "";
+
+    public SnapshotReason Reason { get; init; }
 }
 
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]

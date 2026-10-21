@@ -42,6 +42,8 @@
     private static string Label(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Refused                      => "Update needed",
+        SyncConnection.Failed when s.Pending > 0    => $"Sync problem · {s.Pending} waiting",
+        SyncConnection.Failed                       => "Sync problem",
         SyncConnection.Offline when s.Pending > 0   => $"Offline · {s.Pending} waiting",
         SyncConnection.Offline                      => "Offline",
         _ when s.Pending > 0                        => $"Saving {s.Pending}",
@@ -58,7 +60,7 @@
 
     private static Color ColorFor(SyncStatus s) => s.Connection switch
     {
-        SyncConnection.Refused => Color.Error,
+        SyncConnection.Refused or SyncConnection.Failed => Color.Error,
         SyncConnection.Offline => Color.Warning,
         _ when s.Note is not null => Color.Warning,
         _ => Color.Inherit,
@@ -67,6 +69,7 @@
     private static string IconFor(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Refused => Icons.Material.Filled.SystemUpdate,
+        SyncConnection.Failed  => Icons.Material.Filled.SyncProblem,
         SyncConnection.Offline => Icons.Material.Filled.CloudOff,
         _ when s.Pending > 0   => Icons.Material.Filled.CloudUpload,
         _                      => Icons.Material.Filled.CloudDone,

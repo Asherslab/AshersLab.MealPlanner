@@ -23,11 +23,18 @@ public record PullRequest
     /// </summary>
     public Guid? ServerEpoch { get; init; }
 
-    /// <summary>The highest <see cref="SyncOp.Seq"/> the client has applied. Past the end of the log gets a snapshot.</summary>
+    /// <summary>The highest <see cref="SyncOp.Seq"/> the client has applied.</summary>
     public long SinceSeq { get; init; }
 
     /// <summary>At most this many ops; the server caps it.</summary>
     public int Limit { get; init; }
+
+    /// <summary>
+    /// <see cref="SyncOp.Chain"/> at <see cref="SinceSeq"/>. When the log's chain there differs, or the log has no
+    /// such seq, the server was restored from an older backup and answers with a
+    /// <see cref="SnapshotReason.HistoryLost"/> snapshot.
+    /// </summary>
+    public string? SinceChain { get; init; }
 }
 
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]

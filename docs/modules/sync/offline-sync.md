@@ -22,6 +22,7 @@ code:
   - AshersLab.MealPlanner.Tests/Sync
   - AshersLab.MealPlanner.Tests/Domain
   - .claude/tools/chrome-sync-check.mjs
+  - .claude/tools/chrome-restore-check.mjs
 ---
 
 # Offline sync
@@ -56,6 +57,16 @@ The browser's database itself - OPFS, migrations, sharing it across windows - is
 - **A device whose clock is far ahead wins every conflict** until the others' clocks pass it. The clock
   (below) protects against a few minutes of skew, which is what phones have; nothing guards against a clock set
   a year ahead.
+- **The server cannot tell it was restored from a backup** - the backup holds the epoch, the log and
+  `sqlite_sequence` alike, and nothing outside `/data` survives. The browsers can: each pull carries a fingerprint
+  of the log at its cursor (below), and what a restore lost comes back from the browsers that still hold it. A
+  browser that held an edit and is never opened again takes it with it.
+- **A rejected op stays applied in the browser that made it**, and nothing corrects it until someone edits that
+  field again. That is safe only because the browser checks every edit with the server's own check before
+  applying it (`SyncedEntity.Problem`, called by both `LocalOps.WriteAsync` and `SyncService.Push`). **Never add a
+  server-only check on an op's content**; tightening a rule is a `SyncProtocol` bump, so an older build with the
+  looser rule is refused instead of rejected op by op. `SyncEndToEndTests.The_browser_refuses_exactly_what_the_server_would`
+  is the guard.
 
 ## Shape
 
@@ -117,7 +128,8 @@ scenarios. **What the planner sees** in a conflict: both people rename "eggs" of
 online both phones show whichever rename was made later. Nothing asks; the earlier rename is in the server's
 log but shown nowhere.
 
-Delete is in the rules and tested; nothing in the UI deletes yet (ingredient CRUD, slice 4).
+Delete is in the rules and tested end to end (applier, server, pull, snapshot); nothing in the UI deletes yet
+(ingredient CRUD, slice 4).
 
 ## The server
 
@@ -127,44 +139,74 @@ Delete is in the rules and tested; nothing in the UI deletes yet (ingredient CRU
   answers `Duplicate` with its original seq; one that fails validation (unknown entity, bad clock, a clock naming
   another device, a field the entity does not have, an invalid name) answers `Rejected` with a reason and is
   **not** logged; anything else is applied and logged with a new seq, **whether or not it won its merge** -
-  every browser must see the same ops to reach the same answer.
+  every browser must see the same ops to reach the same answer. The answer carries the server's epoch.
 - **The log is append-only** (`Op` table): seq from SQLite's rowid, the op, its fields as JSON
-  (`Shared.Data/Sync/OpFieldsJson.cs`, source-generated so trimming cannot drop it). The materialised tables
-  (`Ingredient`, `FieldClock`) are what server-side reads will use.
-- **Pull** returns ops after the browser's seq, ascending, at most 500 (200 by default), with `HasMore`. It
-  returns a **snapshot** instead - every synced row with each field's clock, as of the newest seq, read in one
-  transaction - when the browser has no cursor yet (a first load), when its cursor names a different
-  **epoch**, or when its cursor is past the end of the log.
+  (`Shared.Data/Sync/OpFieldsJson.cs`, source-generated so trimming cannot drop it), and its **chain**
+  (`Shared.Domain/Sync/LogChain.cs`): a hash of the previous op's chain and this op's id, so two logs with the same
+  chain at a seq hold the same ops up to it. The materialised tables (`Ingredient`, `FieldClock`) are what
+  server-side reads will use.
+- **Pull** returns ops after the browser's seq, ascending, at most 500 (200 by default), with `HasMore`, each with
+  its chain. It returns a **snapshot** instead - every synced row with each field's clock, as of the newest seq and
+  its chain, read in one transaction - when the cursor means nothing here, and says why (`SnapshotReason`):
+
+  | Reason | When | What the browser does |
+  |---|---|---|
+  | `FirstLoad` | no cursor yet | merges it |
+  | `NewDatabase` | the cursor names another epoch: the server database was wiped and started again | forgets every synced row (they are not in the new database), replays its outbox, merges |
+  | `HistoryLost` | same epoch, but the op at the cursor's seq is missing or has a different chain: **restored from an older backup** | queues everything it holds that the snapshot lacks, merges, pushes |
+
+  Seq alone cannot detect a restore: the restored log numbers new ops from the backup's head again, so a
+  browser's "seq 41" may name a different op on the restored server (AUTOINCREMENT would not help - the backup
+  restores `sqlite_sequence` too). The chain at the cursor is what the server compares.
 - **The epoch** (`SyncEpoch` table) is a GUID minted on the database's first start (`SyncStartup.cs`), not in a
-  migration - seed data would give every database the same one. A server database that is wiped and started
-  again has a new epoch, and every browser's cursor is recognised as meaningless. A restore from an older
-  backup keeps its epoch; the "cursor past the end" check catches that.
+  migration - seed data would give every database the same one. A restore keeps it, which is right: it is the
+  same database, missing its end.
 - **Changes** is a server stream that only ever says "newest seq is N": on connect, after every push, and as a
   heartbeat every 25 s so a proxy (Home Assistant ingress) does not close an idle stream. gRPC-Web carries server
   streaming; it has no client or bidirectional streaming, which is why push and pull are unary.
 
 ## The browser
 
-- **The outbox** (`Outbox` table) holds this browser's ops until the server answers for them. An op leaves it
-  when a push answers for it - accepted, duplicate *or rejected*; a rejected op would be rejected forever - or
-  when a pull brings it back, which covers a push whose answer was lost.
-- **The cursor** (`SyncState`: epoch, pulled-through seq, this device's clock) is one row shared by every window.
-- **A round** (`SyncRound.RunAsync`) pushes the whole outbox in batches of 200, then pulls until caught up.
-  Every step commits on its own and repeating one is harmless, so a round that dies halfway loses nothing.
+- **The outbox** (`Outbox` table) holds this browser's ops until **its cursor has passed them**: a pull brings the
+  op back, or a push answers "already have it" at a seq the cursor has reached (`LocalOps.AcknowledgeAsync`). A
+  push's "accepted" alone does not remove it - if the server is then restored from a backup older than that push,
+  the op is still here and simply goes again. A rejected op leaves at once; it would be rejected forever.
+- **The cursor** (`SyncState`: epoch, pulled-through seq and that op's chain, this device's clock) is one row
+  shared by every window.
+- **A round** (`SyncRound.RunAsync`) pushes the whole outbox in batches of 200, then pulls until caught up. After
+  a snapshot it pushes and pulls once more: a snapshot carries rows, not op ids, so only a second push can tell
+  which queued ops the server already has, and a `HistoryLost` snapshot has just queued ops to give back. Every
+  step commits on its own and repeating one is harmless, so a round that dies halfway loses nothing.
 - **A snapshot is merged, not copied** (`LocalOps.ApplySnapshotAsync`): each field at its own clock, so an
-  unsynced local edit newer than the server's value survives. If the snapshot comes from a different epoch, the
-  browser first forgets every synced row (they are not in the new server database, and their ops left the
-  outbox long ago), then replays its outbox on top and pushes it.
+  unsynced local edit newer than the server's value survives.
+- **What a restored server lost comes back from the browsers** (`LocalOps.QueueWhatTheServerLostAsync`, on a
+  `HistoryLost` snapshot). Every field newer here than in the snapshot is queued as an update **with the clock
+  that set it, as an op from the device that made the edit** (`OutboxOp.DeviceId`), so it merges on the server
+  exactly as the original did. Its op id is derived from the edit, so two browsers giving back the same edit
+  send one op id and the server logs it once. A tombstone the snapshot lacks goes back as a new delete from this
+  device (a delete needs no clock - it wins). Seen: a restore that lost a create, a rename and another browser's
+  create got all three back from the first browser to reconnect; the second found nothing missing.
+- **A wiped server is not a restore.** `NewDatabase` forgets what the old database held - including rows only the
+  browsers still have. That is what wiping means while nothing is in production; once real data exists, a server
+  lost without a backup is a reinstall that should be handled as `HistoryLost` instead, and is not yet.
 - **When a round runs** (`WASM/Sync/SyncLoop.cs`): on start; after every edit; when the change stream reports a
-  seq past the cursor, or reconnects after a drop; on the browser's `online` event (`wwwroot/js/connectivity.js`);
-  every 5 s while rounds are failing; and every 30 s regardless. The 5 s retry is not optional: an idle open
-  stream can survive the network going away, so it cannot be relied on to notice the network coming back.
+  seq other than the cursor's (a restored server reports one *below* it), or reconnects after a drop; on the
+  browser's `online` event (`wwwroot/js/connectivity.js`); every 5 s while the server cannot be reached; and every
+  30 s regardless. The 5 s retry is not optional: an idle open stream can survive the network going away, so it
+  cannot be relied on to notice the network coming back.
+- **Offline is not the same as broken** (`LocalData/Sync/SyncFailure.cs`). Not reaching the server - a failed
+  fetch, `Unavailable` (also what the Supervisor's 502/503 become while the add-on restarts), a cut-off response -
+  is "Offline", logged at Information, retried every 5 s. Anything else - a pulled op that will not apply, a server
+  error, `Unimplemented` - is "Failed": logged as an error and shown. It does not fix itself: a pull that fails
+  rolls back, the cursor stays put, and this browser receives nothing after that op until the cause is fixed.
 - **Every window runs its own loop.** Safe because every step is idempotent; two windows pushing the same outbox
   only do the work twice (seen: the server logged a second window's create exactly once).
 
 **What the planner sees** is the chip at the right of the app bar (`WASM/Sync/SyncStatusChip.razor`), on every
-page: "Synced", "Saving 2", "Offline · 3 waiting", or "Update needed". Tapping it syncs now. An edit made offline
-shows in the list at once and waits in the outbox; nothing is lost by closing the tab.
+page: "Synced", "Saving 2", "Offline · 3 waiting", "Sync problem · 3 waiting" (red; the tooltip says what failed
+and that changes are kept), or "Update needed". Tapping it syncs now. An edit made offline shows in the list at
+once and waits in the outbox; nothing is lost by closing the tab. "Saving" includes edits the server has accepted
+but this browser has not yet pulled back - normally for well under a second.
 
 ## Protocol version
 
@@ -199,6 +241,7 @@ The browser's reload-on-refusal has not been seen in a browser: it needs a serve
 | Standalone deployment, installed as a PWA, opened with no signal | Will, once a service worker caches the app. There is none yet. |
 | Inside Home Assistant (ingress), opened with no signal | **No.** Home Assistant's own frontend must load first, and the companion app's web view is unlikely to support service workers. Accepted. |
 | iOS Safari evicts site storage after weeks unused | Data re-syncs from the server (a snapshot); only unsynced edits are lost. Accepted. |
+| The Pi restored from a Home Assistant backup | Edits made since the backup come back from whichever browsers hold them, on their next round. Nothing to do on any phone. |
 
 ## As measured
 
@@ -216,6 +259,28 @@ reconnect taking longer than the script waits, which is what added the 5 s retry
 | Rows read from each profile's SQLite (copied out of OPFS) and the server's | Same name and the same `FieldClock` reading in all three; outboxes empty; both cursors at the server's newest seq |
 | Four ingredients added as fast as Enter can be pressed, in the user's Chrome | All four saved and synced; no errors |
 
-The in-process tests (`Tests/Sync/SyncEndToEndTests.cs`) cover the same cases against the real host over
-gRPC-Web, plus a lost push answer, rejected ops, a first load from a snapshot that keeps unsynced edits, a new
-epoch, the change stream, and overlapping writes in one window.
+2026-10-21, a restore from backup in the running app, `.claude/tools/chrome-restore-check.mjs` - two headless
+profiles kept open while the app was stopped, its SQLite replaced by a backup taken mid-run (`sqlite3 .backup`),
+and the app started again:
+
+| Check | Result |
+|---|---|
+| The backup at seq 14; then A adds an ingredient and renames one, B adds one (seqs 15-17) | Both converge |
+| Restored; B was online throughout, A offline | B's next round got `HistoryLost`, pushed the three lost edits back - A's two with A's device id and clocks - and the server held all of them |
+| B adds one more (seq 18); A comes back with cursor 17, which now names B's pushed-back op (different chain) | A got `HistoryLost`, queued nothing (the server had it all), showed B's addition |
+| Rows in both profiles' SQLite and the server's | Same five ingredients; outboxes empty; both cursors at 18, the server's head |
+
+The chip in the user's Chrome with a page's `fetch` patched: a `Pull` answered with gRPC status 13 showed red "Sync
+problem" and logged `fail: ... Sync round failed` with the exception; a rejected `fetch` showed "Offline"; restored,
+"Synced".
+
+The in-process tests cover the same cases against real hosts over gRPC-Web: `Tests/Sync/SyncEndToEndTests.cs`
+(convergence, the clock, a lost push answer and an accepted op both confirmed by the pull, deletes through the
+applier, the server, a snapshot and a pull, more than one pull page, the change stream, overlapping writes in one
+window, rejected ops and the browser refusing exactly what the server would) and `Tests/Sync/SyncRecoveryTests.cs`
+(a second host started on the first's backup: cursor past the end, and seqs renumbered by another browser; an
+accepted op lost to a restore; a new database). `Tests/Sync/HookedServer.cs` lets a test edit between a round's push
+and its pull, lose an answer, or cut the network mid-round - without it the outbox is always empty when a snapshot
+arrives and the snapshot paths go untested. Each of these was checked by breaking the code it covers (no outbox
+replay, no wipe on a new database, no chain check, dropping accepted ops, no tombstone, `HasMore` always false, no
+push-back): every one failed at least one test.

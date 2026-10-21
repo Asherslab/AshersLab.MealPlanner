@@ -61,9 +61,21 @@ public static class IngressRequest
     public static string BaseHref(HttpContext context) =>
         context.Items[BaseHrefKey] as string ?? "/";
 
-    /// <summary>Null when the Supervisor sent no user id - a request it forwarded without one is anonymous.</summary>
+    /// <summary>
+    /// Null when the Supervisor sent no user id - a request it forwarded without one is anonymous - or when any of
+    /// the user headers arrived more than once.
+    /// </summary>
+    /// <remarks>
+    /// The Supervisor drops a browser's own <c>X-Remote-User-*</c> headers before setting its own
+    /// (<c>supervisor/api/ingress.py</c>, <c>_REQUEST_HEADERS_FILTER</c>). A second value would mean a proxy in
+    /// between that does not - and ASP.NET would join the two with a comma, the browser's first - so it is
+    /// believed as nobody rather than as either.
+    /// </remarks>
     public static ClaimsPrincipal? UserFrom(IHeaderDictionary headers)
     {
+        if (headers[UserIdHeader].Count > 1 || headers[UserNameHeader].Count > 1 || headers[UserDisplayNameHeader].Count > 1)
+            return null;
+
         string? id = headers[UserIdHeader];
         if (string.IsNullOrWhiteSpace(id))
             return null;

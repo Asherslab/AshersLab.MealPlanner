@@ -16,6 +16,12 @@ public class SyncState
     /// <summary>Every op up to this seq has been applied here.</summary>
     public long PulledThroughSeq { get; set; }
 
+    /// <summary>
+    /// The server log's chain at <see cref="PulledThroughSeq"/>, sent with every pull so the server can tell
+    /// whether its log still holds what this browser has seen. Empty before anything was pulled.
+    /// </summary>
+    public string PulledThroughChain { get; set; } = "";
+
     /// <summary>This device's hybrid logical clock state, as a <c>Hlc</c> string. Null before its first event.</summary>
     public string? Clock { get; set; }
 
