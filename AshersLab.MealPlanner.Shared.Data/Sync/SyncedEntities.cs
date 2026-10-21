@@ -5,6 +5,7 @@ using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Domain;
+using AshersLab.MealPlanner.Shared.Domain.Meals;
 using AshersLab.MealPlanner.Shared.Domain.Products;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using System.Globalization;
@@ -42,7 +43,9 @@ public static class SyncedEntities
 
     public static readonly MealGroupEntity MealGroup = new();
 
-    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product, PriceObservation, MealGroup];
+    public static readonly MealEntity Meal = new();
+
+    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -120,6 +123,19 @@ public static class SyncedEntities
             group.HasKey(g => g.Id);
             group.Property(g => g.Id).ValueGeneratedNever();
             group.Property(g => g.Name).HasMaxLength(Names.MaxLength);
+        });
+
+        modelBuilder.Entity<Meal>(meal =>
+        {
+            meal.ToTable("Meal");
+            meal.HasKey(m => m.Id);
+            meal.Property(m => m.Id).ValueGeneratedNever();
+            meal.Property(m => m.Name).HasMaxLength(Names.MaxLength);
+            // By name, as the op carries it.
+            meal.Property(m => m.Kind).HasConversion<string>().HasMaxLength(20);
+            meal.Property(m => m.Notes).HasMaxLength(MealRules.MaxNotesLength);
+            // "Is this group still used?", the check before a delete. Not a foreign key.
+            meal.HasIndex(m => m.GroupId);
         });
     }
 }

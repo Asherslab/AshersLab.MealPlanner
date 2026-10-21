@@ -66,7 +66,7 @@
                 {
                     <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" ShowCloseIcon="true"
                               CloseIconClicked="() => _inUse = null" data-testid="@($"{TestId}-in-use")">
-                        @item.Name is used by @string.Join(", and ", new[] { Listed(item.UsedBy, "ingredient"), Listed(item.UsedByProducts ?? [], "product") }.Where(s => s is not null)).
+                        @item.Name is used by @string.Join(", and ", new[] { Listed(item.UsedBy, UsedByNoun),Listed(item.UsedByProducts ?? [], "product") }.Where(s => s is not null)).
                         @InUseHint
                     </MudAlert>
                 }
@@ -88,6 +88,9 @@
 
     /// <summary>What to do about it, shown when a delete is refused: "Change their usual store first."</summary>
     [Parameter] public string? InUseHint { get; set; }
+
+    /// <summary>What <see cref="NameListItem.UsedBy"/> names: "ingredient", or "meal" for meal groups.</summary>
+    [Parameter] public string UsedByNoun { get; set; } = "ingredient";
 
     [Parameter, EditorRequired] public Func<string, string?> NameProblem { get; set; } = null!;
 

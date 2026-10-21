@@ -41,6 +41,14 @@ public static class OpValues
         long.TryParse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out cents)
         && FormatCents(cents) == value;
 
+    /// <summary>A count ("4"), as plain digits.</summary>
+    public static string FormatInt(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Reads <see cref="FormatInt"/>'s output, and only that.</summary>
+    public static bool TryParseInt(string? value, out int result) =>
+        int.TryParse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out result)
+        && FormatInt(result) == value;
+
     /// <summary>A calendar date, "2026-10-21". No time and no zone: a price is seen on a day.</summary>
     public static string FormatDate(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 

@@ -30,6 +30,8 @@ public partial class MealPlannerDbContext
 
     public DbSet<MealGroup> MealGroups => Set<MealGroup>();
 
+    public DbSet<Meal> Meals => Set<Meal>();
+
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 
     private static void BuildSyncModel(ModelBuilder modelBuilder)

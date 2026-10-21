@@ -1,0 +1,162 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Meals
+@using AshersLab.MealPlanner.Shared.Domain.Prices
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+
+@*
+    One meal's own fields: name, group, kind, serves, the price of a fixed-cost meal, notes - and delete. Its
+    ingredients are edited on the meal's page, one row at a time. A dialog, full screen on a phone; like the other
+    editors it only edits a draft and answers it, and the page turns the answer into an op.
+
+    Serves has no default for a new batch: a wrong "1" would make every per-serve cost wrong without anyone noticing.
+*@
+
+<MudDialog data-testid="meal-editor">
+    <DialogContent>
+        <form id="meal-editor-form" @onsubmit="Save" @onsubmit:preventDefault>
+            <MudTextField T="string" @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Immediate="true"
+                          MaxLength="Names.MaxLength" AutoFocus="@IsNew"
+                          Error="_nameError is not null" ErrorText="@_nameError"
+                          InputId="meal-edit-name" data-testid="meal-edit-name"/>
+
+            <label class="native-select mt-4">
+                <span>Group</span>
+                <select @bind="_groupId" data-testid="meal-group">
+                    <option value="">No group</option>
+                    @foreach (PickerOption group in Groups)
+                    {
+                        <option value="@group.Id">@group.Name</option>
+                    }
+                </select>
+            </label>
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4">What kind of meal</MudText>
+            <MudRadioGroup T="MealKind" @bind-Value="_kind" data-testid="meal-kind">
+                @foreach (MealKind kind in Enum.GetValues<MealKind>())
+                {
+                    <div class="meal-kind-choice">
+                        <MudRadio T="MealKind" Value="kind" Color="Color.Primary" Dense="true"
+                                  data-testid="@($"meal-kind-{kind}")">@kind.Label()</MudRadio>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary meal-kind-explanation">@kind.Explanation()</MudText>
+                    </div>
+                }
+            </MudRadioGroup>
+
+            @if (_kind == MealKind.FixedCost)
+            {
+                <MudTextField T="string" @bind-Value="_fixedCost" Label="What it costs, all up" Variant="Variant.Outlined"
+                              Immediate="true" InputMode="@(InputMode.@decimal)" Class="mt-4"
+                              Adornment="Adornment.Start" AdornmentText="$"
+                              Error="_fixedCostError is not null" ErrorText="@_fixedCostError"
+                              InputId="meal-edit-fixed-cost" data-testid="meal-edit-fixed-cost"/>
+            }
+
+            @if (_kind.HasServes())
+            {
+                <MudTextField T="string" @bind-Value="_serves" Label="@(_kind == MealKind.Cooked ? "Serves a batch makes" : "Serves it feeds")"
+                              Variant="Variant.Outlined" Immediate="true" InputMode="InputMode.numeric" Class="mt-4"
+                              Error="_servesError is not null" ErrorText="@_servesError"
+                              InputId="meal-edit-serves" data-testid="meal-edit-serves"/>
+            }
+
+            <MudTextField T="string" @bind-Value="_notes" Label="Notes (optional)" Variant="Variant.Outlined"
+                          Lines="3" AutoGrow="true" MaxLines="10" MaxLength="MealRules.MaxNotesLength" Class="mt-4"
+                          Immediate="true" InputId="meal-edit-notes" data-testid="meal-edit-notes"/>
+        </form>
+    </DialogContent>
+    <DialogActions>
+        @if (!IsNew)
+        {
+            <MudButton Color="Color.Error" OnClick="Delete" Class="mr-auto" data-testid="meal-delete">Delete</MudButton>
+        }
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="meal-cancel">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="meal-editor-form" Color="Color.Primary"
+                   Variant="Variant.Filled" data-testid="meal-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Inject] private IDialogService Dialogs { get; set; } = null!;
+
+    /// <summary>What it starts from. A new one carries the name typed so far; its serves are ignored (blank).</summary>
+    [Parameter] public MealDraft Draft { get; set; } = new("", null, MealKind.Cooked, 1, null, null);
+
+    [Parameter] public bool IsNew { get; set; }
+
+    [Parameter] public IReadOnlyList<PickerOption> Groups { get; set; } = [];
+
+    /// <summary>Every other meal's name, to warn about a duplicate.</summary>
+    [Parameter] public IReadOnlyList<string> OtherNames { get; set; } = [];
+
+    private string?  _name;
+    private string   _groupId = "";
+    private MealKind _kind;
+    private string?  _serves;
+    private string?  _fixedCost;
+    private string?  _notes;
+
+    private string? _nameError;
+    private string? _servesError;
+    private string? _fixedCostError;
+
+    protected override void OnInitialized()
+    {
+        _name      = Draft.Name;
+        _groupId   = Groups.Any(g => g.Id == Draft.GroupId) ? Draft.GroupId.ToString()! : "";
+        _kind      = Draft.Kind;
+        _serves    = IsNew ? null : Draft.ServesPerBatch.ToString();
+        _fixedCost = Draft.FixedCostCents is { } cents ? Money.Editable(cents) : null;
+        _notes     = Draft.Notes;
+    }
+
+    private void Save()
+    {
+        string name = Names.Normalise(_name);
+        _nameError = MealRules.NameProblem(name)
+                     ?? (OtherNames.Any(n => Names.Same(n, name)) ? $"There is already a meal called {name}." : null);
+
+        // A kind with no batch keeps what it had (1 for a new one): changing the kind back finds it again.
+        int serves = IsNew ? 1 : Draft.ServesPerBatch;
+        _servesError = null;
+        if (_kind.HasServes())
+        {
+            if (string.IsNullOrWhiteSpace(_serves))
+                _servesError = _kind == MealKind.Cooked ? "How many serves does a batch make?" : "How many does it feed?";
+            else if (!int.TryParse(_serves.Trim(), out serves))
+                _servesError = "Type a whole number, like 4.";
+            else
+                _servesError = MealRules.ServesProblem(serves);
+        }
+
+        // Kept, not cleared, when the kind is not fixed cost: changing it back finds the price again.
+        long? fixedCost = Draft.FixedCostCents;
+        _fixedCostError = null;
+        if (_kind == MealKind.FixedCost)
+            fixedCost = Money.ParseCents(_fixedCost, out _fixedCostError);
+
+        if (_nameError is not null || _servesError is not null || _fixedCostError is not null)
+            return;
+
+        Dialog.Close(DialogResult.Ok(new MealEditorResult(
+            new MealDraft(name, Pick(), _kind, serves, fixedCost, MealRules.NormaliseNotes(_notes)), Delete: false)));
+    }
+
+    /// <summary>The picker's choice - except that "none" over a group that is gone keeps the reference.</summary>
+    private Guid? Pick() =>
+        Guid.TryParse(_groupId, out Guid id) ? id
+        : Draft.GroupId is { } held && Groups.All(g => g.Id != held) ? held
+        : null;
+
+    private async Task Delete()
+    {
+        bool? confirmed = await Dialogs.ShowMessageBoxAsync(
+            title: $"Delete {Draft.Name}?",
+            message: "It goes from the meals on every device, with its ingredients.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+            Dialog.Close(DialogResult.Ok(new MealEditorResult(null, Delete: true)));
+    }
+}

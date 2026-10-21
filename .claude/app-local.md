@@ -126,8 +126,13 @@ date input - set `.value` and dispatch `change`), the form `price-sheet-form` (`
 (ports 19345/19346) drives all of it from two profiles.
 
 **Meal groups** (`/meal-groups`, `nav-meal-groups`) is a `NameList` with the prefix `meal-group`, reorderable like
-Categories. `node .claude/tools/chrome-meals-check.mjs <scratch>/meals` (ports 19347/19348) drives the meals pages from
-two profiles.
+Categories. **Meals** (`/meals`, `nav-meals`): `meal-new-name` (input id too) and `meal-add`; group headings
+`meal-list-group`; per meal `meal-row` (an `<a>` to `/meals/{id}`, `data-id`), `meal-name`, `meal-detail`. A meal's
+page: `meal-title`, `meal-summary` ("Beef · makes 4 serves"), `meal-notes`, `meal-edit`, `meal-back`, or `meal-gone`.
+The editor: `meal-edit-name`, `meal-edit-serves`, `meal-edit-fixed-cost`, `meal-edit-notes` (a textarea - use the
+`HTMLTextAreaElement` value setter) as input ids, `meal-group` (native select), `meal-kind-Cooked|Simple|Leftovers|NoCost|FixedCost`
+(click the `input` inside), `meal-save`, `meal-cancel`, `meal-delete`. `node .claude/tools/chrome-meals-check.mjs <scratch>/meals`
+(ports 19347/19348) drives all of it from two profiles.
 
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).

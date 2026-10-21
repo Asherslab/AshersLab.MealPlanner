@@ -1,0 +1,93 @@
+@page "/meals/{Id:guid}"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Meals
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain.Meals
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject IDialogService Dialogs
+@inject IBrowserViewportService Viewport
+@inject NavigationManager Navigation
+
+@*
+    One meal: what it is, and Edit for its own fields (and delete). A page rather than a dialog because its
+    ingredients are a list of their own, each edited on its own.
+*@
+
+<PageTitle>@(_meal?.Name ?? "Meal") - Meal Planner</PageTitle>
+
+<MudButton Href="meals" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2"
+           data-testid="meal-back">Meals</MudButton>
+
+<LocalDataGate Start="Start">
+    @if (_meal is null)
+    {
+        <MudAlert Severity="Severity.Info" data-testid="meal-gone">
+            This meal is not here - it may have been deleted on another device.
+        </MudAlert>
+    }
+    else
+    {
+        <div class="d-flex align-start gap-2">
+            <div class="flex-grow-1">
+                <MudText Typo="Typo.h5" Component="h1" data-testid="meal-title">@_meal.Name</MudText>
+                <MudText Class="mud-text-secondary" data-testid="meal-summary">@Summary()</MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="Edit"
+                       data-testid="meal-edit">Edit</MudButton>
+        </div>
+
+        @if (_meal.Notes is { } notes)
+        {
+            <MudText Class="mt-2 meal-notes" data-testid="meal-notes">@notes</MudText>
+        }
+    }
+</LocalDataGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private Meal?           _meal;
+    private List<MealGroup> _groups     = [];
+    private List<string>    _otherNames = [];
+
+    // The same page instance shows another meal when only the id in the address changes.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Ready)
+            await Reload();
+    }
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _meal       = await db.Meals.AsNoTracking().SingleOrDefaultAsync(m => m.Id == Id && !m.Deleted);
+        _groups     = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
+        _otherNames = await db.Meals.AsNoTracking().Where(m => !m.Deleted && m.Id != Id).Select(m => m.Name).ToListAsync();
+    }
+
+    /// <summary>"Beef · makes 4 serves".</summary>
+    private string Summary() =>
+        string.Join(" · ", new[]
+        {
+            _meal!.GroupId is { } group ? _groups.FirstOrDefault(g => g.Id == group)?.Name ?? "group removed" : "No group",
+            MealText.Detail(_meal),
+        });
+
+    private async Task Edit()
+    {
+        MealDraft before = _meal!.Draft();
+        MealEditorResult? result = await MealDialogs.EditAsync(Dialogs, Viewport, before, isNew: false,
+            [.. _groups.Select(g => new PickerOption(g.Id, g.Name))], _otherNames);
+
+        if (result is { Delete: true })
+        {
+            await WriteAsync(SyncedEntities.Meal, Id, OpKind.Delete, []);
+            Navigation.NavigateTo("meals");
+        }
+        else if (result?.Saved is { } draft && draft.FieldsChangedFrom(before) is { Count: > 0 } fields)
+            await WriteAsync(SyncedEntities.Meal, Id, OpKind.Update, fields);
+    }
+}

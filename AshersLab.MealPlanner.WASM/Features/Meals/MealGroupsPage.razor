@@ -11,7 +11,8 @@
 
 @*
     The meal groups - Beef, Chicken & egg, Fish... the columns of the planner's "meal ideas" - in the order the meals
-    list shows them. Seeded from the spreadsheet; arranged with the arrows, like the categories.
+    list shows them. Seeded from the spreadsheet; arranged with the arrows, like the categories. A group a meal is in
+    cannot be deleted.
 *@
 
 <PageTitle>Meal groups - Meal Planner</PageTitle>
@@ -20,7 +21,7 @@
 <MudText Class="mt-1 mud-text-secondary">The meals are grouped in this order.</MudText>
 
 <LocalDataGate Start="Start">
-    <NameList Items="_items" Noun="meal group" TestId="meal-group" NewLabel="New meal group"
+    <NameList Items="_items" Noun="meal group" TestId="meal-group" NewLabel="New meal group" UsedByNoun="meal"
               NameProblem="MealGroupRules.NameProblem"
               InUseHint="Move them to another group first."
               OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
@@ -33,7 +34,14 @@
     protected override async Task LoadAsync(LocalDbContext db)
     {
         _groups = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
-        _items  = [.. _groups.Select(g => new NameListItem(g.Id, g.Name, []))];
+        ILookup<Guid?, string> usedBy = (await db.Meals.AsNoTracking()
+                .Where(m => !m.Deleted && m.GroupId != null)
+                .Select(m => new { m.GroupId, m.Name })
+                .ToListAsync())
+            .OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToLookup(m => m.GroupId, m => m.Name);
+
+        _items = [.. _groups.Select(g => new NameListItem(g.Id, g.Name, [.. usedBy[g.Id]]))];
     }
 
     private Task Add(string name) =>

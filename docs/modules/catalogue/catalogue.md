@@ -158,6 +158,8 @@ and nothing is archived.
   and 2 products: ..."; `NameListItem.UsedByProducts`). The ingredient editor's Delete is refused while a product is
   bought as it, naming the products. When meal ingredients (slice 6) refer to ingredients, the same refusal must
   name the meals too.
+- **Meals refer to meal groups** ([meals](../meals/meals.md)); a group a meal is in is refused the same way
+  (`NameList`'s `UsedByNoun`).
 
 ## The pages
 

@@ -70,6 +70,64 @@ public sealed class MealSyncTests : IAsyncLifetime
             (await GroupsAsync(b)).Select(g => g.Name));
     }
 
+    [Fact]
+    public async Task Every_meal_field_reaches_another_browser_by_op_and_by_snapshot()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser byOps = await TestBrowser.OpenAsync(_server);
+        await byOps.SyncAsync();
+
+        Guid bolognese = Guid.CreateVersion7(), pizza = Guid.CreateVersion7();
+        MealDraft draft = new("Spaghetti bolognese", CatalogueSeed.MealGroup(0), MealKind.Cooked, 4, null, "Freezes well.\nDouble the sauce.");
+        await a.WriteAsync(SyncedEntities.Meal, bolognese, OpKind.Create, draft.FieldsChangedFrom(null));
+        await a.WriteAsync(SyncedEntities.Meal, pizza, OpKind.Create,
+            new MealDraft("Pizza", null, MealKind.FixedCost, 3, 4500, null).FieldsChangedFrom(null));
+        await a.SyncAsync();
+        await byOps.SyncAsync();
+
+        a.Now = a.Now.AddMinutes(1);
+        await a.WriteAsync(SyncedEntities.Meal, bolognese, OpKind.Update, (draft with { ServesPerBatch = 6 }).FieldsChangedFrom(draft));
+        await a.SyncAsync();
+        await byOps.SyncAsync();
+        await using TestBrowser bySnapshot = await TestBrowser.OpenAsync(_server);
+        await bySnapshot.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { byOps, bySnapshot })
+        {
+            await using LocalDbContext db = browser.CreateDbContext();
+            Dictionary<Guid, Meal> meals = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, Ct);
+            Assert.Equal(draft with { ServesPerBatch = 6 }, meals[bolognese].Draft());
+            Assert.Equal(new MealDraft("Pizza", null, MealKind.FixedCost, 3, 4500, null), meals[pizza].Draft());
+        }
+    }
+
+    [Fact]
+    public async Task Two_browsers_editing_different_fields_of_one_meal_offline_both_keep_their_edit()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        Guid meal = Guid.CreateVersion7();
+        MealDraft draft = new("Risoni", null, MealKind.Cooked, 4, null, null);
+        await a.WriteAsync(SyncedEntities.Meal, meal, OpKind.Create, draft.FieldsChangedFrom(null));
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        a.Now = a.Now.AddMinutes(1);
+        await a.WriteAsync(SyncedEntities.Meal, meal, OpKind.Update, (draft with { GroupId = CatalogueSeed.MealGroup(0) }).FieldsChangedFrom(draft));
+        b.Now = b.Now.AddMinutes(2);
+        await b.WriteAsync(SyncedEntities.Meal, meal, OpKind.Update, (draft with { ServesPerBatch = 8 }).FieldsChangedFrom(draft));
+        await b.SyncAsync();
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { a, b })
+        {
+            await using LocalDbContext db = browser.CreateDbContext();
+            Meal row = await db.Meals.AsNoTracking().SingleAsync(m => m.Id == meal, Ct);
+            Assert.Equal(((Guid?)CatalogueSeed.MealGroup(0), 8), (row.GroupId, row.ServesPerBatch));
+        }
+    }
+
     [Theory]
     [InlineData(OpKind.Create, MealGroupRules.NameField, "Pasta", true)]
     [InlineData(OpKind.Update, MealGroupRules.NameField, " Pasta", true)]

@@ -1,0 +1,108 @@
+@page "/meals"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Meals
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Meals
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject IDialogService Dialogs
+@inject IBrowserViewportService Viewport
+@inject NavigationManager Navigation
+
+@*
+    Every meal, under its group in the household's order. Type a name and tap Add (or Enter) to open the editor with
+    it filled in; saving opens the new meal's page, where its ingredients go. Tap a meal for its page.
+*@
+
+<PageTitle>Meals - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Meals</MudText>
+
+<LocalDataGate Start="Start">
+    <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
+        <MudTextField T="string" @bind-Value="_newName" Label="New meal, or search" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      InputId="meal-new-name" data-testid="meal-new-name"/>
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
+                   data-testid="meal-add">Add</MudButton>
+    </form>
+
+    @if (_meals.Count == 0)
+    {
+        <MudText Class="pa-4 mud-text-secondary" data-testid="meals-empty">No meals yet.</MudText>
+    }
+    else if (!Groups().Any())
+    {
+        <MudText Class="pa-4 mud-text-secondary" data-testid="meals-none-match">
+            None match "@Names.Normalise(_newName)". Tap Add to add it.
+        </MudText>
+    }
+
+    @foreach ((string heading, List<Meal> items) in Groups())
+    {
+        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="meal-list-group">@heading</MudText>
+        <MudPaper Outlined="true">
+            @foreach (Meal meal in items)
+            {
+                <a class="meal-row d-block px-4 py-2" @key="meal.Id" href="@($"meals/{meal.Id}")"
+                   data-testid="meal-row" data-id="@meal.Id">
+                    <MudText data-testid="meal-name">@meal.Name</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="meal-detail">@MealText.Detail(meal)</MudText>
+                </a>
+            }
+        </MudPaper>
+    }
+</LocalDataGate>
+
+@code {
+    private List<Meal>      _meals  = [];
+    private List<MealGroup> _groups = [];
+
+    private string? _newName;
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _meals  = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToListAsync();
+        _groups = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
+    }
+
+    /// <summary>The meals matching the box, under their group in group order; "No group" (none, or one deleted) last.</summary>
+    private IEnumerable<(string Heading, List<Meal> Items)> Groups()
+    {
+        string filter = Names.Normalise(_newName);
+        List<Meal> shown = [.. _meals
+            .Where(m => filter.Length == 0 || m.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase))
+            .OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)];
+
+        HashSet<Guid> live = [.. _groups.Select(g => g.Id)];
+        foreach (MealGroup group in _groups)
+        {
+            List<Meal> items = [.. shown.Where(m => m.GroupId == group.Id)];
+            if (items.Count > 0)
+                yield return (group.Name, items);
+        }
+
+        List<Meal> loose = [.. shown.Where(m => m.GroupId is not { } id || !live.Contains(id))];
+        if (loose.Count > 0)
+            yield return ("No group", loose);
+    }
+
+    private async Task Add()
+    {
+        MealEditorResult? result = await MealDialogs.EditAsync(Dialogs, Viewport,
+            new MealDraft(Names.Normalise(_newName), null, MealKind.Cooked, 1, null, null), isNew: true,
+            [.. _groups.Select(g => new PickerOption(g.Id, g.Name))], [.. _meals.Select(m => m.Name)]);
+        if (result?.Saved is not { } draft)
+            return;
+
+        _newName = null;
+        Guid id = Guid.CreateVersion7();
+        await WriteAsync(SyncedEntities.Meal, id, OpKind.Create, draft.FieldsChangedFrom(null));
+        Navigation.NavigateTo($"meals/{id}");
+    }
+}
