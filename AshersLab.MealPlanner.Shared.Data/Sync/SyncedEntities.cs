@@ -1,5 +1,6 @@
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Meals;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
@@ -39,7 +40,9 @@ public static class SyncedEntities
 
     public static readonly PriceObservationEntity PriceObservation = new();
 
-    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product, PriceObservation];
+    public static readonly MealGroupEntity MealGroup = new();
+
+    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product, PriceObservation, MealGroup];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -109,6 +112,14 @@ public static class SyncedEntities
                 .HasMaxLength(10);
             // A product's history. Not a foreign key.
             price.HasIndex(p => p.ProductId);
+        });
+
+        modelBuilder.Entity<MealGroup>(group =>
+        {
+            group.ToTable("MealGroup");
+            group.HasKey(g => g.Id);
+            group.Property(g => g.Id).ValueGeneratedNever();
+            group.Property(g => g.Name).HasMaxLength(Names.MaxLength);
         });
     }
 }

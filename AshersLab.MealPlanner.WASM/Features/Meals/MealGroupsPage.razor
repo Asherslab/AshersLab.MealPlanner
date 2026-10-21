@@ -1,0 +1,62 @@
+@page "/meal-groups"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Meals
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Meals
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+
+@*
+    The meal groups - Beef, Chicken & egg, Fish... the columns of the planner's "meal ideas" - in the order the meals
+    list shows them. Seeded from the spreadsheet; arranged with the arrows, like the categories.
+*@
+
+<PageTitle>Meal groups - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Meal groups</MudText>
+<MudText Class="mt-1 mud-text-secondary">The meals are grouped in this order.</MudText>
+
+<LocalDataGate Start="Start">
+    <NameList Items="_items" Noun="meal group" TestId="meal-group" NewLabel="New meal group"
+              NameProblem="MealGroupRules.NameProblem"
+              InUseHint="Move them to another group first."
+              OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
+</LocalDataGate>
+
+@code {
+    private List<MealGroup>    _groups = [];
+    private List<NameListItem> _items  = [];
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _groups = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
+        _items  = [.. _groups.Select(g => new NameListItem(g.Id, g.Name, []))];
+    }
+
+    private Task Add(string name) =>
+        WriteAsync(SyncedEntities.MealGroup, Guid.CreateVersion7(), OpKind.Create,
+        [
+            new OpField(MealGroupRules.NameField, name),
+            new OpField(MealGroupRules.PositionField, ListPosition.Format(ListPosition.AtEnd(_groups.Select(g => g.Position)))),
+        ]);
+
+    private Task Rename(Guid id, string name) =>
+        WriteAsync(SyncedEntities.MealGroup, id, OpKind.Update, [new OpField(MealGroupRules.NameField, name)]);
+
+    private Task Delete(Guid id) => WriteAsync(SyncedEntities.MealGroup, id, OpKind.Delete, []);
+
+    private async Task Move(Guid id, int direction)
+    {
+        int index = _groups.FindIndex(g => g.Id == id);
+        if (index < 0)
+            return;
+
+        List<MealGroup> before = _groups;
+        foreach ((int at, decimal position) in ListPosition.Move([.. before.Select(g => g.Position)], index, direction))
+            await WriteAsync(SyncedEntities.MealGroup, before[at].Id, OpKind.Update,
+                [new OpField(MealGroupRules.PositionField, ListPosition.Format(position))]);
+    }
+}

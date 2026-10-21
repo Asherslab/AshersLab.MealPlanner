@@ -125,6 +125,10 @@ date input - set `.value` and dispatch `change`), the form `price-sheet-form` (`
 `price-history-price` and `price-history-delete`. A row's latest price is `price-product-price`. `node .claude/tools/chrome-prices-check.mjs <scratch>/prices`
 (ports 19345/19346) drives all of it from two profiles.
 
+**Meal groups** (`/meal-groups`, `nav-meal-groups`) is a `NameList` with the prefix `meal-group`, reorderable like
+Categories. `node .claude/tools/chrome-meals-check.mjs <scratch>/meals` (ports 19347/19348) drives the meals pages from
+two profiles.
+
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
 

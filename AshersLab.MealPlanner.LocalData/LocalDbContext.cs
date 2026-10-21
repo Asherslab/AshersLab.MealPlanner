@@ -1,6 +1,7 @@
 using AshersLab.MealPlanner.LocalData.Sync;
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Meals;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
@@ -35,6 +36,8 @@ public class LocalDbContext(
     public DbSet<Product> Products => Set<Product>();
 
     public DbSet<PriceObservation> PriceObservations => Set<PriceObservation>();
+
+    public DbSet<MealGroup> MealGroups => Set<MealGroup>();
 
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 

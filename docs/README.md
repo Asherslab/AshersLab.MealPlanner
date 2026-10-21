@@ -39,6 +39,8 @@ Present tense, kept current, no dates.
   pack says them, price history, an ingredient's price per unit (usual store first, rounded once), and why aliases
   are not a field.
 
+- [Meals](modules/meals/meals.md) — meal groups (seeded, ordered like categories).
+
 ## The other three directories
 
 | Directory | What is in it | Trust it for |

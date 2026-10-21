@@ -53,6 +53,7 @@ mechanism; this doc is what the catalogue does with it.
 |---|---|
 | Store | Woolworths, Costco |
 | Category | Meat, Dairy, Fruit, Vegetables, Carbs/sides, Pantry, Fridge, Freezer, Household - the planner's spreadsheet's shopping categories, in its order (positions 1-9) |
+| MealGroup | Beef, Chicken & egg, Fish, Other, Individual, Side, Snack - the spreadsheet's meal-ideas columns ([meals](../meals/meals.md)) |
 
 A database that already existed when a seed was added gets it at its next start: the categories were added to a
 running dev database that way (seqs 12-20, after the stores and the ops between).

@@ -4,6 +4,7 @@ using AshersLab.MealPlanner.Grpc.Features.Sync;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using AshersLab.MealPlanner.Shared.Domain;
 using AshersLab.MealPlanner.Shared.Domain.Categories;
+using AshersLab.MealPlanner.Shared.Domain.Meals;
 using AshersLab.MealPlanner.Shared.Domain.Stores;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AshersLab.MealPlanner.Grpc.Features.Catalogue;
 
 /// <summary>
-/// The stores and shopping categories every household starts with, written into the op log as the server's own ops - so they reach
+/// The stores, shopping categories and meal groups every household starts with, written into the op log as the server's own ops - so they reach
 /// every browser like any other edit, and the household can rename or delete them.
 /// </summary>
 /// <remarks>
@@ -48,6 +49,13 @@ public static class CatalogueSeed
     /// <summary>The seeded category's id, by its position in <see cref="Categories"/> (0 is Meat).</summary>
     public static Guid Category(int index) => new($"00000000-5eed-7000-8000-000000000{201 + index}");
 
+    /// <summary>The meal groups of the planner's spreadsheet - its "meal ideas" columns - in its order.</summary>
+    public static readonly IReadOnlyList<string> MealGroups =
+        ["Beef", "Chicken & egg", "Fish", "Other", "Individual", "Side", "Snack"];
+
+    /// <summary>The seeded meal group's id, by its position in <see cref="MealGroups"/> (0 is Beef).</summary>
+    public static Guid MealGroup(int index) => new($"00000000-5eed-7000-8000-000000000{301 + index}");
+
     public sealed record Seed(SyncedEntity Type, Guid Id, IReadOnlyList<OpField> Fields);
 
     public static readonly IReadOnlyList<Seed> All =
@@ -58,6 +66,11 @@ public static class CatalogueSeed
         [
             new OpField(CategoryRules.NameField, name),
             new OpField(CategoryRules.PositionField, ListPosition.Format(i + 1)),
+        ])),
+        .. MealGroups.Select((name, i) => new Seed(SyncedEntities.MealGroup, MealGroup(i),
+        [
+            new OpField(MealGroupRules.NameField, name),
+            new OpField(MealGroupRules.PositionField, ListPosition.Format(i + 1)),
         ])),
     ];
 
