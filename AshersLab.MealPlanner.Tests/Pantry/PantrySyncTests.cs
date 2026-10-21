@@ -140,6 +140,22 @@ public sealed class PantrySyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Stock_read_after_the_last_movement_has_the_meals_eaten_since_taken_off()
+    {
+        // The pantry page and the shopping list read from today, which is usually days after the last shop or count.
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        Guid mince = await a.CreateIngredientAsync("Mince");
+        Guid stew  = await MealAsync(a, "Stew", MealKind.Cooked, (mince, 500));
+        await MoveAsync(a, mince, 2000, StockReason.Bought, Mon.AddDays(-7));
+        await EntryAsync(a, Mon.AddDays(-3), Dinner, stew);
+        await EntryAsync(a, Mon.AddDays(1), Dinner, stew);
+
+        PantryBook pantry = await PantryAsync(a, Mon.AddDays(6));
+        Assert.Equal(new StockLevel(1500, StockState.InStock), pantry.At(mince, Mon));
+        Assert.Equal(1000, pantry.At(mince, Mon.AddDays(2)).Quantity);
+    }
+
+    [Fact]
     public async Task Counts_and_purchases_made_offline_on_two_phones_end_the_same_everywhere()
     {
         await using TestBrowser a = await TestBrowser.OpenAsync(_server);

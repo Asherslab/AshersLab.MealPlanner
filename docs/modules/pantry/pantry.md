@@ -104,7 +104,8 @@ a day, two phones' counts and purchases, nothing before the first movement, out 
 `RunsOut`, ingredients apart and any input order, exact decimals), `Tests/Domain/StockRulesTests.cs` (the op's fields, the
 amount fitting the reason, one spelling each, a staple's three states) and `Tests/Pantry/PantrySyncTests.cs` (through the
 real host: draw-downs on another browser, a simple meal per eater, leftovers and unquantified lines using nothing, staples
-untouched, uses listed for an ingredient never counted, a skip giving stock back with no movement written; offline counts
+untouched, uses listed for an ingredient never counted, a skip giving stock back with no movement written; stock read days
+after the last movement with the meals since taken off; offline counts
 and a purchase from two phones and a staple's state ending the same; an undo; a movement whose amount does not fit its
 reason refused before it is queued). Breaking the zero floor, making a count add, drawing a simple meal once, ignoring a
-skip, or reversing the order within a day each fails them.
+skip, reversing the order within a day, or reading the calendar only from the day asked for each fails them.
