@@ -75,9 +75,80 @@ public class CostcoReceiptTests
     public void An_amount_is_read_however_OCR_ran_it_into_the_GST_flag(string printed, long cents, bool gst)
     {
         long unit = cents;
-        ParsedLine line = CostcoReceipt.Parse(Ocr([.. Header, "THING", $"123456   1x   {unit / 100}.{unit % 100:00}   {printed}", .. Footer($"{cents / 100}.{cents % 100:00}", 1)]))
-            .Receipt.Lines.Single();
+        CostcoRead read = CostcoReceipt.Parse(Ocr([.. Header, "THING", $"123456   1x   {unit / 100}.{unit % 100:00}   {printed}", .. Footer($"{cents / 100}.{cents % 100:00}", 1)]));
+        ParsedLine line = read.Receipt.Lines.Single();
         Assert.Equal((cents, gst), (line.AmountCents, line.Gst));
+        // Read, not worked out from the quantity and price - which at one pack would give the same figure.
+        Assert.Empty(read.Unsure);
+    }
+
+    [Fact]
+    public void An_item_row_OCR_ran_together_is_still_an_item()
+    {
+        List<OcrLine> ocr = Receipt();
+        int apples = ocr.FindIndex(l => l.Text.StartsWith("700202"));
+        ocr[apples] = ocr[apples] with { Text = "700202 1x8.99 8.99 0" };
+        ParsedReceipt receipt = CostcoReceipt.Parse(ocr).Receipt;
+        Assert.Equal(("PINK LADY APPLES 2KG", "700202", 899L), (receipt.Lines[1].Description, receipt.Lines[1].StoreCode, receipt.Lines[1].AmountCents));
+        Assert.Null(receipt.TotalsProblem());
+
+        // A 0 in the quantity read as O.
+        ParsedLine ten = CostcoReceipt.Parse(Ocr([.. Header, "THING", "123456   1Ox   0.50   5.00 0", .. Footer("5.00", 10)])).Receipt.Lines.Single();
+        Assert.Equal((10m, 500L), (ten.Supplied, ten.AmountCents));
+    }
+
+    [Fact]
+    public void A_discount_is_known_by_its_minus_or_by_its_name()
+    {
+        // The minus alone: OCR misread the name.
+        List<OcrLine> ocr = Receipt();
+        int tpd = ocr.FindIndex(l => l.Text.StartsWith("TPD"));
+        ocr[tpd] = ocr[tpd] with { Text = "T?D -8UY 2 SAVE" };
+        Assert.Equal(300, CostcoReceipt.Parse(ocr).Receipt.Lines[2].DiscountCents);
+
+        // The name alone: OCR lost the minus.
+        ocr = Receipt();
+        int amount = ocr.FindIndex(l => l.Text.StartsWith("700909"));
+        ocr[amount] = ocr[amount] with { Text = "700909      1x      3.00      3.000" };
+        ParsedReceipt receipt = CostcoReceipt.Parse(ocr).Receipt;
+        Assert.Equal(300, receipt.Lines[2].DiscountCents);
+        Assert.Null(receipt.TotalsProblem());
+    }
+
+    [Fact]
+    public void A_discount_whose_amount_was_worked_out_marks_its_item_to_be_checked()
+    {
+        List<OcrLine> ocr = Receipt();
+        int amount = ocr.FindIndex(l => l.Text.StartsWith("700909"));
+        ocr[amount] = ocr[amount] with { Text = "700909      1x      3.00      3.g?" };
+        CostcoRead read = CostcoReceipt.Parse(ocr);
+        Assert.Equal(300, read.Receipt.Lines[2].DiscountCents);
+        Assert.Equal([2], read.Unsure);
+    }
+
+    [Fact]
+    public void A_discount_before_any_item_is_a_line_of_its_own_that_adds_up()
+    {
+        ParsedReceipt receipt = CostcoReceipt.Parse(Ocr(
+        [
+            .. Header, "TPD -BUY 2 SAVE", "700909      1x      3.00      300-0", "THING", "123456   1x   4.00   4.00 0", .. Footer("1.00", 1),
+        ])).Receipt;
+        ParsedLine discount = receipt.Lines[0];
+        // No packs, all discount: nothing came home, nothing counted as sold, and the receipt imports.
+        Assert.Equal((0m, -300L, 300L), (discount.Supplied, discount.AmountCents, discount.DiscountCents));
+        Assert.Null(receipt.TotalsProblem());
+    }
+
+    [Fact]
+    public void A_total_OCR_lost_the_point_of_is_read_and_one_it_could_not_read_is_left_to_correct()
+    {
+        Assert.Equal(9145, CostcoReceipt.Parse(Receipt(total: "9145")).Receipt.TotalCents);
+
+        // Unreadable: not refused - the review opens on a receipt that does not add up, its total there to correct.
+        ParsedReceipt unread = CostcoReceipt.Parse(Receipt(total: "g?.4S")).Receipt;
+        Assert.Equal((0L, 4), (unread.TotalCents, unread.Lines.Count));
+        Assert.Equal("The lines add up to $91.45, but the receipt's total is $0.00.", unread.TotalsProblem());
+        Assert.Null(ReceiptCorrection.Receipt(unread, "91.45", "5", null, out _)!.TotalsProblem());
     }
 
     [Fact]
@@ -139,7 +210,9 @@ public class CostcoReceiptTests
     {
         Assert.False(CostcoReceipt.Recognises(Ocr("Some other shop", "TOTAL 4.00")));
         Assert.True(CostcoReceipt.Recognises(Receipt()));
-        Assert.Throws<ReceiptFormatException>(() => CostcoReceipt.Parse(Ocr([.. Header, "THING", "123456  1x  4.00  4.00 0"])));
-        Assert.Throws<ReceiptFormatException>(() => CostcoReceipt.Parse(Ocr([.. Header, "THING", "123456  1x  4.00  4.00 0", "**** TOTAL (INCL GST) 4.00"])));
+        Assert.Equal("This is not a Costco receipt: it has no total.",
+            Assert.Throws<ReceiptFormatException>(() => CostcoReceipt.Parse(Ocr([.. Header, "THING", "123456  1x  4.00  4.00 0"]))).Message);
+        Assert.Equal("The receipt's date could not be read.",
+            Assert.Throws<ReceiptFormatException>(() => CostcoReceipt.Parse(Ocr([.. Header, "THING", "123456  1x  4.00  4.00 0", "**** TOTAL (INCL GST) 4.00"]))).Message);
     }
 }

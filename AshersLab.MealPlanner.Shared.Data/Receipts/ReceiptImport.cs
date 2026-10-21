@@ -42,6 +42,14 @@ public static class ReviewChoice
     public static bool MakesProduct(string choice) => choice.StartsWith("n:") || choice == "h";
 
     /// <summary>
+    /// Whether the planner's choice for a line survives their correcting it: only while it is still the same thing - same
+    /// item number, same description. <b>Corrected to another item, it is matched afresh</b>: the old choice was made for a
+    /// misread, and kept it would import the line under the wrong product and teach that product the line's description.
+    /// </summary>
+    public static bool Survives(ParsedLine before, ParsedLine after) =>
+        before.StoreCode == after.StoreCode && before.Description == after.Description;
+
+    /// <summary>
     /// The decision, or null while a new product lacks a valid name or pack. <paramref name="tick"/> is the shopping-list tick
     /// the purchase would replace; <b>it is replaced only while <paramref name="cover"/> is on</b> - the planner turns it off
     /// for two shops of the same thing.

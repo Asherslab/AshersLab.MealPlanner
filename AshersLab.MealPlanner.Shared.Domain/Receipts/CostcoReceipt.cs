@@ -49,7 +49,9 @@ public sealed record CostcoRead(ParsedReceipt Receipt, IReadOnlyDictionary<int, 
 /// </remarks>
 public static partial class CostcoReceipt
 {
-    [GeneratedRegex(@"^(?<code>[0-9OoIl|]{3,8})\s+(?<qty>[0-9Il|]{1,3})\s*[xX×]\s+(?<unit>[0-9OoIl|]+[.,]?[0-9OoIl|]{2})\s+(?<rest>.+)$")]
+    // OCR can run the "x" into the price ("1x8.99") and read a 0 in the quantity as O: either way it is still an item, which
+    // otherwise would become the next item's name and vanish - a line the review cannot correct, as it never existed.
+    [GeneratedRegex(@"^(?<code>[0-9OoIl|]{3,8})\s+(?<qty>[0-9OoIl|]{1,3})\s*[xX×]\s*(?<unit>[0-9OoIl|]+[.,]?[0-9OoIl|]{2})\s+(?<rest>.+)$")]
     private static partial Regex ItemShape();
 
     [GeneratedRegex(@"^(?<dollars>\d+)[.,]?(?<cents>\d{2})(?<minus>-)?(?<gst>[01])$")]
@@ -63,6 +65,10 @@ public static partial class CostcoReceipt
 
     [GeneratedRegex(@"(?<dollars>\d+)[.,](?<cents>\d{2})\s*$")]
     private static partial Regex TrailingMoney();
+
+    // The total's decimal point is lost as an amount's is ("9145"): every figure on the total line has two decimals.
+    [GeneratedRegex(@"(?<dollars>\d+)[.,]?(?<cents>\d{2})\s*$")]
+    private static partial Regex TotalMoney();
 
     [GeneratedRegex(@"TOTAL\s*\(?\s*INCL", RegexOptions.IgnoreCase)]
     private static partial Regex TotalShape();
@@ -93,7 +99,7 @@ public static partial class CostcoReceipt
     public static string ReceiptNumber(DateTime at, string transaction) =>
         $"{at:yyyy-MM-dd HH:mm:ss} {Names.Normalise(transaction)}";
 
-    /// <exception cref="ReceiptFormatException">Not a Costco receipt, or one with no date or total.</exception>
+    /// <exception cref="ReceiptFormatException">Not a Costco receipt, or one with no total line or no date.</exception>
     public static CostcoRead Parse(IReadOnlyList<OcrLine> ocr)
     {
         List<OcrLine> lines = [.. ocr.Select(l => l with { Text = Names.Normalise(l.Text) }).Where(l => l.Text.Any(char.IsLetterOrDigit))];
@@ -128,7 +134,10 @@ public static partial class CostcoReceipt
             throw new ReceiptFormatException("This is not a Costco receipt: it has no total.");
 
         List<OcrLine> footer = lines[end..];
-        long total = Money(TrailingMoney().Match(footer[0].Text)) ?? throw new ReceiptFormatException("The receipt's total could not be read.");
+        // A total that cannot be read at all is $0.00: the receipt does not add up, and the review opens with the total to
+        // correct. Refusing the file would leave the planner nothing to correct. The date cannot be treated so: its stamp
+        // carries the register and transaction numbers, the receipt's dedupe key, and the review does not correct those.
+        long total = Money(TotalMoney().Match(footer[0].Text)) ?? 0;
         Match stamp = footer.Select(l => StampShape().Match(l.Text)).FirstOrDefault(m => m.Success)
                       ?? throw new ReceiptFormatException("The receipt's date could not be read.");
         DateTime at = Stamp(stamp);
@@ -183,19 +192,25 @@ public static partial class CostcoReceipt
         Dictionary<string, List<Raw>> rows = [];
         Dictionary<string, long> discounts = [];
         Dictionary<string, List<PictureSpan>> spans = [];
+        HashSet<string> guessed = [];
         Raw? last = null;
         foreach (Raw raw in raws)
         {
             if (raw.Discount)
             {
-                // Before any item it has nothing to come off: kept as a line of its own, so the totals still add up.
+                // Before any item it has nothing to come off: kept as a line of its own, so the totals still add up - no
+                // packs, all discount, so its own sums agree (0 × price less the discount is the amount) and it sells nothing.
                 if (last is null)
                 {
-                    Add(raw with { Amount = -raw.Amount });
+                    Add(raw with { Quantity = 0, Amount = 0 });
+                    discounts[raw.Code] = discounts.GetValueOrDefault(raw.Code) + raw.Amount;
                     continue;
                 }
                 discounts[last.Code] = discounts.GetValueOrDefault(last.Code) + raw.Amount;
                 spans[last.Code].Add(raw.Span);
+                // A discount worked out from its price is as unsure as an amount: the item it comes off is checked.
+                if (raw.Unsure)
+                    guessed.Add(last.Code);
                 continue;
             }
             Add(raw);
@@ -225,7 +240,7 @@ public static partial class CostcoReceipt
             lines.Add(new ParsedLine(position, same[0].Name, code, null, same.Sum(r => r.Quantity), same[0].Unit,
                 same.Sum(r => r.Amount) - discount, null, null, discount, same.Any(r => r.Gst), false));
             where[position] = spans[code];
-            if (same.Any(r => r.Unsure))
+            if (same.Any(r => r.Unsure) || guessed.Contains(code))
                 unsure.Add(position);
         }
         return (lines, where, unsure);

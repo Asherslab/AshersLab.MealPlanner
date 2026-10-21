@@ -102,15 +102,16 @@ each line's text and where it is (`OcrJson`). `CostcoReceipt.Parse`:
 | Header | logo, address, `TAX INVOICE ($)`, `Member ...` | ignored; a line naming `member`, `tax invoice` or `abn` starts the items |
 | An item | the name; optionally pack size and logistics codes (`6X500G MP6 P200 SL300`); then `700101  1x  21.49  21.49 0` | `StoreCode` the item number, quantity, shelf price, amount, the GST flag (`Gst`); the description is the name plus any pack size from the second line - the codes dropped |
 | The same item number again | scanned separately | one line: quantities and amounts added |
-| A discount | `TPD -BUY 2 SAVE` / `700909  1x  3.00  3.00 - 0` (a trailing `-`, or a `TPD` name) | not a line: its amount comes off the item before it (`DiscountCents`) |
-| Total | `**** TOTAL (INCL GST)  91.45` | the total, and the sub total (no fees) |
+| A discount | `TPD -BUY 2 SAVE` / `700909  1x  3.00  3.00 - 0` (a trailing `-`, or a `TPD` name) | not a line: its amount comes off the item before it (`DiscountCents`), and a discount worked out from its price marks that item to check. Before any item, a line of its own: no packs, all discount (0 × $3.00 less $3.00 is -$3.00), so it adds up and sells nothing |
+| Total | `**** TOTAL (INCL GST)  91.45` | the total, and the sub total (no fees). Its point lost (`9145`) is read as an amount's is; **one that cannot be read at all is $0.00, not a refusal** - the receipt does not add up and the review opens with the total to correct. No stamp is refused: it carries the dedupe key, which the review does not correct |
 | Payment | `VISA CREDIT  91.45` | paid |
 | Items sold | `TOTAL NUMBER OF ITEMS SOLD = 5` | `ItemsSold`, checked against the lines' quantities (a discount is not an item) |
 | Stamp | `03/03/2026 05:07:00 PM 100 001 0002 003` | the date; with the time and the register/transaction numbers, the receipt number - the dedupe key, `2026-03-03 17:07:00 100 001 0002 003`. The file's name also encodes it, but a file can be renamed |
 
 The price a discounted line records is the **shelf price**, not what the deal made it - like a Woolworths substitute; the next
 shop pays the shelf price. Its amount is what was paid, so the receipt's totals hold. In a column of digits, OCR's `O` is
-read as `0` and `l`, `I`, `|` as `1`.
+read as `0` and `l`, `I`, `|` as `1`, and an item row OCR ran together (`700202 1x8.99 8.99 0`) is still an item: one that did not
+match would become the next item's name and vanish - a line the review cannot correct because it never existed.
 
 ### Why in the browser
 
@@ -207,7 +208,9 @@ whose amount could not be read, "...worked out from the price: check it." **Corr
 description, item number, quantity, price and amount, filled as read; **Correct** re-checks the whole receipt
 (`ReceiptCorrection.Line`; the discount stays as read, so an amount under the price is never taken for one). **Correct the
 total** does the same for the total, items sold and date (`ReceiptCorrection.Receipt`). The planner's choices on every line
-are kept through a correction.
+are kept through a correction - **unless the correction made the line another item** (its item number or description
+changed; `ReviewChoice.Survives`): then it is matched afresh. Kept, a choice made for the misread would import the line under
+the wrong product and teach that product the line's description as an alias.
 
 **Import 19 lines** (disabled while anything does not add up, a correction is open, a new product lacks a name or pack, or
 the receipt is in already) then "Imported 19 lines: 12 prices, 8 into the pantry, 3 not matched." Picking a receipt already
@@ -245,7 +248,9 @@ ligatures joined; wrapped descriptions and nearby headings; weighed meat, also i
 lines it cannot place failing the totals; a wrong total; not an invoice; money as printed), `CostcoReceiptTests.cs` (synthetic
 OCR lines with the measured misreads: items, repeats merged, a discount off the item before it, total, items sold, stamp and
 number; every way the amount ran into the flag; where each line is on the picture; a misread amount, a wrong total and a
-wrong count each failing; an unreadable amount worked out and marked; letters in digits; not a receipt),
+wrong count each failing; an unreadable amount worked out and marked, its discount's too; a run-together row; a
+discount by its minus or its name alone, and one before any item; a total without its point, and an unreadable one left
+to correct; letters in digits; not a receipt, no date),
 `ReceiptCorrectionTests.cs` (a corrected amount adding up, an amount under the price not taken for a discount, a discount
 kept, fields refused and why, the total, items sold and date), `ReceiptMatchingTests.cs` (code before alias, alias whatever its
 case, an alias to a deleted product, suggestions never applied, ingredients by their words, a stable order, words, pack sizes
@@ -256,7 +261,8 @@ refused twice - also under another store -, never imported when it does not add 
 receipt and a tick counting once - and the list still reading it as bought - and two purchases when the planner unticks the
 cover the review offered), `CostcoSyncTests.cs` (item numbers becoming product codes and the next receipt matching by them, an
 alias taught only for a product without the code, a purchase replacing its tick, refused twice) and `ReviewChoiceTests.cs`
-(what the page decides from each choice and the cover's checkbox).
+(what the page decides from each choice and the cover's checkbox, and a choice surviving a correction only as the same
+item).
 
 Each was checked by breaking the code: no cover rule, no wrap distance, no fee check, ligatures spaced, no alias step,
 weighed meat at no price, a minted stock id, the list counting a covering purchase, no bold dedupe, the window a day short,

@@ -1,5 +1,6 @@
 using AshersLab.MealPlanner.Shared.Data.Receipts;
 using AshersLab.MealPlanner.Shared.Domain.Ingredients;
+using AshersLab.MealPlanner.Shared.Domain.Receipts;
 
 namespace AshersLab.MealPlanner.Tests.Receipts;
 
@@ -15,6 +16,16 @@ public class ReviewChoiceTests
         Assert.Null(ReviewChoice.Decide($"p:{Product}", null, null, BaseUnit.Gram, Tick, cover: false)!.Covers);
         Assert.Equal(Tick, ReviewChoice.Decide($"n:{Ingredient}", "Beans 420g", "420g", BaseUnit.Gram, Tick, cover: true)!.Covers);
         Assert.Null(ReviewChoice.Decide($"n:{Ingredient}", "Beans 420g", "420g", BaseUnit.Gram, Tick, cover: false)!.Covers);
+    }
+
+    [Fact]
+    public void A_choice_survives_a_correction_only_while_the_line_is_the_same_item()
+    {
+        ParsedLine read = new(1, "PINK LADY APPLES 2KG", "700107", null, 1, 899, 839, null, null, 0, false, false);
+        Assert.True(ReviewChoice.Survives(read, read with { AmountCents = 899 }));
+        // The item number corrected: another product, matched afresh - not imported under the misread's choice.
+        Assert.False(ReviewChoice.Survives(read, read with { StoreCode = "700101" }));
+        Assert.False(ReviewChoice.Survives(read, read with { Description = "PINK LADY APPLES 1KG" }));
     }
 
     [Fact]

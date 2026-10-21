@@ -439,11 +439,11 @@
 
     private async Task OpenAsync(Guid store, ParsedReceipt parsed)
     {
-        // A correction re-opens the review: the planner's choices so far are kept, by line.
+        // A correction re-opens the review: the planner's choices so far are kept, by line - unless the line is now another item.
         Dictionary<int, LineState> before = _lines?.ToDictionary(l => l.Review.Line.Position) ?? [];
         await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
             _review = await ReceiptImport.LoadAsync(db, store, parsed);
-        _lines = [.. _review.Review().Select(r => before.GetValueOrDefault(r.Line.Position) is { } old
+        _lines = [.. _review.Review().Select(r => before.GetValueOrDefault(r.Line.Position) is { } old && ReviewChoice.Survives(old.Review.Line, r.Line)
             ? new LineState(r) { Choice = old.Choice, NewName = old.NewName, NewPack = old.NewPack, Cover = old.Cover }
             : new LineState(r))];
         await Reload();
