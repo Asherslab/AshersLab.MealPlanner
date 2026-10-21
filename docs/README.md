@@ -66,7 +66,8 @@ Present tense, kept current, no dates.
 - [SQLite in the browser](open-questions/sqlite-in-the-browser.md) — proven in Chrome; waiting on the
   owner's iPhone check, whose steps it lists.
 - [Blazor WASM behind Home Assistant ingress](open-questions/home-assistant-ingress.md) — proven against a
-  simulated Supervisor; waiting on the owner to install the add-on on the Pi, whose steps it lists.
+  simulated Supervisor; waiting on the owner to install the add-on on the Pi, and to take and restore a backup there,
+  whose steps it lists.
 - [Reading Costco receipts with OCR in the browser](open-questions/costco-ocr.md) — is tesseract.js
   accurate enough? Slice 13.
 

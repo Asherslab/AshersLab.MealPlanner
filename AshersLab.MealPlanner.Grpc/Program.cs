@@ -8,6 +8,15 @@ using ProtoBuf.Grpc.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// `dotnet AshersLab.MealPlanner.Grpc.dll snapshot`: the Home Assistant add-on's backup_pre. Writes a consistent copy
+// of the database beside it and exits - it never starts the host, so it runs beside the one already serving.
+if (args is [DatabaseSnapshot.Verb])
+{
+    string snapshot = await DatabaseSnapshot.TakeAsync(DataDirectory.DatabasePath(builder.Configuration));
+    Console.WriteLine($"Wrote {snapshot}");
+    return;
+}
+
 builder.AddServiceDefaults();
 
 builder.Services.AddCodeFirstGrpc();
@@ -26,6 +35,9 @@ builder.Services.AddOptions<IngressOptions>()
     .ValidateOnStart();
 
 var app = builder.Build();
+
+// After a Home Assistant restore /data holds only the backup snapshot (the live file is excluded from backups).
+DatabaseSnapshot.RestoreIfMissing(DataDirectory.DatabasePath(app.Configuration), app.Logger);
 
 // Migrate before serving. One process and a single-writer database, so there is no migrations Job to
 // wait on as in the GSBC repos: a migration that fails stops the host here, before it answers anything.

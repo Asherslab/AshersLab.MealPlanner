@@ -8,6 +8,7 @@ code:
   - AshersLab.MealPlanner.AppHost/AppHost.cs
   - AshersLab.MealPlanner.Grpc/Program.cs
   - AshersLab.MealPlanner.Grpc/Data/DataDirectory.cs
+  - AshersLab.MealPlanner.Grpc/Data/DatabaseSnapshot.cs
   - AshersLab.MealPlanner.Grpc/AshersLab.MealPlanner.Grpc.csproj
   - AshersLab.MealPlanner.WASM/Extensions/GrpcServiceExtensions.cs
   - AshersLab.MealPlanner.WASM/wwwroot/index.html
@@ -97,12 +98,12 @@ One setting, `DataDirectory` (`Grpc/Data/DataDirectory.cs`); the database is
 The fallback is `app-data`, not `data`: macOS is case-insensitive, and `data` is the host project's
 `Data/` source folder.
 
-**Not proven: that a Home Assistant backup of `/data` is a usable SQLite database.** An add-on's backup is "hot"
-by default - its folder is copied while it runs - and SQLite in WAL mode keeps recent commits in
-`mealplanner.db-wal` beside the file, so a copy taken mid-write can be torn. `backup: cold` in
-`mealplanner/config.yaml` (the add-on stopped for the copy) or a `backup_pre` checkpoint would settle it; neither
-is set, and neither has been tried on the Pi. What a restore of a *good* backup does to the browsers is in
-[offline sync](../sync/offline-sync.md) - they give back what it lost.
+Beside it, `mealplanner.snapshot.db` (`Grpc/Data/DatabaseSnapshot.cs`): a self-contained copy, written only by
+`dotnet AshersLab.MealPlanner.Grpc.dll snapshot` - the Home Assistant add-on's backup command, which is what goes into
+a backup in place of the live file. **On start, a missing `mealplanner.db` beside a snapshot is restored from it**
+(`DatabaseSnapshot.RestoreIfMissing`, before migrating; a stray `-wal`/`-shm` is deleted first, since it cannot belong
+to the snapshot). A live database is never replaced. Why and how the backup works: [deployment](deployment.md). What
+a restore does to the browsers is in [offline sync](../sync/offline-sync.md) - they give back what it lost.
 
 ## Package versions that are not the GSBC ones
 

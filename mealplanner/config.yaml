@@ -31,6 +31,19 @@ panel_title: Meals
 environment:
   Ingress__TrustedProxy: 172.30.32.2
 
+# Hot backups that are still consistent. The live SQLite file copied mid-write, or without the -wal holding its
+# newest commits, can be unusable; so before each hot backup the app writes a self-contained copy with VACUUM INTO
+# (/data/mealplanner.snapshot.db), the live files are left out, and a restore starts from the copy
+# (AshersLab.MealPlanner.Grpc/Data/DatabaseSnapshot.cs). The Supervisor matches each exclude against the end of the
+# path, so these never match the snapshot. If the command fails, the backup fails - it never silently backs up nothing.
+backup: hot
+backup_pre: dotnet /app/AshersLab.MealPlanner.Grpc.dll snapshot
+backup_exclude:
+  - mealplanner.db
+  - mealplanner.db-wal
+  - mealplanner.db-shm
+  - mealplanner.snapshot.db.partial
+
 # The Actual Budget settings and S3 backup arrive with version 2; there is nothing to configure yet.
 options: {}
 schema: {}

@@ -11,6 +11,8 @@ code:
   - repository.yaml
   - mealplanner
   - AshersLab.MealPlanner.Grpc/Features/Ingress
+  - AshersLab.MealPlanner.Grpc/Data/DatabaseSnapshot.cs
+  - AshersLab.MealPlanner.Tests/Grpc/DatabaseSnapshotTests.cs
   - AshersLab.MealPlanner.WASM/Extensions/GrpcServiceExtensions.cs
   - .claude/tools/ingress-sim
 ---
@@ -74,8 +76,47 @@ The repository is a Home Assistant add-on repository: `repository.yaml` at the r
 | `ingress: true`, `ingress_port: 8099`, no `ports:` | Nothing published on the host: the Supervisor is the only client the app ever sees. |
 | `environment: Ingress__TrustedProxy: 172.30.32.2` | Turns on the ingress handling below. Set here, not in the image, so the same image elsewhere believes nobody's headers. |
 | `options: {}` | Nothing to configure until version 2's Actual Budget settings. |
+| `backup: hot`, `backup_pre`, `backup_exclude` | A consistent hot backup - below. |
 
 No icon or logo yet — Home Assistant shows a placeholder.
+
+## Backups
+
+**The live SQLite file is never in a Home Assistant backup.** A hot backup tars `/data` while the add-on runs; the
+database copied mid-write, or without the `-wal` that holds its newest commits, can be unusable or silently old. So:
+
+| Step | What | Where |
+|---|---|---|
+| Before each hot backup | The Supervisor runs `backup_pre` **inside the container**: `dotnet /app/AshersLab.MealPlanner.Grpc.dll snapshot`. It writes `/data/mealplanner.snapshot.db` with SQLite's `VACUUM INTO` - one read transaction, so exactly the commits before it started; the app keeps writing meanwhile - checks it with `PRAGMA integrity_check`, and only then replaces the previous snapshot. It never starts the web host. | `Grpc/Program.cs`, `Grpc/Data/DatabaseSnapshot.cs` |
+| The backup | `backup_exclude` leaves out `mealplanner.db`, `-wal`, `-shm` and a failed `.partial`. | `mealplanner/config.yaml` |
+| A restore | The Supervisor replaces `/data` with the backup's, so there is a snapshot and no live database; the next start copies the snapshot into place. | `DatabaseSnapshot.RestoreIfMissing` |
+
+Read from the Supervisor's source (`supervisor/apps/app.py`, 2026-10-21) and the add-on configuration reference:
+
+- `backup_pre`/`backup_post` run only for `backup: hot` (`cold` stops the add-on and ignores them). **A command that
+  exits non-zero fails the add-on's backup** - so a snapshot that cannot be written is a failed backup in Home
+  Assistant's list, never a backup without the data.
+- `backup_exclude` globs are tested with Python's `PurePath.match` against the full path, i.e. **from the right**:
+  `mealplanner.db` matches `/data/mealplanner.db` and nothing called `mealplanner.snapshot.db`. Renaming the
+  snapshot to something ending `mealplanner.db` would exclude it too, and every backup would be empty.
+- A restore removes the add-on's data folder and copies the backup's in (`remove_data`, then `copytree`).
+
+The command needs ~1-2 s of .NET start-up on the Pi on top of the copy. `backup: cold` was the fallback - hooks
+exist, so it is not used: it stops the app, and the planner's open pages, for every nightly backup.
+
+Measured 2026-10-21 on a Mac: the built host binary's `snapshot`, five times against a copy of the dev database while
+one `sqlite3` process committed continuously (two 2 KB rows and a counter per transaction, WAL, about 40 000
+transactions between the first and last snapshot): every copy `integrity_check` ok, rows exactly twice the counter
+(no transaction torn or half-seen), `journal_mode` delete (self-contained), and the source's own rows intact.
+`Tests/Grpc/DatabaseSnapshotTests.cs` repeats that in the suite and covers the restore. In the arm64 image (Docker on
+the Mac, `/data` a host folder): `docker exec <container> dotnet /app/AshersLab.MealPlanner.Grpc.dll snapshot` - the
+exact `backup_pre` line - exited 0 beside the running app and wrote an `ok` snapshot; with the live files deleted, the
+container started, logged the restore and served. **Not yet seen on the Pi** -
+a real backup and restore through Home Assistant; the steps are in
+[home-assistant-ingress](../../open-questions/home-assistant-ingress.md).
+
+A server reinstalled with **no** backup is not this - see "The server came back empty" in
+[offline sync](../sync/offline-sync.md).
 
 ## Ingress
 

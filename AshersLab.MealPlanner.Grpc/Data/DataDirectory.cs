@@ -1,3 +1,5 @@
+using Microsoft.Data.Sqlite;
+
 namespace AshersLab.MealPlanner.Grpc.Data;
 
 /// <summary>
@@ -34,4 +36,8 @@ public static class DataDirectory
 
         return $"Data Source={Path.Combine(directory, DatabaseFileName)}";
     }
+
+    /// <summary>The database file the connection string names.</summary>
+    public static string DatabasePath(IConfiguration configuration) =>
+        Path.GetFullPath(new SqliteConnectionStringBuilder(ConnectionString(configuration)).DataSource);
 }

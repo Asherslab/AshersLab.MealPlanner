@@ -8,6 +8,7 @@ verified: 2026-10-21
 code:
   - mealplanner/config.yaml
   - AshersLab.MealPlanner.Grpc/Features/Ingress
+  - AshersLab.MealPlanner.Grpc/Data/DatabaseSnapshot.cs
   - .claude/tools/ingress-sim
 ---
 
@@ -47,6 +48,22 @@ It also found the one real bug: gRPC-Web calls dropped the prefix and 404'd. Fix
 5. **The companion app.** It loads and works in the HA iOS app's web view, not only in desktop Safari —
    including OPFS (the browser database; see [sqlite-in-the-browser](sqlite-in-the-browser.md)). Note
    whether a service worker registers there (expected: no).
+
+6. **A backup and a restore.** The add-on backs up with a pre-backup snapshot and leaves the live database out
+   ([deployment](../modules/infrastructure/deployment.md#backups)); only the real Supervisor can prove it. With the
+   add-on running and a few ingredients entered:
+   1. Settings → System → Backups → Create backup → Partial → tick only **Meal Planner**. It must finish without an
+      error (a failed snapshot fails the backup). The add-on's Log tab shows nothing for it; the Supervisor log
+      (Settings → System → Logs → Supervisor) shows the pre-backup command ran.
+   2. Download the backup (⋮ → Download). Inside the `.tar`, the add-on's inner archive's `data/` must hold
+      `mealplanner.snapshot.db` and **no** `mealplanner.db`, `-wal` or `-shm`. Optional, on a computer:
+      `sqlite3 mealplanner.snapshot.db 'PRAGMA integrity_check; select count(*) from Ingredient;'` - `ok` and the count.
+   3. Add one more ingredient (so the restore visibly loses it), then restore the backup: ⋮ → Restore → Meal
+      Planner only. The add-on restarts; its Log tab shows `No database at /data/mealplanner.db; restored it from the
+      backup snapshot`.
+   4. Open the app on a device that was open during step 3: the extra ingredient is back (the browsers give back what
+      a restore lost - [offline sync](../modules/sync/offline-sync.md)), and the chip says "Synced".
+   5. Create a second backup and check its `data/` again: the snapshot is new, the live files still absent.
 
 ## Owner prerequisites
 
