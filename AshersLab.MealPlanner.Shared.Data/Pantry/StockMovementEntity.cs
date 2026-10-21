@@ -30,6 +30,9 @@ public sealed class StockMovementEntity : SyncedEntity<StockMovement>
             case StockRules.ShoppingItemField:
                 row.ShoppingItemId = OpValues.TryParseId(field.Value, out Guid? item) ? item : throw Unreadable(field);
                 break;
+            case StockRules.CoversItemField:
+                row.CoversItemId = OpValues.TryParseId(field.Value, out Guid? covers) ? covers : throw Unreadable(field);
+                break;
             default:
                 throw new ArgumentException($"A stock change has no field '{field.Name}'.", nameof(field));
         }
@@ -42,6 +45,7 @@ public sealed class StockMovementEntity : SyncedEntity<StockMovement>
         new(StockRules.OccurredOnField, OpValues.FormatDate(row.OccurredOn)),
         new(StockRules.ReasonField, StockReasons.Format(row.Reason)),
         new(StockRules.ShoppingItemField, OpValues.FormatId(row.ShoppingItemId)),
+        new(StockRules.CoversItemField, OpValues.FormatId(row.CoversItemId)),
     ];
 
     private static ArgumentException Unreadable(OpField field) =>

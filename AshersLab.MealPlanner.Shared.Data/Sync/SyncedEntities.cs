@@ -5,12 +5,14 @@ using AshersLab.MealPlanner.Shared.Data.Pantry;
 using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
+using AshersLab.MealPlanner.Shared.Data.Receipts;
 using AshersLab.MealPlanner.Shared.Data.Shopping;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Domain;
 using AshersLab.MealPlanner.Shared.Domain.Meals;
 using AshersLab.MealPlanner.Shared.Domain.Planning;
 using AshersLab.MealPlanner.Shared.Domain.Products;
+using AshersLab.MealPlanner.Shared.Domain.Receipts;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
@@ -70,10 +72,17 @@ public static class SyncedEntities
 
     public static readonly ShoppingListItemEntity ShoppingListItem = new();
 
+    public static readonly ReceiptEntity Receipt = new();
+
+    public static readonly ReceiptLineEntity ReceiptLine = new();
+
+    public static readonly ProductAliasEntity ProductAlias = new();
+
     public static readonly IReadOnlyList<SyncedEntity> All =
     [
         Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal, MealIngredient,
         Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice, CalendarEntry, StockMovement, ShoppingList, ShoppingListItem,
+        Receipt, ReceiptLine, ProductAlias,
     ];
 
     // Text in the op's own format, converted here rather than by the provider: see PriceObservation.ObservedOn.
@@ -283,6 +292,45 @@ public static class SyncedEntities
             item.Property(i => i.Tick).HasConversion<string>().HasMaxLength(10);
             // A list's items. Not a foreign key.
             item.HasIndex(i => i.ListId);
+        });
+
+        modelBuilder.Entity<Receipt>(receipt =>
+        {
+            receipt.ToTable("Receipt");
+            receipt.HasKey(r => r.Id);
+            // Derived from its store and order number (ReceiptRules.ReceiptId): the same order is the same row everywhere.
+            receipt.Property(r => r.Id).ValueGeneratedNever();
+            receipt.Property(r => r.OrderNumber).HasMaxLength(ReceiptRules.MaxOrderNumberLength);
+            receipt.Property(r => r.PurchasedOn).HasConversion(DateText).HasMaxLength(10);
+            receipt.Property(r => r.ImportedOn).HasConversion(DateText).HasMaxLength(10);
+        });
+
+        modelBuilder.Entity<ReceiptLine>(line =>
+        {
+            line.ToTable("ReceiptLine");
+            line.HasKey(l => l.Id);
+            // Derived from its receipt and position (ReceiptRules.LineId).
+            line.Property(l => l.Id).ValueGeneratedNever();
+            line.Property(l => l.Description).HasMaxLength(ReceiptLineRules.MaxDescriptionLength);
+            line.Property(l => l.StoreCode).HasMaxLength(ProductRules.MaxStoreCodeLength);
+            line.Property(l => l.Category).HasMaxLength(Names.MaxLength);
+            // By name, as the op carries it.
+            line.Property(l => l.Kind).HasConversion<string>().HasMaxLength(20);
+            // A receipt's lines, and a product's purchases. Not foreign keys.
+            line.HasIndex(l => l.ReceiptId);
+            line.HasIndex(l => l.ProductId);
+        });
+
+        modelBuilder.Entity<ProductAlias>(alias =>
+        {
+            alias.ToTable("ProductAlias");
+            alias.HasKey(a => a.Id);
+            // Derived from its store and text (ProductAliasRules.AliasId): one alias per description.
+            alias.Property(a => a.Id).ValueGeneratedNever();
+            alias.Property(a => a.Text).HasMaxLength(ReceiptLineRules.MaxDescriptionLength);
+            // A store's aliases, and a product's. Not foreign keys.
+            alias.HasIndex(a => a.StoreId);
+            alias.HasIndex(a => a.ProductId);
         });
     }
 }

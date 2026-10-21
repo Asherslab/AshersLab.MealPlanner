@@ -77,11 +77,17 @@ public static class StockRules
     /// </summary>
     public const string ShoppingItemField = "ShoppingItemId";
 
+    /// <summary>
+    /// For a receipt's purchase: the shopping-list tick that noted the same purchase, whose own movement then no longer
+    /// counts - the receipt has the real quantity (docs/modules/receipts/receipts.md). Absent otherwise.
+    /// </summary>
+    public const string CoversItemField = "CoversItemId";
+
     public const string Noun = "A stock change";
 
     public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal)
     {
-        IngredientField, QuantityField, OccurredOnField, ReasonField, ShoppingItemField,
+        IngredientField, QuantityField, OccurredOnField, ReasonField, ShoppingItemField, CoversItemField,
     };
 
     private static readonly string[] RequiredOnCreate = [IngredientField, QuantityField, OccurredOnField, ReasonField];
@@ -119,7 +125,7 @@ public static class StockRules
                                    && decimal.Round(quantity, Quantity.MaxDecimals) == quantity ? null : "The amount is not a quantity.",
                 OccurredOnField => OpValues.TryParseDate(field.Value, out _) ? null : "The date is not a date.",
                 ReasonField     => StockReasons.TryParse(field.Value, out _) ? null : "The reason is not bought, adjusted or counted.",
-                ShoppingItemField => OpValues.TryParseId(field.Value, out _) ? null : "The shopping item is not an id.",
+                ShoppingItemField or CoversItemField => OpValues.TryParseId(field.Value, out _) ? null : "The shopping item is not an id.",
                 _               => null,
             }) is { } problem)
             return problem;
@@ -132,7 +138,8 @@ public static class StockRules
 }
 
 /// <summary>A new movement as the pantry or a shopping-list tick writes it: every field, in one create.</summary>
-public sealed record StockEntry(Guid IngredientId, decimal Quantity, DateOnly OccurredOn, StockReason Reason, Guid? ShoppingItemId = null)
+public sealed record StockEntry(Guid IngredientId, decimal Quantity, DateOnly OccurredOn, StockReason Reason, Guid? ShoppingItemId = null,
+                                Guid? CoversItemId = null)
 {
     public IReadOnlyList<OpField> Fields()
     {
@@ -145,6 +152,8 @@ public sealed record StockEntry(Guid IngredientId, decimal Quantity, DateOnly Oc
         ];
         if (ShoppingItemId is { } item)
             fields.Add(new(StockRules.ShoppingItemField, OpValues.FormatId(item)));
+        if (CoversItemId is { } covers)
+            fields.Add(new(StockRules.CoversItemField, OpValues.FormatId(covers)));
         return fields;
     }
 }

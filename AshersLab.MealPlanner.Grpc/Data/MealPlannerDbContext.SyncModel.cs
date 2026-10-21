@@ -6,6 +6,7 @@ using AshersLab.MealPlanner.Shared.Data.Pantry;
 using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
+using AshersLab.MealPlanner.Shared.Data.Receipts;
 using AshersLab.MealPlanner.Shared.Data.Shopping;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Data.Sync;
@@ -54,6 +55,12 @@ public partial class MealPlannerDbContext
     public DbSet<ShoppingList> ShoppingLists => Set<ShoppingList>();
 
     public DbSet<ShoppingListItem> ShoppingListItems => Set<ShoppingListItem>();
+
+    public DbSet<Receipt> Receipts => Set<Receipt>();
+
+    public DbSet<ReceiptLine> ReceiptLines => Set<ReceiptLine>();
+
+    public DbSet<ProductAlias> ProductAliases => Set<ProductAlias>();
 
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 

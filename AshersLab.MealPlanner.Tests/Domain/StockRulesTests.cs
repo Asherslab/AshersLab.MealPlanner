@@ -19,7 +19,7 @@ public class StockRulesTests
         Assert.Equal(new[] { "IngredientId", "Quantity", "OccurredOn", "Reason" }, Fields(2000, StockReason.Bought).Select(f => f.Name));
         Assert.Equal(new[] { OpValues.FormatId(Mince), "1.5", "2026-10-26", "Counted" }, Fields(1.50m, StockReason.Counted).Select(f => f.Value));
 
-        foreach (string field in StockRules.Fields.Where(f => f != StockRules.ShoppingItemField))
+        foreach (string field in StockRules.Fields.Where(f => f != StockRules.ShoppingItemField && f != StockRules.CoversItemField))
             Assert.NotNull(StockRules.OpProblem(OpKind.Create, [.. Fields(1, StockReason.Bought).Where(f => f.Name != field)]));
         Assert.NotNull(StockRules.OpProblem(OpKind.Create, [.. Fields(1, StockReason.Bought), new OpField("Note", "x")]));
         Assert.Null(StockRules.OpProblem(OpKind.Delete, []));
@@ -33,6 +33,11 @@ public class StockRulesTests
         Assert.Equal(OpValues.FormatId(tick), fields.Single(f => f.Name == "ShoppingItemId").Value);
         Assert.Null(StockRules.OpProblem(OpKind.Create, fields));
         Assert.NotNull(StockRules.OpProblem(OpKind.Create, [.. Fields(1, StockReason.Bought), new OpField(StockRules.ShoppingItemField, "mince")]));
+        // A receipt's purchase names the tick it replaces the same way.
+        List<OpField> receipt = [.. new StockEntry(Mince, 1850, Mon, StockReason.Bought, null, tick).Fields()];
+        Assert.Equal(OpValues.FormatId(tick), receipt.Single(f => f.Name == "CoversItemId").Value);
+        Assert.Null(StockRules.OpProblem(OpKind.Create, receipt));
+        Assert.NotNull(StockRules.OpProblem(OpKind.Create, [.. Fields(1, StockReason.Bought), new OpField(StockRules.CoversItemField, "mince")]));
     }
 
     [Fact]

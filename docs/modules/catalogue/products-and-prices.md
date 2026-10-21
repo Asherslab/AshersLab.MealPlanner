@@ -3,7 +3,7 @@ title: Products and prices
 kind: reference
 status: current
 module: catalogue
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.Shared.Domain/Products
   - AshersLab.MealPlanner.Shared.Domain/Sync/OpValues.cs
@@ -35,9 +35,9 @@ into a cost. The stores and ingredients they hang off are [the catalogue](catalo
   scale, and EF's SQLite providers store it as text that differs between the server (`2000.0`) and a browser
   (`2000`), so a snapshot re-reads the column and re-formats it. The op rules refuse `2000.0`. Compare in SQL with
   `cast(PackQuantity as real)`.
-- **Aliases are not a field of the product.** The receipt names a product has been matched to will be their own
-  rows (one per alias), written by receipt import (slice 12). A list in one field would merge last-writer-wins:
-  two phones each matching a different receipt line offline would lose one alias.
+- **Aliases are not a field of the product.** The receipt descriptions a product has been matched to are their own
+  rows (`ProductAlias`, one per description, written by [receipt import](../receipts/receipts.md)). A list in one field
+  would merge last-writer-wins: two phones each matching a different receipt line offline would lose one alias.
 
 ## Products
 
@@ -82,7 +82,7 @@ Delete says "mince is used by 1 product: ... Delete them on the Prices page firs
 | `ProductId` | GUID, never null | required |
 | `PriceCents` | whole cents as plain digits (`OpValues.FormatCents`), 1 to 10,000,000 | one pack; never dollars, never a decimal |
 | `ObservedOn` | `yyyy-MM-dd` | the day it was seen; no time, no zone |
-| `Source` | `Manual`, `Receipt`, `Live` or `Sheet` - by name | the pages write `Manual`; the [spreadsheet import](../import/spreadsheet-import.md) `Sheet`, so a later import compares only with what the sheet said; receipts and live prices come later |
+| `Source` | `Manual`, `Receipt`, `Live` or `Sheet` - by name | the pages write `Manual`; the [spreadsheet import](../import/spreadsheet-import.md) `Sheet`, so a later import compares only with what the sheet said; [receipts](../receipts/receipts.md) `Receipt`, on the receipt's date; live prices come later |
 | `PerKgCents` | whole cents or null | variable-weight meat: what a gram costs when the pack price depends on its weight |
 
 - **Append-only by use, not by rule.** The pages add a price and delete a mistaken one; nothing edits one, because the

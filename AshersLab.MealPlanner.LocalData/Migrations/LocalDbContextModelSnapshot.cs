@@ -266,6 +266,9 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("CoversItemId")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Deleted")
                         .HasColumnType("INTEGER");
 
@@ -547,6 +550,142 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.HasIndex("StoreId");
 
                     b.ToTable("Product", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Receipts.ProductAlias", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("StoreId");
+
+                    b.ToTable("ProductAlias", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Receipts.Receipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FeesCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImportedOn")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("PaidCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PurchasedOn")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RefundCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SubtotalCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("TotalCents")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Receipt", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Receipts.ReceiptLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AmountCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DiscountCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("PerKgCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StoreCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UnitPriceCents")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("WeightGrams")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ReceiptId");
+
+                    b.ToTable("ReceiptLine", (string)null);
                 });
 
             modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Shopping.ShoppingList", b =>

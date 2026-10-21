@@ -29,6 +29,9 @@ and Eaten costs, or anything that writes stock from a tick.
   mince would be covered and jump to "in the pantry" under the shopper's thumb. So every movement a tick writes names the
   tick (`StockMovement.ShoppingItemId`), and the list leaves those out. Every other reader - the pantry page, next week's
   list - counts them: the spare is in the pantry for next week. `ShoppingSyncTests.Ticks_made_offline_...` fails without it.
+  **The list also leaves out a receipt's purchase that replaced one of its ticks** (`StockMovement.CoversItemId`,
+  [receipts](../receipts/receipts.md)): it is the same purchase, and counted it would turn the bought line into "in the
+  pantry" and drop its pack from the Spend once the receipt is imported.
 - **A tick undoes the line's last tick before writing its own** (`ShoppingTicking.EditsAsync`): it deletes every live
   movement naming the tick, then writes the new one. Bought → Have → Bought adds one pack, not three; unticking takes the
   pack back out of the pantry on every device. All of a tap's ops go in one `WriteAllAsync`: all or none.

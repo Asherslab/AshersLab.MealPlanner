@@ -27,6 +27,12 @@ public class StockMovement : ISyncedRow
     /// <summary>The shopping-list tick that wrote it, or null for one made in the pantry. Not a foreign key.</summary>
     public Guid? ShoppingItemId { get; set; }
 
+    /// <summary>
+    /// A receipt's purchase: the shopping-list tick that noted the same purchase. That tick's movements stop counting - the
+    /// receipt has what really came home. Not a foreign key.
+    /// </summary>
+    public Guid? CoversItemId { get; set; }
+
     public bool Deleted { get; set; }
 
     public StockEvent Event() => new(IngredientId, OccurredOn, StockEvent.From(Reason), Quantity, Id);
@@ -38,11 +44,20 @@ public class StockMovement : ISyncedRow
     /// ticking the same line bought offline each write a pack, and after sync both are live rows. The line was bought once,
     /// and the tick (one row, its id derived) says which, so stock follows the tick rather than the rows.
     /// </summary>
+    /// <remarks>
+    /// <b>And a receipt covers a tick</b>: a live movement naming a tick in <see cref="CoversItemId"/> - the receipt's line
+    /// for the same purchase - silences every movement that tick wrote, here and on every device, whenever it arrives.
+    /// </remarks>
     /// <param name="ticks">Every tick by its id. A movement naming a tick not seen yet counts, newest only.</param>
-    public static IEnumerable<StockMovement> Counting(IEnumerable<StockMovement> live, IReadOnlyDictionary<Guid, ShoppingTick> ticks) =>
-        live.GroupBy(m => m.ShoppingItemId)
+    public static IEnumerable<StockMovement> Counting(IEnumerable<StockMovement> live, IReadOnlyDictionary<Guid, ShoppingTick> ticks)
+    {
+        List<StockMovement> all = [.. live];
+        HashSet<Guid> covered = [.. all.Where(m => m.CoversItemId is not null).Select(m => m.CoversItemId!.Value)];
+        return all.GroupBy(m => m.ShoppingItemId)
             .SelectMany(g => g.Key is not { } item ? g
+                : covered.Contains(item) ? []
                 : g.Where(m => !ticks.TryGetValue(item, out ShoppingTick tick) || Says(tick, m.Reason)).OrderByDescending(m => m.Id).Take(1));
+    }
 
     private static bool Says(ShoppingTick tick, StockReason reason) => tick switch
     {

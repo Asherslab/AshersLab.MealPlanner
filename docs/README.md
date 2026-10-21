@@ -55,6 +55,9 @@ Present tense, kept current, no dates.
 - [The shopping list](modules/shopping/shopping-list.md) — the days' meals less the pantry in whole packs by store, why it
   reads the pantry without its own ticks, what Bought and Have it write to stock, derived ids for two phones, and the
   Spend and Eaten costs.
+- [Receipts](modules/receipts/receipts.md) — a Woolworths invoice read in the browser by position (its traps: overprinted
+  bold, ligatures, wrapped descriptions), refused unless it adds up, matched by code then alias then a confirmed suggestion,
+  derived ids so a second import is refused, and the rule that a receipt replaces the shopping-list tick for the same purchase.
 - [Meals](modules/meals/meals.md) — meal groups, meals and their five kinds, a meal's ingredients, and its batch and
   per-serve cost (incomplete, never lower, when anything is unpriced).
 
@@ -70,8 +73,8 @@ Present tense, kept current, no dates.
 
 - [Version 1 scope](work/2026-10-v1-scope.md) — what the app is, every decision already made, the
   domain model, how costs are computed, and the build order. **Start here.**
-- [Receipt formats](work/2026-10-receipt-formats.md) — what a Woolworths invoice and a Costco receipt
-  contain, their traps, and how lines match products.
+- [Receipt formats](work/2026-10-receipt-formats.md) — what a Costco receipt contains and its traps, for slice 13. The
+  Woolworths half has landed in [receipts](modules/receipts/receipts.md).
 - [Deployment design](work/2026-10-deployment.md) — why one image and no YARP; the add-on and CI parts
   have landed in [deployment](modules/infrastructure/deployment.md). Left: standalone k8s, slice 14.
 - [Version 2 integrations](work/2026-10-version-2-integrations.md) — Actual Budget and Woolworths live

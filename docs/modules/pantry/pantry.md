@@ -6,6 +6,7 @@ module: pantry
 verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.Shared.Domain/Pantry
+  - AshersLab.MealPlanner.Shared.Domain/Receipts/ReceiptStock.cs
   - AshersLab.MealPlanner.Shared.Domain/Ingredients/StapleStock.cs
   - AshersLab.MealPlanner.Shared.Data/Pantry
   - AshersLab.MealPlanner.WASM/Features/Pantry
@@ -46,16 +47,19 @@ shopping list (which subtracts it), receipts (which add to it) or anything else 
 
 ## The ledger
 
-`StockMovement (Id, IngredientId, Quantity, OccurredOn, Reason, ShoppingItemId, Deleted)`, in the ingredient's base unit.
+`StockMovement (Id, IngredientId, Quantity, OccurredOn, Reason, ShoppingItemId, CoversItemId, Deleted)`, in the ingredient's
+base unit.
 Rules in `Shared.Domain/Pantry/StockRules.cs`; appended and deleted (undo), never edited - updates are accepted only so a
 restored server can be given its fields back, as for prices. `ShoppingItemId` names the shopping-list tick that wrote it,
 null for one made here: the list reads stock without its own ticks' movements, and unticking deletes them. **A tick's
 movements count only while the tick says so, and only the newest** (`StockMovement.Counting`): two phones ticking one line
-bought offline leave two live rows and one pack ([the shopping list](../shopping/shopping-list.md)).
+bought offline leave two live rows and one pack ([the shopping list](../shopping/shopping-list.md)). `CoversItemId` is a
+receipt's purchase naming the tick that noted the same purchase: **that tick's movements then do not count at all**, on
+every device and whenever they arrive - the receipt has what really came home ([receipts](../receipts/receipts.md)).
 
 | `Reason` | `Quantity` | Does |
 |---|---|---|
-| `Bought` | more than 0 | adds it - whole packs, here or ticked bought on the shopping list; later, matched receipt lines |
+| `Bought` | more than 0 | adds it - whole packs, here or ticked bought on the shopping list; a matched receipt line's packs, or weighed meat's weight, on the receipt's date |
 | `Adjusted` | not 0, usually negative | adds it - "threw this out"; down past zero is out; "have it" on the shopping list adds what it lacked |
 | `Counted` | 0 or more | **sets** the level - "out", "½ pack", "that's what's left" |
 

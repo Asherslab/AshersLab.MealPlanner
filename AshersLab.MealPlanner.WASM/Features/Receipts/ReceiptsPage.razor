@@ -1,0 +1,489 @@
+@page "/receipts"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.LocalData.Sync
+@using AshersLab.MealPlanner.Shared.Data.Ingredients
+@using AshersLab.MealPlanner.Shared.Data.Products
+@using AshersLab.MealPlanner.Shared.Data.Receipts
+@using AshersLab.MealPlanner.Shared.Data.Stores
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Prices
+@using AshersLab.MealPlanner.Shared.Domain.Products
+@using AshersLab.MealPlanner.Shared.Domain.Receipts
+@using AshersLab.MealPlanner.WASM.Data
+@using AshersLab.MealPlanner.WASM.Features.Shopping
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    Receipts: a Woolworths invoice PDF read on this device (wwwroot/js/receipt-pdf.js gives its text runs, Shared.Domain
+    reads them), reviewed line by line, then imported as ops in one transaction. The file is never uploaded or stored:
+    it is shown during the review if asked for, and dropped once the review ends (docs/modules/receipts/receipts.md).
+*@
+
+<PageTitle>Receipts - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Receipts</MudText>
+
+<LocalDataGate Start="Start">
+    @if (_review is null)
+    {
+        <MudText Class="mt-2 mud-text-secondary">
+            Pick a Woolworths invoice (the PDF from the order's page). It is read on this device only, and not kept.
+        </MudText>
+        <label class="import-file mt-4 d-block">
+            <InputFile OnChange="Picked" accept=".pdf,application/pdf" data-testid="receipt-file"/>
+        </label>
+        @if (_reading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-2"/>
+        }
+    }
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="receipt-error">@_error</MudAlert>
+    }
+
+    @if (_done is not null)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-4" data-testid="receipt-done">@_done</MudAlert>
+    }
+
+    @if (_review is { } import && _lines is not null)
+    {
+        ParsedReceipt parsed = import.Parsed;
+        string? totals = parsed.TotalsProblem();
+        <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="receipt-summary" data-order="@parsed.OrderNumber" data-date="@parsed.PurchasedOn.ToString("yyyy-MM-dd")">
+            <MudText Typo="Typo.h6">@StoreName(import.StoreId) · @ShoppingText.Day(parsed.PurchasedOn) @parsed.PurchasedOn.Year</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Order @parsed.OrderNumber · @parsed.Lines.Count lines</MudText>
+            <MudText Typo="Typo.body2" Class="mt-2" data-testid="receipt-totals">
+                Sub total @Money.Format(parsed.SubtotalCents)
+                @foreach (ParsedFee fee in parsed.Fees.Where(f => f.AmountCents != 0))
+                {
+                    <span> · @fee.Name @Money.Format(fee.AmountCents)</span>
+                }
+                · <b>Total @Money.Format(parsed.TotalCents)</b>
+                @if (parsed.RefundCents is { } refund)
+                {
+                    <span> · refunded @Money.Format(refund)</span>
+                }
+            </MudText>
+            @if (totals is null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Success" data-testid="receipt-totals-ok">The lines add up to the sub total.</MudText>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-2" data-testid="receipt-totals-problem">@totals It cannot be imported.</MudAlert>
+            }
+            @if (import.Earlier is { } earlier)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-2" data-testid="receipt-earlier">
+                    This order was imported already, on @ShoppingText.Day(earlier.ImportedOn) @earlier.ImportedOn.Year. It cannot be imported twice.
+                </MudAlert>
+            }
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <label class="native-select">
+                    <span>Store</span>
+                    <select value="@import.StoreId" @onchange="StoreChanged" data-testid="receipt-store">
+                        @foreach (Store store in _stores)
+                        {
+                            <option value="@store.Id">@store.Name</option>
+                        }
+                    </select>
+                </label>
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" OnClick="ShowFile" data-testid="receipt-show-file">
+                    @(_showingFile ? "Hide the invoice" : "Show the invoice")
+                </MudButton>
+            </div>
+            <div @ref="_fileView" class="@(_showingFile ? "mt-2" : "d-none")" data-testid="receipt-file-view"></div>
+        </MudPaper>
+
+        <MudText Class="mt-4 mud-text-secondary">
+            Check each line: what it is decides what it prices and what goes into the pantry. A line matched once is matched by
+            itself on the next receipt.
+        </MudText>
+
+        @foreach (LineState state in _lines)
+        {
+            ParsedLine line = state.Review.Line;
+            <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="receipt-line" data-position="@line.Position" data-match="@state.Review.Match.By"
+                      data-choice="@state.Choice" data-kind="@KindOf(state)">
+                <div class="d-flex gap-2">
+                    <div class="flex-grow-1">
+                        <MudText data-testid="receipt-line-desc">@line.Description</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="receipt-line-amount">@Bought(line)</MudText>
+                    </div>
+                    @if (state.Review.Match.By != MatchedBy.None && state.Choice == $"p:{state.Review.Match.ProductId}")
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined" data-testid="receipt-line-matched">matched</MudChip>
+                    }
+                </div>
+                @if (state.Choice == "" && state.Review.Match.Suggestions.FirstOrDefault(s => s.ProductId is not null) is { } guess)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1"
+                               OnClick="@(() => Choose(state, "p:" + guess.ProductId))" data-testid="receipt-line-suggest">
+                        Is it @guess.Name?
+                    </MudButton>
+                }
+                <label class="native-select mt-2 d-block">
+                    <span>It is</span>
+                    <select value="@state.Choice" @onchange="e => Choose(state, e.Value?.ToString())" data-testid="receipt-line-choice">
+                        <option value="">Not matched yet</option>
+                        @if (state.Review.Match.Suggestions.Count > 0)
+                        {
+                            <optgroup label="Suggested">
+                                @foreach (MatchSuggestion s in state.Review.Match.Suggestions)
+                                {
+                                    <option value="@(s.ProductId is { } p ? $"p:{p}" : $"n:{s.IngredientId}")">@(s.ProductId is null ? $"New product of {s.Name}" : s.Name)</option>
+                                }
+                            </optgroup>
+                        }
+                        <optgroup label="@($"{StoreName(import.StoreId)} products")">
+                            @foreach (Product p in _products)
+                            {
+                                <option value="p:@p.Id">@p.Name</option>
+                            }
+                        </optgroup>
+                        <optgroup label="A new product of">
+                            @foreach (Ingredient i in _ingredients)
+                            {
+                                <option value="n:@i.Id">@i.Name</option>
+                            }
+                        </optgroup>
+                        <option value="h">A new product, not food</option>
+                        <option value="x">Leave it out</option>
+                    </select>
+                </label>
+                @if (state.Choice.StartsWith("n:") || state.Choice == "h")
+                {
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <MudTextField T="string" @bind-Value="state.NewName" Label="Product name" Variant="Variant.Outlined" Immediate="true"
+                                      MaxLength="Names.MaxLength" Class="flex-grow-1" InputId="@($"receipt-new-name-{line.Position}")" data-testid="receipt-line-new-name"/>
+                        <MudTextField T="string" @bind-Value="state.NewPack" Label="@($"Pack size ({UnitOf(state).Symbol()})")" Variant="Variant.Outlined"
+                                      Immediate="true" Style="max-width: 10rem" InputId="@($"receipt-new-pack-{line.Position}")" data-testid="receipt-line-new-pack"
+                                      HelperText="@PackHelp(state)"/>
+                    </div>
+                }
+                @if (state.Tick is { } tick)
+                {
+                    <div data-testid="receipt-line-cover" data-on="@state.Cover">
+                        <MudCheckBox T="bool" Value="state.Cover" ValueChanged="v => { state.Cover = v; }" Dense="true" Class="mt-1">
+                            Replaces the shopping list's tick of @ShoppingText.Day(tick.On) (@Quantity.Format(tick.Quantity, UnitOf(state)))
+                        </MudCheckBox>
+                    </div>
+                }
+                <MudText Typo="Typo.caption" Class="d-block mt-1" data-testid="receipt-line-will">@Will(state)</MudText>
+            </MudPaper>
+        }
+
+        <div class="d-flex gap-2 mt-4 mb-8">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanImport)" OnClick="Import" data-testid="receipt-import">
+                Import @_lines.Count lines
+            </MudButton>
+            <MudButton Variant="Variant.Text" OnClick="Cancel" data-testid="receipt-cancel">Cancel</MudButton>
+        </div>
+    }
+
+    @if (_review is null)
+    {
+        <MudText Typo="Typo.h6" Component="h2" Class="mt-6">Imported</MudText>
+        @if (_receipts.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">None yet.</MudText>
+        }
+        @foreach (ReceiptRow row in _receipts)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="receipt-row" data-id="@row.Receipt.Id">
+                <MudText>@StoreName(row.Receipt.StoreId) · @ShoppingText.Day(row.Receipt.PurchasedOn) @row.Receipt.PurchasedOn.Year · @Money.Format(row.Receipt.TotalCents)</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    @row.Lines lines · @row.Unmatched not matched · imported @ShoppingText.Day(row.Receipt.ImportedOn)
+                </MudText>
+            </MudPaper>
+        }
+    }
+</LocalDataGate>
+
+@code {
+    private const long MaxFileBytes = 10 * 1024 * 1024;
+
+    private sealed record ReceiptRow(Receipt Receipt, int Lines, int Unmatched);
+
+    /// <summary>One line's review: the planner's choice, a new product's name and pack, and the tick it would replace.</summary>
+    private sealed class LineState(ReviewLine review)
+    {
+        public ReviewLine Review { get; } = review;
+
+        /// <summary>"" not matched, "p:{product}", "n:{ingredient}" a new product of it, "h" a new household product, "x" left out.</summary>
+        public string Choice { get; set; } = review.Match.ProductId is { } p ? $"p:{p}" : "";
+
+        public string? NewName { get; set; }
+
+        public string? NewPack { get; set; }
+
+        public TickBought? Tick { get; set; }
+
+        public bool Cover { get; set; } = true;
+    }
+
+    private IJSObjectReference? _module;
+    private ReceiptImport? _review;
+    private List<LineState>? _lines;
+    private List<Store> _stores = [];
+    private List<Product> _products = [];
+    private List<Ingredient> _ingredients = [];
+    private List<ReceiptRow> _receipts = [];
+    private ElementReference _fileView;
+    private bool _showingFile, _reading, _busy;
+    private string? _error, _done;
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _stores = [.. (await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync()).OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)];
+        _ingredients = [.. (await db.Ingredients.AsNoTracking().Where(i => !i.Deleted).ToListAsync()).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)];
+        List<ReceiptLine> lines = await db.ReceiptLines.AsNoTracking().Where(l => !l.Deleted).ToListAsync();
+        _receipts = [.. (await db.Receipts.AsNoTracking().Where(r => !r.Deleted).ToListAsync())
+            .OrderByDescending(r => r.PurchasedOn)
+            .Select(r => new ReceiptRow(r, lines.Count(l => l.ReceiptId == r.Id && l.Kind != ReceiptLineKind.Fee),
+                lines.Count(l => l.ReceiptId == r.Id && l.ProductId is null && l.Kind is ReceiptLineKind.Food or ReceiptLineKind.Household)))];
+        if (_review is not null)
+            _products = [.. (await db.Products.AsNoTracking().Where(p => !p.Deleted && p.StoreId == _review.StoreId).ToListAsync())
+                .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)];
+    }
+
+    private string StoreName(Guid id) => _stores.FirstOrDefault(s => s.Id == id)?.Name ?? "Store removed";
+
+    private async Task<IJSObjectReference> Module() => _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/receipt-pdf.js");
+
+    private async Task Picked(InputFileChangeEventArgs e)
+    {
+        (_error, _done, _reading) = (null, null, true);
+        try
+        {
+            byte[] bytes;
+            await using (Stream stream = e.File.OpenReadStream(MaxFileBytes))
+            using (MemoryStream copy = new())
+            {
+                await stream.CopyToAsync(copy);
+                bytes = copy.ToArray();
+            }
+            List<PdfPage> pages = PdfJson.Read(await (await Module()).InvokeAsync<string>("read", bytes));
+            if (!WoolworthsInvoice.Recognises(pages))
+                throw new ReceiptFormatException("This is not a Woolworths invoice. Costco receipts come later.");
+            ParsedReceipt parsed = WoolworthsInvoice.Parse(pages);
+            Guid store = _stores.FirstOrDefault(s => Names.Same(s.Name, "Woolworths"))?.Id ?? _stores.FirstOrDefault()?.Id
+                         ?? throw new ReceiptFormatException("Add a store first.");
+            await OpenAsync(store, parsed);
+        }
+        catch (Exception ex) when (ex is ReceiptFormatException or IOException or JSException)
+        {
+            _error = ex is IOException ? "That file is too big to be an invoice." : ex is JSException ? "That file is not a PDF this device can read." : ex.Message;
+            await Forget();
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    private async Task OpenAsync(Guid store, ParsedReceipt parsed)
+    {
+        await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
+            _review = await ReceiptImport.LoadAsync(db, store, parsed);
+        _lines = [.. _review.Review().Select(r => new LineState(r))];
+        await Reload();
+        Covers();
+    }
+
+    private async Task StoreChanged(ChangeEventArgs e)
+    {
+        if (_review is not null && Guid.TryParse(e.Value?.ToString(), out Guid store))
+            await OpenAsync(store, _review.Parsed);
+    }
+
+    private void Choose(LineState state, string? choice)
+    {
+        state.Choice = choice ?? "";
+        if (state.Choice.StartsWith("n:") || state.Choice == "h")
+        {
+            state.NewName ??= ReceiptImport.Clip(state.Review.Line.Description, Names.MaxLength);
+            BaseUnit unit = UnitOf(state);
+            state.NewPack = (state.Choice == "h" ? 1 : ReceiptMatching.PackGuess(state.Review.Line.Description, unit)) is { } pack
+                ? PackSize.Editable(pack, unit) : state.NewPack;
+        }
+        Covers();
+    }
+
+    /// <summary>Which tick each line's purchase replaces, top to bottom, one line per tick.</summary>
+    private void Covers()
+    {
+        if (_review is null || _lines is null)
+            return;
+        HashSet<Guid> taken = [];
+        foreach (LineState state in _lines)
+        {
+            (Guid? product, Guid? ingredient) = Target(state);
+            Guid? tick = state.Choice is "" or "x" ? null : _review.CoverFor(state.Review.Line, product, taken, ingredient);
+            state.Tick = tick is { } t ? _review.Ticks.First(x => x.ItemId == t) : null;
+            if (tick is { } c)
+                taken.Add(c);
+        }
+    }
+
+    private static (Guid? Product, Guid? Ingredient) Target(LineState state) =>
+        state.Choice.StartsWith("p:") && Guid.TryParse(state.Choice[2..], out Guid p) ? (p, null)
+        : state.Choice.StartsWith("n:") && Guid.TryParse(state.Choice[2..], out Guid i) ? (null, i)
+        : (null, null);
+
+    private BaseUnit UnitOf(LineState state)
+    {
+        (Guid? product, Guid? ingredient) = Target(state);
+        return (ingredient is { } i ? _review?.Ingredients.GetValueOrDefault(i) : _review?.IngredientOf(product))?.BaseUnit ?? BaseUnit.Each;
+    }
+
+    private string? PackHelp(LineState state)
+    {
+        decimal? pack = PackSize.Parse(state.NewPack, UnitOf(state), out string? problem);
+        return pack is { } p ? $"= {PackSize.Format(p, UnitOf(state))}" : problem;
+    }
+
+    private LineDecision? DecisionOf(LineState state)
+    {
+        (Guid? product, Guid? ingredient) = Target(state);
+        Guid? covers = state.Cover ? state.Tick?.ItemId : null;
+        if (state.Choice == "x")
+            return new LineDecision(null, null, true, null);
+        if (product is { } p)
+            return new LineDecision(p, null, false, covers);
+        if (state.Choice.StartsWith("n:") || state.Choice == "h")
+        {
+            string name = Names.Normalise(state.NewName);
+            decimal? pack = PackSize.Parse(state.NewPack, UnitOf(state), out _);
+            return Names.Problem(name, "A product") is null && pack is { } size
+                ? new LineDecision(null, new NewProduct(name, ingredient, size), false, covers)
+                : null;
+        }
+        return new LineDecision(null, null, false, null);
+    }
+
+    private ReceiptLineKind KindOf(LineState state) =>
+        DecisionOf(state) is { } d && _review is not null ? _review.KindOf(state.Review.Line, d) : ReceiptLineKind.Food;
+
+    private bool CanImport => !_busy && _review is { Earlier: null } r && r.Parsed.TotalsProblem() is null && _lines!.All(l => DecisionOf(l) is not null);
+
+    private static string Bought(ParsedLine line) =>
+        line.NotSupplied ? $"not supplied{(line.Substitute ? "" : " - nothing came home")}"
+        : line.WeightGrams is { } g ? $"{Quantity.Format(g, BaseUnit.Gram)} at {Money.Format(line.PerKgCents ?? 0)}/kg = {Money.Format(line.AmountCents)}"
+        : $"{line.Supplied:0.##} × {Money.Format(line.UnitPriceCents ?? 0)} = {Money.Format(line.AmountCents)}"
+          + (line.Substitute ? " · a substitute" : "") + (line.DiscountCents > 0 ? $" · {Money.Format(line.DiscountCents)} off" : "");
+
+    /// <summary>What importing does with the line, in the planner's words.</summary>
+    private string Will(LineState state)
+    {
+        ParsedLine line = state.Review.Line;
+        if (DecisionOf(state) is not { } decision)
+            return "Give the new product a name and a pack size.";
+        if (decision.Ignore)
+            return "Left out.";
+        if (decision.ProductId is null && decision.New is null)
+            return "Not matched: imported, but it prices nothing and adds nothing to the pantry.";
+        if (line.NotSupplied)
+            return "Nothing came home: no price, nothing into the pantry.";
+        string price = line.PackPriceCents is { } c ? $"Prices it at {Money.Format(c)} a pack" : "No price";
+        (Guid? product, Guid? ingredientId) = Target(state);
+        Ingredient? ingredient = ingredientId is { } i ? _review!.Ingredients.GetValueOrDefault(i) : _review!.IngredientOf(product);
+        if (ingredient is null)
+            return $"{price}. Not food: nothing into the pantry.";
+        if (ingredient.IsStaple)
+            return $"{price}. {ingredient.Name} is a staple: its stock is what you set on the pantry page.";
+        decimal pack = decision.New?.PackQuantity ?? (product is { } p ? _review.Products.GetValueOrDefault(p)?.PackQuantity ?? 0 : 0);
+        return ReceiptStock.Quantity(line, pack, ingredient.BaseUnit) is { } q
+            ? $"{price}; {Quantity.Format(q, ingredient.BaseUnit)} of {ingredient.Name} into the pantry."
+            : $"{price}.";
+    }
+
+    private async Task Import()
+    {
+        if (_review is null || _lines is null || !CanImport)
+            return;
+        _busy = true;
+        try
+        {
+            // Read again just before writing: the same order may have arrived from another phone since the review opened.
+            ReceiptImport fresh;
+            await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
+                fresh = await ReceiptImport.LoadAsync(db, _review.StoreId, _review.Parsed);
+            if (fresh.Earlier is not null)
+            {
+                _review = fresh;
+                return;
+            }
+            List<LineDecision> decisions = [.. _lines.Select(l => DecisionOf(l)!)];
+            List<ReceiptEdit> edits = fresh.Edits(decisions, DateOnly.FromDateTime(DateTime.Now), Guid.CreateVersion7);
+            await WriteAllAsync([.. edits.Select(e => new LocalEdit(e.Type, e.Id, e.Kind, e.Fields))]);
+            int prices = edits.Count(e => e.Type == SyncedEntities.PriceObservation);
+            int stock = edits.Count(e => e.Type == SyncedEntities.StockMovement);
+            int unmatched = decisions.Count(d => d is { ProductId: null, New: null, Ignore: false });
+            _done = $"Imported {_review.Parsed.Lines.Count} lines: {prices} prices, {stock} into the pantry"
+                    + (unmatched > 0 ? $", {unmatched} not matched." : ".");
+            await Close();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Cancel()
+    {
+        (_error, _done) = (null, null);
+        await Close();
+    }
+
+    private async Task Close()
+    {
+        (_review, _lines, _showingFile) = (null, null, false);
+        await Forget();
+        await Reload();
+    }
+
+    private async Task ShowFile()
+    {
+        _showingFile = !_showingFile;
+        if (_showingFile)
+        {
+            StateHasChanged();
+            await (await Module()).InvokeVoidAsync("show", _fileView);
+        }
+    }
+
+    private async Task Forget()
+    {
+        if (_module is not null)
+            await _module.InvokeVoidAsync("forget");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Dispose();
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("forget");
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+}

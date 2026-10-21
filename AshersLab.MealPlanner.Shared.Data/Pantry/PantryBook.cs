@@ -75,8 +75,10 @@ public sealed class PantryBook
         Dictionary<Guid, ShoppingTick> ticks = await db.Set<ShoppingListItem>().AsNoTracking().Where(i => !i.Deleted && i.IngredientId != null)
             .ToDictionaryAsync(i => i.Id, i => i.Tick, cancellationToken);
         List<StockMovement> movements = [.. StockMovement.Counting(await db.Set<StockMovement>().AsNoTracking().Where(m => !m.Deleted).ToListAsync(cancellationToken), ticks)
-            .Where(m =>ingredients.TryGetValue(m.IngredientId, out Ingredient? i) && !i.IsStaple
-                        && !(m.ShoppingItemId is { } item && ignoringItems?.Contains(item) == true))];
+            .Where(m => ingredients.TryGetValue(m.IngredientId, out Ingredient? i) && !i.IsStaple
+                        && !(m.ShoppingItemId is { } item && ignoringItems?.Contains(item) == true)
+                        // A receipt's purchase that replaced one of those ticks is the same purchase: left out with it.
+                        && !(m.CoversItemId is { } covered && ignoringItems?.Contains(covered) == true))];
 
         DateOnly first = movements.Count > 0 && movements.Min(m => m.OccurredOn) is var earliest && earliest < from ? earliest : from;
         List<StockUse> uses = first <= through ? await UsesAsync(db, ingredients, first, through, cancellationToken) : [];
