@@ -247,7 +247,20 @@ the same days adds to them.
 invoice dated today (written to the scratch directory by `lib/synthetic-invoice.mjs`) for the alias, the refusal and the
 tick a purchase replaces, then each real invoice passed - their paths are under `private/`, pass them, never copy them -
 printing counts only. Names carry the run id, so it needs no fresh database; a real invoice already imported is refused,
-so pass those only to a database that has not seen them.
+so pass those only to a database that has not seen them. The fees are `receipt-fee` spans inside `receipt-totals`.
+
+A **Costco receipt** (a picture, read by OCR) adds: `receipt-ocr-progress` while reading; `receipt-summary`'s `data-store`
+(the seeded store id); `receipt-items-sold`; `receipt-total-edit` → `receipt-total-form` with `receipt-edit-total` /
+`receipt-edit-sold` (input ids), `receipt-edit-date` (native date), `receipt-total-save`; per line `data-code` (item number),
+`data-check` (present when it is marked), `receipt-line-picture` (its strips: canvases, `data-drawn` once drawn),
+`receipt-line-problem`, `receipt-line-edit` → `receipt-line-form` with `receipt-edit-desc` / `-code` / `-qty` / `-price` /
+`-amount` (input ids), `receipt-line-save`; `receipt-edit-problem`. `node .claude/tools/chrome-costco-check.mjs
+<scratch>/costco [<receipt.pdf> ...]` (ports 19366/19367, about two minutes) drives it from two profiles, B phone-sized
+with its CPU slowed 4×: a synthetic image-only receipt (`lib/synthetic-costco.mjs`, drawn by the headless page as a JPEG
+and wrapped in a two-page PDF like the Costco app's), a second with a misread amount to correct, then each real Costco
+receipt passed (`private/receipts/receipt_*.pdf`), which must add up with no correction; timings and counts only. Item
+numbers are new each run, so it needs no fresh database. **Headless Chrome's OCR timing is not a phone's**: DevTools CPU
+throttling is a stand-in; the real iPhone has not been timed.
 
 **`build_solution` after a source edit sometimes needs running twice** before the test project's copies of `Shared.*.dll`
 are newer than the source (seen repeatedly on 2026-10-22, also with `get_file_problems` first). Check `[ dll -nt source ]`

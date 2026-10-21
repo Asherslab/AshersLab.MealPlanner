@@ -30,6 +30,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "archive", "archive", "{5E91169D-D9F9-4D4D-BBDF-06E27B1BD9E8}"
 	ProjectSection(SolutionItems) = preProject
 		docs\archive\2026-10-offline-sync.md = docs\archive\2026-10-offline-sync.md
+		docs\archive\2026-10-receipt-formats.md = docs\archive\2026-10-receipt-formats.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "modules", "modules", "{331AE102-A8F0-47ED-9C68-E28C98929852}"
@@ -90,7 +91,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sync", "sync", "{40EBDCC4-B
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "open-questions", "open-questions", "{9F36046B-D670-48EE-8A95-18FFAED4C4BF}"
 	ProjectSection(SolutionItems) = preProject
-		docs\open-questions\costco-ocr.md = docs\open-questions\costco-ocr.md
 		docs\open-questions\home-assistant-ingress.md = docs\open-questions\home-assistant-ingress.md
 		docs\open-questions\sqlite-in-the-browser.md = docs\open-questions\sqlite-in-the-browser.md
 	EndProjectSection
@@ -98,7 +98,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "work", "work", "{E246D070-6AAB-4CF7-B7DE-F885A8F04473}"
 	ProjectSection(SolutionItems) = preProject
 		docs\work\2026-10-deployment.md = docs\work\2026-10-deployment.md
-		docs\work\2026-10-receipt-formats.md = docs\work\2026-10-receipt-formats.md
 		docs\work\2026-10-v1-scope.md = docs\work\2026-10-v1-scope.md
 		docs\work\2026-10-version-2-integrations.md = docs\work\2026-10-version-2-integrations.md
 	EndProjectSection

@@ -175,7 +175,7 @@ for (const [i, file] of realInvoices.entries()) {
   await pick(a, file);
   const ok = await until(a, `!!document.querySelector('[data-testid=receipt-totals-ok]')`);
   const shown = await a.evaluate(`document.querySelectorAll('[data-testid=receipt-line]').length`);
-  const fees = await a.evaluate(`document.querySelectorAll('[data-testid=receipt-totals] span').length - (document.querySelector('[data-testid=receipt-totals]').textContent.includes('refunded') ? 1 : 0)`);
+  const fees = await a.evaluate(`document.querySelectorAll('[data-testid=receipt-fee]').length`);
   const before = Number(server(`select count(*) from ReceiptLine`));
   await click(a, '[data-testid=receipt-import]');
   const imported = await until(a, `!!document.querySelector('[data-testid=receipt-done]')`);

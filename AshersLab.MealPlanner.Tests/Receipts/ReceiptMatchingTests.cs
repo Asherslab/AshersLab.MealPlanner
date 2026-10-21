@@ -98,6 +98,10 @@ public class ReceiptMatchingTests
     [InlineData("Chicken breast fillet skinless small 500g - 800g", BaseUnit.Gram, "800")]
     [InlineData("Beef mince 8x250g", BaseUnit.Gram, "2000")]
     [InlineData("Beef mince 1.4KG", BaseUnit.Gram, "1400")]
+    // Two sizes in different kinds of unit: the one in the ingredient's own kind, wherever it is.
+    [InlineData("FREE RANGE EGGS 24PK 1.4KG", BaseUnit.Each, "24")]
+    [InlineData("FREE RANGE EGGS 24PK 1.4KG", BaseUnit.Gram, "1400")]
+    [InlineData("NAPPIES SIZE 3 120CT", BaseUnit.Each, "120")]
     [InlineData("Vitasoy oat milk 1l", BaseUnit.Gram, null)]
     [InlineData("tomato roma red each", BaseUnit.Gram, null)]
     [InlineData("Loose kale", BaseUnit.Gram, null)]

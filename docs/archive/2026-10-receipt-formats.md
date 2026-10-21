@@ -1,10 +1,13 @@
 ---
 title: Receipt formats
 kind: discussion
-status: accepted
+status: folded
 module: receipts
 opened: 2026-10-20
+closed: 2026-10-22
 verified: 2026-10-22
+folded_into:
+  - docs/modules/receipts/receipts.md
 code:
   - AshersLab.MealPlanner.Shared.Domain/Receipts
 ---

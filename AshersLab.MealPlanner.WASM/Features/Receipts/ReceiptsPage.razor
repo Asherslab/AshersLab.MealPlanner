@@ -1,4 +1,5 @@
 @page "/receipts"
+@using System.Globalization
 @using AshersLab.MealPlanner.LocalData
 @using AshersLab.MealPlanner.LocalData.Sync
 @using AshersLab.MealPlanner.Shared.Data.Ingredients
@@ -20,9 +21,10 @@
 @implements IAsyncDisposable
 
 @*
-    Receipts: a Woolworths invoice PDF read on this device (wwwroot/js/receipt-pdf.js gives its text runs, Shared.Domain
-    reads them), reviewed line by line, then imported as ops in one transaction. The file is never uploaded or stored:
-    it is shown during the review if asked for, and dropped once the review ends (docs/modules/receipts/receipts.md).
+    Receipts: a Woolworths invoice PDF or a Costco receipt read on this device (wwwroot/js/receipt-pdf.js gives a text PDF's
+    runs, or the OCR of a picture's lines; Shared.Domain reads them), reviewed line by line, then imported as ops in one
+    transaction. The file is never uploaded or stored: it is shown during the review, and dropped once the review ends
+    (docs/modules/receipts/receipts.md).
 *@
 
 <PageTitle>Receipts - Meal Planner</PageTitle>
@@ -33,14 +35,23 @@
     @if (_review is null)
     {
         <MudText Class="mt-2 mud-text-secondary">
-            Pick a Woolworths invoice (the PDF from the order's page). It is read on this device only, and not kept.
+            Pick a Woolworths invoice (the PDF from the order's page) or a Costco receipt (the PDF the Costco app saves). It is
+            read on this device only, and not kept.
         </MudText>
         <label class="import-file mt-4 d-block">
-            <InputFile OnChange="Picked" accept=".pdf,application/pdf" data-testid="receipt-file"/>
+            <InputFile OnChange="Picked" accept=".pdf,application/pdf" data-testid="receipt-file" disabled="@_reading"/>
         </label>
         @if (_reading)
         {
-            <MudProgressLinear Indeterminate="true" Class="mt-2"/>
+            @if (_progress is { } progress)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2" data-testid="receipt-ocr-progress">Reading the receipt's picture… @((int)(progress * 100))%</MudText>
+                <MudProgressLinear Value="@(progress * 100)" Class="mt-1"/>
+            }
+            else
+            {
+                <MudProgressLinear Indeterminate="true" Class="mt-2"/>
+            }
         }
     }
 
@@ -58,16 +69,26 @@
     {
         ParsedReceipt parsed = import.Parsed;
         string? totals = parsed.TotalsProblem();
-        <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="receipt-summary" data-order="@parsed.OrderNumber" data-date="@parsed.PurchasedOn.ToString("yyyy-MM-dd")">
+        bool ocr = _spans is not null;
+        <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="receipt-summary" data-order="@parsed.OrderNumber" data-date="@parsed.PurchasedOn.ToString("yyyy-MM-dd")"
+                  data-store="@import.StoreId">
             <MudText Typo="Typo.h6">@StoreName(import.StoreId) · @ShoppingText.Day(parsed.PurchasedOn) @parsed.PurchasedOn.Year</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Order @parsed.OrderNumber · @parsed.Lines.Count lines</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@(ocr ? "Receipt" : "Order") @parsed.OrderNumber · @parsed.Lines.Count lines</MudText>
             <MudText Typo="Typo.body2" Class="mt-2" data-testid="receipt-totals">
-                Sub total @Money.Format(parsed.SubtotalCents)
-                @foreach (ParsedFee fee in parsed.Fees.Where(f => f.AmountCents != 0))
+                @if (parsed.Fees.Count > 0 || parsed.SubtotalCents != parsed.TotalCents)
                 {
-                    <span> · @fee.Name @Money.Format(fee.AmountCents)</span>
+                    <span>Sub total @Money.Format(parsed.SubtotalCents)</span>
+                    @foreach (ParsedFee fee in parsed.Fees.Where(f => f.AmountCents != 0))
+                    {
+                        <span data-testid="receipt-fee"> · @fee.Name @Money.Format(fee.AmountCents)</span>
+                    }
+                    <span> · </span>
                 }
-                · <b>Total @Money.Format(parsed.TotalCents)</b>
+                <b>Total @Money.Format(parsed.TotalCents)</b>
+                @if (parsed.ItemsSold is { } sold)
+                {
+                    <span data-testid="receipt-items-sold"> · @sold items sold</span>
+                }
                 @if (parsed.RefundCents is { } refund)
                 {
                     <span> · refunded @Money.Format(refund)</span>
@@ -75,46 +96,129 @@
             </MudText>
             @if (totals is null)
             {
-                <MudText Typo="Typo.caption" Color="Color.Success" data-testid="receipt-totals-ok">The lines add up to the sub total.</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Success" data-testid="receipt-totals-ok">
+                    @(parsed.ItemsSold is { } n ? $"The lines add up to the total, and to the {n} items sold." : "The lines add up to the sub total.")
+                </MudText>
             }
             else
             {
-                <MudAlert Severity="Severity.Error" Class="mt-2" data-testid="receipt-totals-problem">@totals It cannot be imported.</MudAlert>
+                <MudAlert Severity="Severity.Error" Class="mt-2" data-testid="receipt-totals-problem">
+                    @totals @(ocr ? "Check the lines marked below against the receipt, and correct what was misread." : "It cannot be imported.")
+                </MudAlert>
             }
             @if (import.Earlier is { } earlier)
             {
                 <MudAlert Severity="Severity.Warning" Class="mt-2" data-testid="receipt-earlier">
-                    This order was imported already, on @ShoppingText.Day(earlier.ImportedOn) @earlier.ImportedOn.Year. It cannot be imported twice.
+                    This @(ocr ? "receipt" : "order") was imported already, on @ShoppingText.Day(earlier.ImportedOn) @earlier.ImportedOn.Year. It cannot be imported twice.
                 </MudAlert>
+            }
+            @if (ocr && _editingTotal)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="receipt-total-form">
+                    <div class="d-flex flex-wrap gap-2">
+                        <MudTextField T="string" @bind-Value="_editTotal" Label="Total" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-total" Style="max-width: 9rem"/>
+                        <MudTextField T="string" @bind-Value="_editSold" Label="Items sold" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-sold" Style="max-width: 9rem"/>
+                        <label class="native-select">
+                            <span>Date</span>
+                            <input type="date" value="@_editDate?.ToString("yyyy-MM-dd")" @onchange="e => _editDate = DateOnly.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out DateOnly d) ? d : _editDate"
+                                   data-testid="receipt-edit-date"/>
+                        </label>
+                    </div>
+                    @if (_editProblem is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error" data-testid="receipt-edit-problem">@_editProblem</MudText>
+                    }
+                    <div class="d-flex gap-2 mt-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveTotal" data-testid="receipt-total-save">Correct</MudButton>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => _editingTotal = false">Cancel</MudButton>
+                    </div>
+                </MudPaper>
             }
             <div class="d-flex flex-wrap gap-2 mt-3">
                 <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" OnClick="ShowFile" data-testid="receipt-show-file">
-                    @(_showingFile ? "Hide the invoice" : "Show the invoice")
+                    @(_showingFile ? $"Hide the {(ocr ? "receipt" : "invoice")}" : $"Show the {(ocr ? "receipt" : "invoice")}")
                 </MudButton>
+                @if (ocr && !_editingTotal)
+                {
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditTotal" data-testid="receipt-total-edit">Correct the total</MudButton>
+                }
             </div>
             <div @ref="_fileView" class="@(_showingFile ? "mt-2" : "d-none")" data-testid="receipt-file-view"></div>
         </MudPaper>
 
         <MudText Class="mt-4 mud-text-secondary">
             Check each line: what it is decides what it prices and what goes into the pantry. A line matched once is matched by
-            itself on the next receipt.
+            itself on the next receipt.@(ocr ? " Each line shows the part of the receipt it was read from: if a figure differs, correct it." : "")
         </MudText>
 
+        <div @ref="_linesView">
         @foreach (LineState state in _lines)
         {
             ParsedLine line = state.Review.Line;
+            string? sums = line.SumProblem();
+            bool unsure = _unsure?.Contains(line.Position) == true;
             <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="receipt-line" data-position="@line.Position" data-match="@state.Review.Match.By"
-                      data-choice="@state.Choice" data-kind="@KindOf(state)">
+                      data-choice="@state.Choice" data-kind="@KindOf(state)" data-code="@line.StoreCode" data-check="@(sums is not null || unsure)">
+                <MudGrid Spacing="2">
+                    @if (_spans?.GetValueOrDefault(line.Position) is { } spans)
+                    {
+                        <MudItem xs="12" md="5">
+                            <div class="receipt-strips" data-testid="receipt-line-picture">
+                                @foreach (PictureSpan span in spans)
+                                {
+                                    <canvas data-top="@span.Top.ToString(CultureInfo.InvariantCulture)" data-bottom="@span.Bottom.ToString(CultureInfo.InvariantCulture)"></canvas>
+                                }
+                            </div>
+                        </MudItem>
+                    }
+                    <MudItem xs="12" md="@(_spans is null ? 12 : 7)">
                 <div class="d-flex gap-2">
                     <div class="flex-grow-1">
                         <MudText data-testid="receipt-line-desc">@line.Description</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="receipt-line-amount">@Bought(line)</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="receipt-line-amount">
+                            @(line.StoreCode is { } code ? $"#{code} · " : "")@Bought(line)
+                        </MudText>
                     </div>
                     @if (state.Review.Match.By != MatchedBy.None && state.Choice == $"p:{state.Review.Match.ProductId}")
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined" data-testid="receipt-line-matched">matched</MudChip>
                     }
                 </div>
+                @if (sums is not null || unsure)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1" data-testid="receipt-line-problem">
+                        @(sums is not null ? $"Check this line: {sums}" : "Its amount could not be read, so it was worked out from the price: check it.")
+                    </MudAlert>
+                }
+                @if (ocr && _editing == line.Position)
+                {
+                    <MudPaper Outlined="true" Class="pa-2 mt-2" data-testid="receipt-line-form">
+                        <MudTextField T="string" @bind-Value="_editDescription" Label="Description" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-desc"/>
+                        <div class="d-flex flex-wrap gap-2 mt-1">
+                            <MudTextField T="string" @bind-Value="_editCode" Label="Item number" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-code" Style="max-width: 9rem"/>
+                            <MudTextField T="string" @bind-Value="_editQuantity" Label="Quantity" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-qty" Style="max-width: 6rem"/>
+                            <MudTextField T="string" @bind-Value="_editPrice" Label="Price" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-price" Style="max-width: 7rem"/>
+                            <MudTextField T="string" @bind-Value="_editAmount" Label="Amount" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-amount" Style="max-width: 7rem"/>
+                        </div>
+                        @if (line.DiscountCents != 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Less its discount of @Money.Format(line.DiscountCents), read from its own line.</MudText>
+                        }
+                        @if (_editProblem is not null)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Error" data-testid="receipt-edit-problem">@_editProblem</MudText>
+                        }
+                        <div class="d-flex gap-2 mt-1">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => SaveLine(line)" data-testid="receipt-line-save">Correct</MudButton>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => _editing = null">Cancel</MudButton>
+                        </div>
+                    </MudPaper>
+                }
+                else if (ocr)
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Edit" Class="mt-1" OnClick="() => EditLine(line)"
+                               data-testid="receipt-line-edit">Correct what was read</MudButton>
+                }
                 @if (state.Choice == "" && state.Review.Match.Suggestions.FirstOrDefault(s => s.ProductId is not null) is { } guess)
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1"
@@ -151,7 +255,7 @@
                         <option value="x">Leave it out</option>
                     </select>
                 </label>
-                @if (state.Choice.StartsWith("n:") || state.Choice == "h")
+                @if (ReviewChoice.MakesProduct(state.Choice))
                 {
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <MudTextField T="string" @bind-Value="state.NewName" Label="Product name" Variant="Variant.Outlined" Immediate="true"
@@ -170,8 +274,11 @@
                     </div>
                 }
                 <MudText Typo="Typo.caption" Class="d-block mt-1" data-testid="receipt-line-will">@Will(state)</MudText>
+                    </MudItem>
+                </MudGrid>
             </MudPaper>
         }
+        </div>
 
         <div class="d-flex gap-2 mt-4 mb-8">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanImport)" OnClick="Import" data-testid="receipt-import">
@@ -223,15 +330,27 @@
     }
 
     private IJSObjectReference? _module;
+    private DotNetObjectReference<ReceiptsPage>? _self;
     private ReceiptImport? _review;
     private List<LineState>? _lines;
     private List<Store> _stores = [];
     private List<Product> _products = [];
     private List<Ingredient> _ingredients = [];
     private List<ReceiptRow> _receipts = [];
-    private ElementReference _fileView;
+    private ElementReference _fileView, _linesView;
     private bool _showingFile, _reading, _busy;
     private string? _error, _done;
+    private double? _progress;
+
+    // A picture's receipt (Costco): where each line was read from, and the lines whose amount OCR could not read.
+    private IReadOnlyDictionary<int, IReadOnlyList<PictureSpan>>? _spans;
+    private IReadOnlySet<int>? _unsure;
+
+    // The correction open: a line's (by position) or the total's.
+    private int? _editing;
+    private bool _editingTotal;
+    private string? _editDescription, _editCode, _editQuantity, _editPrice, _editAmount, _editTotal, _editSold, _editProblem;
+    private DateOnly? _editDate;
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
@@ -247,13 +366,28 @@
                 .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)];
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (_spans is not null && _module is not null)
+            await _module.InvokeVoidAsync("strips", _linesView);
+    }
+
     private string StoreName(Guid id) => _stores.FirstOrDefault(s => s.Id == id)?.Name ?? "Store removed";
 
     private async Task<IJSObjectReference> Module() => _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/receipt-pdf.js");
 
+    /// <summary>OCR's progress, 0 to 1, from <c>receipt-pdf.js</c>.</summary>
+    [JSInvokable]
+    public Task Progress(double at)
+    {
+        _progress = at;
+        return InvokeAsync(StateHasChanged);
+    }
+
     private async Task Picked(InputFileChangeEventArgs e)
     {
-        (_error, _done, _reading) = (null, null, true);
+        (_error, _done, _reading, _progress) = (null, null, true, null);
         try
         {
             byte[] bytes;
@@ -263,39 +397,104 @@
                 await stream.CopyToAsync(copy);
                 bytes = copy.ToArray();
             }
-            List<PdfPage> pages = PdfJson.Read(await (await Module()).InvokeAsync<string>("read", bytes));
-            if (!WoolworthsInvoice.Recognises(pages))
-                throw new ReceiptFormatException("This is not a Woolworths invoice. Costco receipts come later.");
-            ParsedReceipt parsed = WoolworthsInvoice.Parse(pages);
+            IJSObjectReference module = await Module();
+            List<PdfPage> pages = PdfJson.Read(await module.InvokeAsync<string>("read", bytes));
+
             // The reader names the store, by its seeded id: never a name, never a choice - a receipt's id is derived from it.
-            if (_stores.All(s => s.Id != StoreRules.Woolworths))
-                throw new ReceiptFormatException("The Woolworths store was deleted, so its invoices cannot be imported.");
-            await OpenAsync(StoreRules.Woolworths, parsed);
+            if (WoolworthsInvoice.Recognises(pages))
+            {
+                ParsedReceipt parsed = WoolworthsInvoice.Parse(pages);
+                (_spans, _unsure) = (null, null);
+                await OpenAsync(Store(StoreRules.Woolworths, "Woolworths"), parsed);
+                return;
+            }
+            if (pages.Any(p => p.Items.Count > 0))
+                throw new ReceiptFormatException("This is not a Woolworths invoice or a Costco receipt.");
+
+            // A picture, no text: read it with OCR, here on this device.
+            _progress = 0;
+            StateHasChanged();
+            _self ??= DotNetObjectReference.Create(this);
+            List<OcrLine> lines = OcrJson.Read(await module.InvokeAsync<string>("ocr", _self));
+            if (!CostcoReceipt.Recognises(lines))
+                throw new ReceiptFormatException("This picture is not a Costco receipt this app can read.");
+            CostcoRead read = CostcoReceipt.Parse(lines);
+            (_spans, _unsure) = (read.Spans, read.Unsure);
+            await OpenAsync(Store(StoreRules.Costco, "Costco"), read.Receipt);
         }
         catch (Exception ex) when (ex is ReceiptFormatException or IOException or JSException)
         {
-            _error = ex is IOException ? "That file is too big to be an invoice." : ex is JSException ? "That file is not a PDF this device can read." : ex.Message;
+            _error = ex is IOException ? "That file is too big to be a receipt." : ex is JSException ? "That file is not a PDF this device can read." : ex.Message;
+            (_spans, _unsure) = (null, null);
             await Forget();
         }
         finally
         {
-            _reading = false;
+            (_reading, _progress) = (false, null);
         }
     }
 
+    private Guid Store(Guid id, string name) =>
+        _stores.Any(s => s.Id == id) ? id : throw new ReceiptFormatException($"The {name} store was deleted, so its receipts cannot be imported.");
+
     private async Task OpenAsync(Guid store, ParsedReceipt parsed)
     {
+        // A correction re-opens the review: the planner's choices so far are kept, by line.
+        Dictionary<int, LineState> before = _lines?.ToDictionary(l => l.Review.Line.Position) ?? [];
         await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
             _review = await ReceiptImport.LoadAsync(db, store, parsed);
-        _lines = [.. _review.Review().Select(r => new LineState(r))];
+        _lines = [.. _review.Review().Select(r => before.GetValueOrDefault(r.Line.Position) is { } old
+            ? new LineState(r) { Choice = old.Choice, NewName = old.NewName, NewPack = old.NewPack, Cover = old.Cover }
+            : new LineState(r))];
         await Reload();
         Covers();
+    }
+
+    private void EditLine(ParsedLine line)
+    {
+        (_editing, _editingTotal, _editProblem) = (line.Position, false, null);
+        _editDescription = line.Description;
+        _editCode = line.StoreCode;
+        _editQuantity = line.Supplied.ToString("0.##", CultureInfo.InvariantCulture);
+        _editPrice = line.UnitPriceCents is { } u ? Money.Editable(u) : "";
+        _editAmount = line.AmountCents > 0 ? Money.Editable(line.AmountCents) : "";
+    }
+
+    private async Task SaveLine(ParsedLine line)
+    {
+        if (_review is null)
+            return;
+        if (ReceiptCorrection.Line(line, _editDescription, _editCode, _editQuantity, _editPrice, _editAmount, out _editProblem) is not { } corrected)
+            return;
+        _unsure = _unsure?.Where(p => p != line.Position).ToHashSet();
+        _editing = null;
+        await OpenAsync(_review.StoreId, _review.Parsed.WithLine(corrected));
+    }
+
+    private void EditTotal()
+    {
+        if (_review is null)
+            return;
+        (_editingTotal, _editing, _editProblem) = (true, null, null);
+        _editTotal = Money.Editable(_review.Parsed.TotalCents);
+        _editSold = _review.Parsed.ItemsSold?.ToString(CultureInfo.InvariantCulture);
+        _editDate = _review.Parsed.PurchasedOn;
+    }
+
+    private async Task SaveTotal()
+    {
+        if (_review is null)
+            return;
+        if (ReceiptCorrection.Receipt(_review.Parsed, _editTotal, _editSold, _editDate, out _editProblem) is not { } corrected)
+            return;
+        _editingTotal = false;
+        await OpenAsync(_review.StoreId, corrected);
     }
 
     private void Choose(LineState state, string? choice)
     {
         state.Choice = choice ?? "";
-        if (state.Choice.StartsWith("n:") || state.Choice == "h")
+        if (ReviewChoice.MakesProduct(state.Choice))
         {
             state.NewName ??= ReceiptImport.Clip(state.Review.Line.Description, Names.MaxLength);
             BaseUnit unit = UnitOf(state);
@@ -341,13 +540,14 @@
     private ReceiptLineKind KindOf(LineState state) =>
         DecisionOf(state) is { } d && _review is not null ? _review.KindOf(state.Review.Line, d) : ReceiptLineKind.Food;
 
-    private bool CanImport => !_busy && _review is { Earlier: null } r && r.Parsed.TotalsProblem() is null && _lines!.All(l => DecisionOf(l) is not null);
+    private bool CanImport => !_busy && _editing is null && !_editingTotal && _review is { Earlier: null } r && r.Parsed.TotalsProblem() is null
+                              && _lines!.All(l => DecisionOf(l) is not null);
 
     private static string Bought(ParsedLine line) =>
         line.NotSupplied ? $"not supplied{(line.Substitute ? "" : " - nothing came home")}"
         : line.WeightGrams is { } g ? $"{Quantity.Format(g, BaseUnit.Gram)} at {Money.Format(line.PerKgCents ?? 0)}/kg = {Money.Format(line.AmountCents)}"
         : $"{line.Supplied:0.##} × {Money.Format(line.UnitPriceCents ?? 0)} = {Money.Format(line.AmountCents)}"
-          + (line.Substitute ? " · a substitute" : "") + (line.DiscountCents > 0 ? $" · {Money.Format(line.DiscountCents)} off" : "");
+          + (line.Substitute ? " · a substitute" : "") + (line.DiscountCents > 0 ? $" · {Money.Format(line.DiscountCents)} off" : "") + (line.Gst ? " · GST" : "");
 
     /// <summary>What importing does with the line, in the planner's words.</summary>
     private string Will(LineState state)
@@ -418,7 +618,7 @@
 
     private async Task Close()
     {
-        (_review, _lines, _showingFile) = (null, null, false);
+        (_review, _lines, _showingFile, _spans, _unsure, _editing, _editingTotal) = (null, null, false, null, null, null, false);
         await Forget();
         await Reload();
     }
@@ -442,6 +642,7 @@
     public async ValueTask DisposeAsync()
     {
         Dispose();
+        _self?.Dispose();
         if (_module is not null)
         {
             try

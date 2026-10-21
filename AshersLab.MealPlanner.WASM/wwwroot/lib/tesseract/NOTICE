@@ -1,0 +1,7 @@
+Vendored so the app makes no third-party request (docs/modules/receipts/receipts.md). All Apache License 2.0 - see LICENSE.
+
+tesseract.esm.min.js, worker.min.js   tesseract.js 6.0.1          https://github.com/naptha/tesseract.js
+core/*.wasm.js                        tesseract.js-core 6.1.2     https://github.com/naptha/tesseract.js-core (Tesseract OCR)
+lang/eng.traineddata.gz               tessdata 4.0.0_best_int     https://github.com/naptha/tessdata (@tesseract.js-data/eng)
+
+Only the LSTM cores are kept, with and without SIMD (older iPhones): the app runs Tesseract's LSTM engine only.

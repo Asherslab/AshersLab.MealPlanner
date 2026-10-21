@@ -111,17 +111,24 @@ public static partial class ReceiptMatching
 
     /// <summary>
     /// The pack size a description prints, read in the ingredient's unit: "...bread 700g" is 700 g, "...4 pack" 4 each,
-    /// "...tomato each" 1, "...milk uht 1l" 1000 ml. The last size printed wins ("500g - 800g" is the heaviest tray). Null
-    /// when it prints none, or one in another kind of unit - never converted, as everywhere.
+    /// "...tomato each" 1, "...milk uht 1l" 1000 ml. The last size printed in the ingredient's kind of unit wins ("500g - 800g"
+    /// is the heaviest tray; Costco's "EGGS 24PK 1.4KG" is 24 each, or 1400 g). Null when it prints none in that kind -
+    /// never converted, as everywhere.
     /// </summary>
     public static decimal? PackGuess(string description, BaseUnit unit)
     {
-        Match? last = PackShape().Matches(description).LastOrDefault();
-        if (last is null)
-            return null;
-        if (last.Groups["each"].Success)
-            return unit == BaseUnit.Each ? 1 : null;
-        string text = (last.Groups["count"].Success ? last.Groups["count"].Value + "x" : "") + last.Groups["size"].Value + last.Groups["unit"].Value;
-        return PackSize.Parse(text, unit, out _);
+        foreach (Match size in PackShape().Matches(description).Reverse())
+        {
+            if (size.Groups["each"].Success)
+            {
+                if (unit == BaseUnit.Each)
+                    return 1;
+                continue;
+            }
+            string text = (size.Groups["count"].Success ? size.Groups["count"].Value + "x" : "") + size.Groups["size"].Value + size.Groups["unit"].Value;
+            if (PackSize.Parse(text, unit, out _) is { } pack)
+                return pack;
+        }
+        return null;
     }
 }

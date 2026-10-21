@@ -252,9 +252,12 @@ public sealed class ReceiptImport
             if (productId is not { } matched)
                 continue;
 
-            // Teach the alias, unless the line matched by it (or by the store's code) already.
+            // Teach the alias, unless the line matched by it already, or its code will match it next time: a new product is
+            // made with the line's code, but an existing one matched by name may have none (or another).
             string key = ProductAliasRules.Key(line.Description);
-            if (Aliases.GetValueOrDefault(key)?.ProductId != matched && line.StoreCode is null)
+            string? code = decision.New is not null ? line.StoreCode : Products.GetValueOrDefault(matched)?.StoreCode;
+            bool codeMatches = line.StoreCode is not null && string.Equals(code, line.StoreCode, StringComparison.OrdinalIgnoreCase);
+            if (Aliases.GetValueOrDefault(key)?.ProductId != matched && !codeMatches)
                 edits.Add(new(SyncedEntities.ProductAlias, ProductAliasRules.AliasId(StoreId, line.Description), OpKind.Create,
                     ReceiptFields.Of(new ProductAlias { StoreId = StoreId, Text = line.Description, ProductId = matched })));
 

@@ -68,6 +68,14 @@
     max-width: 100%;
 }
 
+/* The strip of a Costco receipt's picture a line was read from (ReceiptsPage), drawn by receipt-pdf.js strips(). */
+.receipt-strips canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-left: 3px solid var(--mud-palette-lines-default);
+}
+
 /* A meal in the list is a link to its page (MealsPage), dressed as a row. */
 .meal-row {
     color: inherit;
