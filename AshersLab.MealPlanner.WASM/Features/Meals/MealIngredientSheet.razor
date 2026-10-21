@@ -1,0 +1,160 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Meals
+@using AshersLab.MealPlanner.WASM.Features.Products
+
+@*
+    One ingredient of a meal: which ingredient, how much a batch uses, and a note - and remove. For a new one, a
+    search box (focused, keyboard up) lists the matching ingredients; tap one and the quantity box takes focus, so
+    adding is type a few letters, tap, type the amount, Enter. The amount may be left empty: "not known yet" is a real
+    state, and the meal's cost then says it is incomplete.
+
+    Like the editors it only answers; the page writes the op.
+*@
+
+<MudDialog data-testid="meal-ingredient-sheet">
+    <DialogContent>
+        @if (_ingredient is null)
+        {
+            <MudTextField T="string" @ref="_searchField" @bind-Value="_search" Label="Find an ingredient" Variant="Variant.Outlined"
+                          Immediate="true" MaxLength="Names.MaxLength" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          InputId="meal-ingredient-search" data-testid="meal-ingredient-search"/>
+            <div class="mt-2">
+                @foreach (IngredientOption option in Matches().Take(8))
+                {
+                    <div class="list-row meal-ingredient-choice px-2 py-3" @key="option.Id" role="button" tabindex="0"
+                         @onclick="() => Choose(option)" data-testid="meal-ingredient-choice" data-id="@option.Id">
+                        <MudText>@option.Name</MudText>
+                    </div>
+                }
+                @if (!Matches().Any())
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2" data-testid="meal-ingredient-no-match">
+                        @(string.IsNullOrWhiteSpace(_search)
+                            ? "No ingredients yet - add them on the Ingredients page first."
+                            : $"No ingredient called \"{Names.Normalise(_search)}\" - add it on the Ingredients page first.")
+                    </MudText>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="d-flex align-center gap-2">
+                <MudText Typo="Typo.subtitle1" Class="flex-grow-1" data-testid="meal-ingredient-chosen">@_ingredient.Name</MudText>
+                @if (IsNew)
+                {
+                    <MudButton Size="Size.Small" OnClick="() => _ingredient = null" data-testid="meal-ingredient-change">Change</MudButton>
+                }
+            </div>
+
+            <form id="meal-ingredient-form" @onsubmit="Save" @onsubmit:preventDefault>
+                <MudTextField T="string" @ref="_quantityField" @bind-Value="_quantity" Label="@($"How much a batch uses ({_ingredient.Unit.Symbol()})")"
+                              Variant="Variant.Outlined" Immediate="true" Class="mt-3" Placeholder="@Quantity.Example(_ingredient.Unit)"
+                              HelperText="@QuantityHelper" Error="_quantityError is not null" ErrorText="@_quantityError"
+                              InputId="meal-ingredient-quantity" data-testid="meal-ingredient-quantity"/>
+
+                <MudTextField T="string" @bind-Value="_note" Label="Note (optional)" Variant="Variant.Outlined"
+                              Immediate="true" MaxLength="MealIngredientRules.MaxNoteLength" Class="mt-3"
+                              Placeholder="grated, for the sauce"
+                              InputId="meal-ingredient-note" data-testid="meal-ingredient-note"/>
+                @* Enter in either box submits; the button is for a tap. *@
+                <button type="submit" hidden></button>
+            </form>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!IsNew)
+        {
+            <MudButton Color="Color.Error" OnClick="Remove" Class="mr-auto" data-testid="meal-ingredient-remove">Remove</MudButton>
+        }
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="meal-ingredient-cancel">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="meal-ingredient-form" Color="Color.Primary" Disabled="_ingredient is null"
+                   Variant="Variant.Filled" data-testid="meal-ingredient-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    /// <summary>The line being edited; for a new one, only its meal (and an empty ingredient id).</summary>
+    [Parameter] public MealIngredientDraft Draft { get; set; } = new(Guid.Empty, Guid.Empty, null, null);
+
+    [Parameter] public bool IsNew { get; set; }
+
+    /// <summary>Every live ingredient, by name, with the unit its quantity is typed in.</summary>
+    [Parameter] public IReadOnlyList<IngredientOption> Ingredients { get; set; } = [];
+
+    /// <summary>For an existing line whose ingredient is gone: what to call it.</summary>
+    [Parameter] public string? GoneName { get; set; }
+
+    private IngredientOption? _ingredient;
+    private string?           _search;
+    private string?           _quantity;
+    private string?           _note;
+    private string?           _quantityError;
+
+    private MudTextField<string>? _searchField;
+    private MudTextField<string>? _quantityField;
+    private bool                  _focusQuantity;
+
+    protected override void OnInitialized()
+    {
+        _ingredient = Ingredients.FirstOrDefault(i => i.Id == Draft.IngredientId)
+                      ?? (IsNew ? null : new IngredientOption(Draft.IngredientId, GoneName ?? "ingredient removed", BaseUnit.Each));
+        _quantity   = Draft.Quantity is { } quantity && _ingredient is not null ? Quantity.Editable(quantity, _ingredient.Unit) : null;
+        _note       = Draft.Note;
+    }
+
+    /// <summary>
+    /// Focuses the search box (a new line) or the quantity box once the dialog has finished opening - not AutoFocus,
+    /// which the dialog's focus trap overrides (see PriceSheet) - and the quantity box again after an ingredient is picked.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Delay(100);
+            await ((_ingredient is null ? _searchField : _quantityField)?.FocusAsync() ?? ValueTask.CompletedTask);
+        }
+        else if (_focusQuantity && _quantityField is not null)
+        {
+            _focusQuantity = false;
+            await _quantityField.FocusAsync();
+        }
+    }
+
+    private IEnumerable<IngredientOption> Matches()
+    {
+        string filter = Names.Normalise(_search);
+        return Ingredients.Where(i => filter.Length == 0 || i.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase))
+            .OrderBy(i => !i.Name.StartsWith(filter, StringComparison.CurrentCultureIgnoreCase))
+            .ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+    }
+
+    private void Choose(IngredientOption option)
+    {
+        _ingredient    = option;
+        _focusQuantity = true;
+    }
+
+    /// <summary>What the typed amount reads as - "= 1.5 kg" - or that empty is allowed.</summary>
+    private string QuantityHelper =>
+        _ingredient is not null && Quantity.Read(_quantity, _ingredient.Unit, out _) is { } read
+            ? $"= {Quantity.Format(read, _ingredient.Unit)}"
+            : "Leave it empty if you don't know yet - the cost shows as incomplete.";
+
+    private void Save()
+    {
+        if (_ingredient is null)
+            return;
+
+        decimal? quantity = MealIngredientRules.ParseQuantity(_quantity, _ingredient.Unit, out _quantityError);
+        if (_quantityError is not null)
+            return;
+
+        Dialog.Close(DialogResult.Ok(new MealIngredientSheetResult(
+            Draft with { IngredientId = _ingredient.Id, Quantity = quantity, Note = MealIngredientRules.NormaliseNote(_note) }, Remove: false)));
+    }
+
+    private void Remove() => Dialog.Close(DialogResult.Ok(new MealIngredientSheetResult(null, Remove: true)));
+}

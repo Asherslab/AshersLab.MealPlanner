@@ -121,8 +121,8 @@ ingredients and the shopping list are grouped in this order."; a "New category" 
 
 - **A create needs a unit, and the editor has no default.** Every quantity of the ingredient - in a recipe, in a
   pack - is counted in it, so a silent "grams" on a cucumber would make every later number wrong without anyone
-  noticing. Changing the unit later converts nothing (there is nothing yet to convert; when meals and products
-  exist, that is their slices' problem).
+  noticing. **Changing the unit later converts nothing**: its products' pack sizes and its meals' quantities are
+  then read in the new unit, and mean the wrong thing until someone fixes them.
 - **An edit sends only the fields that changed** (`IngredientDraft.FieldsChangedFrom`, tested): two phones changing
   different fields of one ingredient offline both keep their change; the same field, the later edit wins.
 - A reference to a category or store that is gone shows as "No category" (listed last) or "store removed", and the
@@ -156,8 +156,10 @@ and nothing is archived.
 - **Products refer to stores and ingredients** ([products and prices](products-and-prices.md)). A store that sells a
   product is refused like one an ingredient uses - the message names both ("Costco is used by 1 ingredient: cucumber,
   and 2 products: ..."; `NameListItem.UsedByProducts`). The ingredient editor's Delete is refused while a product is
-  bought as it, naming the products. When meal ingredients (slice 6) refer to ingredients, the same refusal must
-  name the meals too.
+  bought as it, naming the products.
+- **Meals are made of ingredients** ([meals](../meals/meals.md)): the ingredient editor's Delete is also refused while
+  a live meal has it as a line, naming both ("onion is used by 1 product: ..., and 1 meal: cottage pie. Delete the
+  products on the Prices page, and take it out of the meals, first.").
 - **Meals refer to meal groups** ([meals](../meals/meals.md)); a group a meal is in is refused the same way
   (`NameList`'s `UsedByNoun`).
 

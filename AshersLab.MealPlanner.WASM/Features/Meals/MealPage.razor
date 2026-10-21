@@ -1,11 +1,15 @@
 @page "/meals/{Id:guid}"
 @using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Ingredients
 @using AshersLab.MealPlanner.Shared.Data.Meals
 @using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
 @using AshersLab.MealPlanner.Shared.Domain.Meals
+@using AshersLab.MealPlanner.Shared.Domain.Prices
 @using AshersLab.MealPlanner.Shared.Domain.Sync
 @using AshersLab.MealPlanner.WASM.Data
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using AshersLab.MealPlanner.WASM.Features.Products
 @using Microsoft.EntityFrameworkCore
 @inherits LocalDataPage
 @inject IDialogService Dialogs
@@ -13,8 +17,10 @@
 @inject NavigationManager Navigation
 
 @*
-    One meal: what it is, and Edit for its own fields (and delete). A page rather than a dialog because its
-    ingredients are a list of their own, each edited on its own.
+    One meal: what it is, what it costs, and - for a meal made from ingredients - its ingredients, each with what it
+    adds to the batch. Edit opens the editor for the meal's own fields (and delete); tapping an ingredient opens its
+    sheet; "Add ingredient" adds one. A page rather than a dialog because each ingredient is edited on its own, and
+    each is its own op.
 *@
 
 <PageTitle>@(_meal?.Name ?? "Meal") - Meal Planner</PageTitle>
@@ -31,6 +37,9 @@
     }
     else
     {
+        MealCost cost = _costs.CostOf(_meal);
+        IReadOnlyList<MealIngredient> lines = _costs.LinesOf(_meal.Id);
+
         <div class="d-flex align-start gap-2">
             <div class="flex-grow-1">
                 <MudText Typo="Typo.h5" Component="h1" data-testid="meal-title">@_meal.Name</MudText>
@@ -40,9 +49,72 @@
                        data-testid="meal-edit">Edit</MudButton>
         </div>
 
+        <MudPaper Outlined="true" Class="pa-3 mt-3 d-flex flex-wrap gap-x-6 gap-y-1" data-testid="meal-cost">
+            @switch (_meal.Kind)
+            {
+                case MealKind.Leftovers:
+                    <MudText Typo="Typo.body2" data-testid="meal-cost-note">Eats a serve of a batch cooked earlier - that batch is what it costs.</MudText>
+                    break;
+                case MealKind.NoCost:
+                    <MudText Typo="Typo.body2" data-testid="meal-cost-note">Costs nothing.</MudText>
+                    break;
+                case MealKind.Simple when cost.PerServe is { } serve:
+                    <div><MudText Typo="Typo.caption" Class="mud-text-secondary">A serve</MudText>
+                        <MudText Typo="Typo.h6" data-testid="meal-cost-serve">@serve.Format()</MudText></div>
+                    break;
+                case not MealKind.Simple when cost.Batch is { } batch && cost.PerServe is { } serve:
+                    <div><MudText Typo="Typo.caption" Class="mud-text-secondary">@(_meal.Kind == MealKind.FixedCost ? "All up" : "A batch")</MudText>
+                        <MudText Typo="Typo.h6" data-testid="meal-cost-batch">@batch.Format()</MudText></div>
+                    <div><MudText Typo="Typo.caption" Class="mud-text-secondary">A serve, of @_meal.ServesPerBatch</MudText>
+                        <MudText Typo="Typo.h6" data-testid="meal-cost-serve">@serve.Format()</MudText></div>
+                    break;
+                default:
+                    <MudText Typo="Typo.body2" data-testid="meal-cost-note">No ingredients yet - add them below to see what it costs.</MudText>
+                    break;
+            }
+        </MudPaper>
+
         @if (_meal.Notes is { } notes)
         {
-            <MudText Class="mt-2 meal-notes" data-testid="meal-notes">@notes</MudText>
+            <MudText Class="mt-3 meal-notes" data-testid="meal-notes">@notes</MudText>
+        }
+
+        @if (_meal.Kind.HasIngredients())
+        {
+            <div class="d-flex align-center mt-4">
+                <MudText Typo="Typo.overline" Component="h2" Class="flex-grow-1">
+                    @(_meal.Kind == MealKind.Simple ? "Ingredients, for one serve" : "Ingredients, for a batch")
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="AddLine" data-testid="meal-ingredient-add">Add ingredient</MudButton>
+            </div>
+            <MudPaper Outlined="true" Class="mt-2">
+                @if (lines.Count == 0)
+                {
+                    <MudText Class="pa-4 mud-text-secondary" data-testid="meal-ingredients-empty">None yet.</MudText>
+                }
+                @for (int i = 0; i < lines.Count; i++)
+                {
+                    MealIngredient line = lines[i];
+                    LineCost lineCost = cost.Lines[i];
+                    Ingredient? ingredient = _costs.Ingredient(line.IngredientId);
+                    <div class="list-row meal-ingredient-row d-flex align-center gap-2 px-4 py-2" @key="line.Id" role="button" tabindex="0"
+                         @onclick="() => EditLine(line)" data-testid="meal-ingredient-row" data-id="@line.Id">
+                        <div class="flex-grow-1">
+                            <MudText data-testid="meal-ingredient-name">@(ingredient?.Name ?? "ingredient removed")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="meal-ingredient-detail">@LineDetail(line, ingredient)</MudText>
+                        </div>
+                        <MudText Typo="Typo.body2" Class="@(lineCost.State == LineState.Costed ? "text-nowrap" : "text-nowrap mud-warning-text")"
+                                 data-testid="meal-ingredient-cost">@LineCostText(lineCost)</MudText>
+                    </div>
+                }
+            </MudPaper>
+        }
+        else if (lines.Count > 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-4" data-testid="meal-ingredients-kept">
+                @lines.Count ingredient@(lines.Count == 1 ? " is" : "s are") kept from before, and not used while it is @_meal.Kind.Label().ToLowerInvariant().
+            </MudText>
         }
     }
 </LocalDataGate>
@@ -53,6 +125,7 @@
     private Meal?           _meal;
     private List<MealGroup> _groups     = [];
     private List<string>    _otherNames = [];
+    private MealCostBook    _costs      = null!;
 
     // The same page instance shows another meal when only the id in the address changes.
     protected override async Task OnParametersSetAsync()
@@ -66,6 +139,7 @@
         _meal       = await db.Meals.AsNoTracking().SingleOrDefaultAsync(m => m.Id == Id && !m.Deleted);
         _groups     = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
         _otherNames = await db.Meals.AsNoTracking().Where(m => !m.Deleted && m.Id != Id).Select(m => m.Name).ToListAsync();
+        _costs      = await MealCostBook.LoadAsync(db);
     }
 
     /// <summary>"Beef · makes 4 serves".</summary>
@@ -76,6 +150,45 @@
             MealText.Detail(_meal),
         });
 
+    /// <summary>"500 g · grated", "no quantity yet", "1.5 kg · $16.66/kg at Costco".</summary>
+    private string LineDetail(MealIngredient line, Ingredient? ingredient) =>
+        string.Join(" · ", new[]
+        {
+            line.Quantity is { } quantity && ingredient is not null ? Quantity.Format(quantity, ingredient.BaseUnit)
+                : line.Quantity is null ? "no quantity yet" : null,
+            line.Note,
+            ingredient is not null && _costs.PriceOf(ingredient.Id) is { } price ? price.UnitPrice.Format(ingredient.BaseUnit) : null,
+        }.Where(s => s is not null));
+
+    private static string LineCostText(LineCost line) => line.State switch
+    {
+        LineState.Costed     => Money.Format(line.Cents!.Value),
+        LineState.NoQuantity => "how much?",
+        _                    => "unpriced",
+    };
+
+    private List<IngredientOption> IngredientOptions() =>
+        [.. _costs.Ingredients.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).Select(i => new IngredientOption(i.Id, i.Name, i.BaseUnit))];
+
+    private async Task AddLine()
+    {
+        MealIngredientSheetResult? result = await MealDialogs.EditLineAsync(Dialogs, Viewport,
+            new MealIngredientDraft(Id, Guid.Empty, null, null), isNew: true, IngredientOptions());
+        if (result?.Saved is { } draft)
+            await WriteAsync(SyncedEntities.MealIngredient, Guid.CreateVersion7(), OpKind.Create, draft.FieldsChangedFrom(null));
+    }
+
+    private async Task EditLine(MealIngredient line)
+    {
+        MealIngredientDraft before = line.Draft();
+        MealIngredientSheetResult? result = await MealDialogs.EditLineAsync(Dialogs, Viewport, before, isNew: false, IngredientOptions());
+
+        if (result is { Remove: true })
+            await WriteAsync(SyncedEntities.MealIngredient, line.Id, OpKind.Delete, []);
+        else if (result?.Saved is { } draft && draft.FieldsChangedFrom(before) is { Count: > 0 } fields)
+            await WriteAsync(SyncedEntities.MealIngredient, line.Id, OpKind.Update, fields);
+    }
+
     private async Task Edit()
     {
         MealDraft before = _meal!.Draft();
@@ -84,7 +197,12 @@
 
         if (result is { Delete: true })
         {
+            // Its lines go too, one op each, so no table keeps rows of a meal nobody can see: nothing cascades on
+            // sync. A line added on another device meanwhile is left behind, shown nowhere and costing nothing.
+            IReadOnlyList<MealIngredient> lines = _costs.LinesOf(Id);
             await WriteAsync(SyncedEntities.Meal, Id, OpKind.Delete, []);
+            foreach (MealIngredient line in lines)
+                await WriteAsync(SyncedEntities.MealIngredient, line.Id, OpKind.Delete, []);
             Navigation.NavigateTo("meals");
         }
         else if (result?.Saved is { } draft && draft.FieldsChangedFrom(before) is { Count: > 0 } fields)

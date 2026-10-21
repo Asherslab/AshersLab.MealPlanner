@@ -15,7 +15,8 @@
 
 @*
     Every meal, under its group in the household's order. Type a name and tap Add (or Enter) to open the editor with
-    it filled in; saving opens the new meal's page, where its ingredients go. Tap a meal for its page.
+    it filled in; saving opens the new meal's page, where its ingredients go. Tap a meal for its page. Each meal shows
+    what a serve costs (MealCosting), or "from $X a serve + N unpriced" while an ingredient has no quantity or price.
 *@
 
 <PageTitle>Meals - Meal Planner</PageTitle>
@@ -52,7 +53,7 @@
                 <a class="meal-row d-block px-4 py-2" @key="meal.Id" href="@($"meals/{meal.Id}")"
                    data-testid="meal-row" data-id="@meal.Id">
                     <MudText data-testid="meal-name">@meal.Name</MudText>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="meal-detail">@MealText.Detail(meal)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="meal-detail">@MealText.Detail(meal, _costs.CostOf(meal))</MudText>
                 </a>
             }
         </MudPaper>
@@ -62,6 +63,7 @@
 @code {
     private List<Meal>      _meals  = [];
     private List<MealGroup> _groups = [];
+    private MealCostBook    _costs  = null!;
 
     private string? _newName;
 
@@ -69,6 +71,7 @@
     {
         _meals  = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToListAsync();
         _groups = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
+        _costs  = await MealCostBook.LoadAsync(db);
     }
 
     /// <summary>The meals matching the box, under their group in group order; "No group" (none, or one deleted) last.</summary>

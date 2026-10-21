@@ -45,7 +45,10 @@ public static class SyncedEntities
 
     public static readonly MealEntity Meal = new();
 
-    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal];
+    public static readonly MealIngredientEntity MealIngredient = new();
+
+    public static readonly IReadOnlyList<SyncedEntity> All =
+        [Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal, MealIngredient];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -136,6 +139,17 @@ public static class SyncedEntities
             meal.Property(m => m.Notes).HasMaxLength(MealRules.MaxNotesLength);
             // "Is this group still used?", the check before a delete. Not a foreign key.
             meal.HasIndex(m => m.GroupId);
+        });
+
+        modelBuilder.Entity<MealIngredient>(line =>
+        {
+            line.ToTable("MealIngredient");
+            line.HasKey(l => l.Id);
+            line.Property(l => l.Id).ValueGeneratedNever();
+            line.Property(l => l.Note).HasMaxLength(MealIngredientRules.MaxNoteLength);
+            // A meal's ingredients, and "is this ingredient still used?" Not foreign keys.
+            line.HasIndex(l => l.MealId);
+            line.HasIndex(l => l.IngredientId);
         });
     }
 }

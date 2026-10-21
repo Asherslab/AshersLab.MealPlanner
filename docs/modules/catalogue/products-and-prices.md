@@ -55,7 +55,8 @@ into a cost. The stores and ingredients they hang off are [the catalogue](catalo
 Many products per ingredient (one per store, sometimes two sizes at one store). Not foreign keys, as everywhere in
 the catalogue: a product whose store or ingredient is gone shows "store removed" or under "Not food".
 
-**Pack sizes are typed the way the pack says them** (`PackSize.Parse`, tested in `Tests/Domain/PackSizeTests.cs`):
+**Pack sizes are typed the way the pack says them** (`PackSize.Parse` over `Ingredients/Quantity.cs`, which a meal's
+quantities share; tested in `Tests/Domain/PackSizeTests.cs`):
 `500g`, `2kg`, `1.4KG`, `8x250g`, `375ml`, `2L`, `6x375ml`, `18pk`, `148CT`. Only the units of the ingredient's own
 kind are accepted - `1.5L` for an ingredient in grams is refused ("It is counted in g"), never converted. A comma is
 never a decimal point. The editor shows what it read ("= 2 kg") under the box before saving.
@@ -101,7 +102,8 @@ runs it offline; the server will run the same code.
    the planner there. Two at the usual store (two sizes): the cheaper per unit.
 3. Otherwise - no usual store, or none of its products priced - **the cheapest per unit at any store**, flagged
    `FromUsualStore = false`.
-4. Nothing priced: **null, "unpriced" - never zero.** Meal costs (slice 6) count it as missing.
+4. Nothing priced: **null, "unpriced" - never zero.** [A meal's cost](../meals/meals.md#what-a-meal-costs) counts
+   it as missing.
 
 Equal per-unit prices go to the newer observation, then the product id, so every device picks the same product.
 

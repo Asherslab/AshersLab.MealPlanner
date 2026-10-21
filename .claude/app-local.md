@@ -131,7 +131,14 @@ Categories. **Meals** (`/meals`, `nav-meals`): `meal-new-name` (input id too) an
 page: `meal-title`, `meal-summary` ("Beef · makes 4 serves"), `meal-notes`, `meal-edit`, `meal-back`, or `meal-gone`.
 The editor: `meal-edit-name`, `meal-edit-serves`, `meal-edit-fixed-cost`, `meal-edit-notes` (a textarea - use the
 `HTMLTextAreaElement` value setter) as input ids, `meal-group` (native select), `meal-kind-Cooked|Simple|Leftovers|NoCost|FixedCost`
-(click the `input` inside), `meal-save`, `meal-cancel`, `meal-delete`. `node .claude/tools/chrome-meals-check.mjs <scratch>/meals`
+(click the `input` inside), `meal-save`, `meal-cancel`, `meal-delete`. On the page, the cost box `meal-cost` holds
+`meal-cost-batch` and `meal-cost-serve` (or `meal-cost-note`); `meal-ingredient-add`; per line `meal-ingredient-row`
+(`data-id`; tapping it opens the sheet), `meal-ingredient-name`, `meal-ingredient-detail`, `meal-ingredient-cost`. The
+sheet (`meal-ingredient-sheet`): `meal-ingredient-search` (input id), choices `meal-ingredient-choice`, then
+`meal-ingredient-quantity` / `meal-ingredient-note` (input ids) in the form `meal-ingredient-form` (`requestSubmit()` is
+Enter), `meal-ingredient-save`, `meal-ingredient-cancel`, `meal-ingredient-remove`. **Wait for a saved row before
+navigating**: `go()` is a full reload, and a write still in flight when the dialog closes is lost with the page.
+`node .claude/tools/chrome-meals-check.mjs <scratch>/meals`
 (ports 19347/19348) drives all of it from two profiles.
 
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's

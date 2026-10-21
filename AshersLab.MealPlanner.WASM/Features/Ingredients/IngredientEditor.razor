@@ -100,6 +100,9 @@
     /// <summary>The products bought as this ingredient. Not empty: it cannot be deleted.</summary>
     [Parameter] public IReadOnlyList<string> UsedByProducts { get; set; } = [];
 
+    /// <summary>The meals made with this ingredient. Not empty: it cannot be deleted.</summary>
+    [Parameter] public IReadOnlyList<string> UsedByMeals { get; set; } = [];
+
     private string?   _name;
     private BaseUnit? _unit;
     private string    _categoryId = "";
@@ -148,16 +151,30 @@
         : before is { } held && options.All(o => o.Id != held) ? before
         : null;
 
+    /// <summary>"2 products: Costco mince, Woolworths mince", the first five named; null when there are none.</summary>
+    private static string? Listed(IReadOnlyList<string> names, string noun) =>
+        names.Count == 0
+            ? null
+            : $"{names.Count} {noun}{(names.Count == 1 ? "" : "s")}: {string.Join(", ", names.Take(5))}"
+              + (names.Count > 5 ? $" and {names.Count - 5} more" : "");
+
     private async Task Delete()
     {
-        // Refused while products are bought as it, as stores and categories are (docs/modules/catalogue/catalogue.md).
-        if (UsedByProducts.Count > 0)
+        // Refused while products are bought as it or meals are made with it, as stores and categories are
+        // (docs/modules/catalogue/catalogue.md).
+        if (UsedByProducts.Count > 0 || UsedByMeals.Count > 0)
         {
+            string[] uses = [.. new[]
+            {
+                Listed(UsedByProducts, "product"),
+                Listed(UsedByMeals, "meal"),
+            }.OfType<string>()];
+            string fix = UsedByProducts.Count > 0 && UsedByMeals.Count > 0 ? "Delete the products on the Prices page, and take it out of the meals, first."
+                : UsedByProducts.Count > 0 ? "Delete them on the Prices page first."
+                : "Take it out of those meals first.";
             await Dialogs.ShowMessageBoxAsync(
                 title: $"{Draft.Name} is in use",
-                message: $"{Draft.Name} is used by {UsedByProducts.Count} product{(UsedByProducts.Count == 1 ? "" : "s")}: "
-                         + string.Join(", ", UsedByProducts.Take(5)) + (UsedByProducts.Count > 5 ? $" and {UsedByProducts.Count - 5} more" : "")
-                         + ". Delete them on the Prices page first.",
+                message: $"{Draft.Name} is used by {string.Join(", and ", uses)}. {fix}",
                 yesText: "OK");
             return;
         }

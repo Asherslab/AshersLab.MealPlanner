@@ -39,7 +39,8 @@ Present tense, kept current, no dates.
   pack says them, price history, an ingredient's price per unit (usual store first, rounded once), and why aliases
   are not a field.
 
-- [Meals](modules/meals/meals.md) — meal groups (seeded, ordered like categories), meals and their five kinds.
+- [Meals](modules/meals/meals.md) — meal groups, meals and their five kinds, a meal's ingredients, and its batch and
+  per-serve cost (incomplete, never lower, when anything is unpriced).
 
 ## The other three directories
 

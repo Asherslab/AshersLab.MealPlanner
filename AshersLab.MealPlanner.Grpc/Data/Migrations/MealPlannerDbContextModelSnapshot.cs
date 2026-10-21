@@ -194,6 +194,36 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                     b.ToTable("MealGroup", (string)null);
                 });
 
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Meals.MealIngredient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("IngredientId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MealId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IngredientId");
+
+                    b.HasIndex("MealId");
+
+                    b.ToTable("MealIngredient", (string)null);
+                });
+
             modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Prices.PriceObservation", b =>
                 {
                     b.Property<Guid>("Id")

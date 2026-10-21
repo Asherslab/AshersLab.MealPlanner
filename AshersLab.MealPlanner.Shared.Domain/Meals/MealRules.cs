@@ -5,7 +5,7 @@ namespace AshersLab.MealPlanner.Shared.Domain.Meals;
 
 /// <summary>
 /// A meal - "spaghetti bolognese", "takeaway pizza" - as the op log sees it. Its ingredients are their own rows
-/// (<c>MealIngredient</c>, next to this), not a field: two phones each adding an ingredient offline must both keep theirs.
+/// (<see cref="MealIngredientRules"/>), not a field: two phones each adding an ingredient offline must both keep theirs.
 /// </summary>
 public static class MealRules
 {

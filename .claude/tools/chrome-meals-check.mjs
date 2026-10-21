@@ -6,12 +6,12 @@
 //
 // Needs the app running (AppHost: https) and sqlite3 on the PATH. Fresh profiles each run (ports 19347/19348); names
 // carry the run id. APP_URL / SERVER_DB as in chrome-sync-check.mjs.
-import { RUN, launch, check, finish, settled, server, dump, nameList, click, clickDialogButton, typeInto, phone, screenshot,
-  sleep, until } from './lib/profiles.mjs';
+import { RUN, launch, check, finish, settled, server, dump, nameList, ingredients, click, clickDialogButton, typeInto, phone,
+  screenshot, sleep, until } from './lib/profiles.mjs';
 
 const [scratch] = process.argv.slice(2);
 if (!scratch) { console.error('usage: chrome-meals-check.mjs <scratchDir>'); process.exit(2); }
-setTimeout(() => { console.error('FAIL gave up after 5 minutes'); process.exit(3); }, 300_000).unref();
+setTimeout(() => { console.error('FAIL gave up after 8 minutes'); process.exit(3); }, 480_000).unref();
 
 const a = await launch(scratch, 'mealA', 19347, 'meal-groups');
 const b = await launch(scratch, 'mealB', 19348, 'meal-groups');
@@ -118,7 +118,8 @@ function meals(p) {
   const id = a.evaluate(`location.pathname.split('/').pop()`);
 
   check(await mb.has(meal), 'B lists the meal');
-  check(await mb.group(meal) === 'Beef' && await mb.detail(meal) === 'makes 4 serves', `B lists it under Beef, "makes 4 serves" (${await mb.group(meal)}, ${await mb.detail(meal)})`);
+  check(await mb.group(meal) === 'Beef' && await mb.detail(meal) === 'makes 4 serves · no ingredients yet',
+    `B lists it under Beef, "makes 4 serves · no ingredients yet" (${await mb.group(meal)}, ${await mb.detail(meal)})`);
 
   // B makes it a takeaway: a fixed cost needs its amount.
   check(await mb.open(meal), 'B taps it and sees its page');
@@ -153,7 +154,7 @@ function meals(p) {
   await mb.edit(); await sleep(400);
   console.log(`  phone screenshot: ${await screenshot(b, 'meal-editor')}`);
   await click(b, '[data-testid=meal-cancel]'); await mb.editorClosed();
-  await b.go('meals'); await sleep(800);
+  await b.go('meals'); await mb.has(meal, 30_000); await sleep(300);
   console.log(`  phone screenshot: ${await screenshot(b, 'meals')}`);
   await phone(b, false);
 
@@ -169,6 +170,148 @@ function meals(p) {
   check(await until(a, `!!document.querySelector('[data-testid=meal-gone]')`), 'A, on its page, is told the meal is not here');
   await settled(a);
   check(server(`select Deleted from Meal where Id = '${up(mealId)}'`) === '1', 'the server keeps the tombstone');
+}
+
+// --- A meal's ingredients and its cost ----------------------------------------------------------------------------
+{
+  const mince = `mince ${RUN}`, onion = `onion ${RUN}`, meal = `Cottage pie ${RUN}`;
+  await a.go('ingredients');
+  check(await ingredients(a).add(mince, { unit: 'Gram', store: 'Costco' }) && await ingredients(a).add(onion, { unit: 'Each', store: 'Woolworths' }),
+    'A adds mince (grams, Costco) and onion (each, Woolworths)');
+
+  /** Adds a product with its first price under an ingredient on the Prices page. */
+  async function priced(p, ingredient, pack, price) {
+    await p.go('prices');
+    const block = `[...document.querySelectorAll('[data-testid=price-ingredient]')]
+      .find(r => r.querySelector('[data-testid=price-ingredient-name]')?.textContent.trim() === ${JSON.stringify(ingredient)})`;
+    if (!await until(p, `!!${block}`, 30_000)) return false;
+    await p.evaluate(`${block}.querySelector('[data-testid=price-ingredient-add]').click()`);
+    if (!await until(p, `!!document.getElementById('product-edit-pack')`, 10_000)) return false;
+    await p.evaluate(typeInto('product-edit-pack', pack));
+    await p.evaluate(typeInto('product-edit-price', price)); await sleep(150);
+    await click(p, '[data-testid=product-save]');
+    // Until the row shows its price: the write lands after the dialog closes, and navigating away first loses it.
+    return until(p, `${block}?.querySelector('[data-testid=price-product-price]')?.textContent.trim() === ${JSON.stringify('$' + price)}`, 10_000);
+  }
+  check(await priced(a, mince, '8x250g', '24.99'), 'A prices the mince: $24.99 for 8x250g at Costco');
+
+  await a.go('meals');
+  const ma = meals(a), mb = meals(b);
+  await ma.startAdd(meal);
+  await ma.fill({ group: 'Beef', serves: '4' });
+  await ma.save();
+  check(await until(a, `document.querySelector('[data-testid=meal-cost-note]')?.textContent.includes('No ingredients yet')`),
+    'a new batch meal says "No ingredients yet", not $0');
+
+  const lineRow = (p, name) => `[...document.querySelectorAll('[data-testid=meal-ingredient-row]')]
+    .find(r => r.querySelector('[data-testid=meal-ingredient-name]')?.textContent.trim() === ${JSON.stringify(name)})`;
+  const lineText = (p, name, testid) => p.evaluate(`${lineRow(p, name)}?.querySelector('[data-testid=${testid}]')?.textContent.trim()`);
+  const lineIs = (p, name, testid, text) => until(p, `${lineRow(p, name)}?.querySelector('[data-testid=${testid}]')?.textContent.trim() === ${JSON.stringify(text)}`);
+  const sheetOpen = p => until(p, `!!document.querySelector('[data-testid=meal-ingredient-sheet]')`, 10_000);
+  const sheetClosed = p => until(p, `!document.querySelector('[data-testid=meal-ingredient-sheet]')`, 10_000);
+  const costIs = (p, testid, text, ms) => until(p, `document.querySelector('[data-testid=${testid}]')?.textContent.trim() === ${JSON.stringify(text)}`, ms);
+  const submitSheet = p => p.evaluate(`document.getElementById('meal-ingredient-form').requestSubmit()`);
+
+  /** Taps "Add ingredient", types the search, taps the match, types the quantity and presses Enter. */
+  async function addLine(p, ingredient, quantity, note) {
+    await click(p, '[data-testid=meal-ingredient-add]');
+    if (!await sheetOpen(p)) return 'no sheet';
+    const searchFocused = await until(p, `document.activeElement?.id === 'meal-ingredient-search'`, 3000);
+    await p.evaluate(typeInto('meal-ingredient-search', ingredient.split(' ')[0] + ' ' + RUN)); await sleep(200);
+    const choice = `[...document.querySelectorAll('[data-testid=meal-ingredient-choice]')].find(e => e.textContent.trim() === ${JSON.stringify(ingredient)})`;
+    if (!await until(p, `!!${choice}`, 5000)) return 'no match';
+    await p.evaluate(`${choice}.click()`);
+    const quantityFocused = await until(p, `document.activeElement?.id === 'meal-ingredient-quantity'`, 3000);
+    if (quantity) await p.evaluate(typeInto('meal-ingredient-quantity', quantity));
+    if (note) await p.evaluate(typeInto('meal-ingredient-note', note));
+    await sleep(150);
+    await submitSheet(p);
+    return { searchFocused, quantityFocused, closed: await sheetClosed(p) };
+  }
+
+  const r1 = await addLine(a, mince, '500g', 'browned');
+  check(r1.searchFocused && r1.quantityFocused && r1.closed,
+    `A adds 500g of mince: the search box has focus, tapping the match focuses the quantity, Enter saves (${JSON.stringify(r1)})`);
+  check(await lineIs(a, mince, 'meal-ingredient-cost', '$6.25'), `its line costs $6.25 (${await lineText(a, mince, 'meal-ingredient-cost')})`);
+  check(await lineIs(a, mince, 'meal-ingredient-detail', '500 g · browned · $12.50/kg'), `its detail reads "500 g · browned · $12.50/kg" (${await lineText(a, mince, 'meal-ingredient-detail')})`);
+  check(await costIs(a, 'meal-cost-batch', '$6.25') && await costIs(a, 'meal-cost-serve', '$1.56'), 'the batch is $6.25 and a serve $1.56 (625 / 4)');
+
+  const r2 = await addLine(a, onion, '', '');
+  check(r2.closed, 'A adds an onion with no quantity');
+  check(await lineIs(a, onion, 'meal-ingredient-cost', 'how much?') && await lineIs(a, onion, 'meal-ingredient-detail', 'no quantity yet'),
+    'its line says "how much?" and "no quantity yet"');
+  check(await costIs(a, 'meal-cost-batch', 'from $6.25 + 1 unpriced') && await costIs(a, 'meal-cost-serve', 'from $1.56 + 1 unpriced'),
+    'the batch is "from $6.25 + 1 unpriced", a serve "from $1.56 + 1 unpriced" - never $6.25 alone');
+
+  await b.go('meals');
+  check(await until(b, `[...document.querySelectorAll('[data-testid=meal-row]')].some(r => r.querySelector('[data-testid=meal-name]')?.textContent.trim() === ${JSON.stringify(meal)}
+    && r.querySelector('[data-testid=meal-detail]')?.textContent.trim() === 'makes 4 serves · from $1.56 a serve + 1 unpriced')`),
+    'B lists it as "makes 4 serves · from $1.56 a serve + 1 unpriced"');
+
+  // B: the wrong kind of unit is refused; 2 onions saved; still unpriced.
+  await mb.open(meal);
+  await until(b, `!!${lineRow(b, onion)}`, 30_000);
+  await b.evaluate(`${lineRow(b, onion)}.click()`); await sheetOpen(b);
+  await b.evaluate(typeInto('meal-ingredient-quantity', '500ml')); await sleep(150);
+  await submitSheet(b); await sleep(400);
+  check(await b.evaluate(`!!document.querySelector('[data-testid=meal-ingredient-sheet]') && document.body.textContent.includes('It is counted in each')`),
+    'B: "500ml" of onion is refused - it is counted in each');
+  await b.evaluate(typeInto('meal-ingredient-quantity', '2')); await sleep(150);
+  await submitSheet(b); await sheetClosed(b);
+  check(await until(a, `${lineRow(a, onion)}?.querySelector('[data-testid=meal-ingredient-cost]')?.textContent.trim() === 'unpriced'`),
+    'B sets 2 onions; A shows the line as "unpriced" (the onion has no price)');
+
+  check(await priced(b, onion, '6', '4.50'), 'B prices onions: $4.50 for 6 at Woolworths');
+  check(await costIs(a, 'meal-cost-batch', '$7.75', 20_000) && await costIs(a, 'meal-cost-serve', '$1.94'),
+    `A's open page completes: batch $7.75 (625 + 150), a serve $1.94 (775 / 4 = 193.75) (${await a.evaluate(`document.querySelector('[data-testid=meal-cost]')?.textContent.replace(/\\s+/g, ' ')`)})`);
+
+  // The onion is now in a meal and sold as a product: deleting it is refused, naming both.
+  await b.go('ingredients');
+  await ingredients(b).has(onion, 30_000);
+  await ingredients(b).open(onion);
+  await click(b, '[data-testid=ingredient-delete]');
+  check(await until(b, `document.body.textContent.includes('is used by 1 product: ${onion}, and 1 meal: ${meal}')`, 5000),
+    'B cannot delete the onion: it names the product and the meal');
+  await clickDialogButton(b, 'OK'); await ingredients(b).cancel();
+
+  await settled(a); await settled(b);
+  const mealId = await a.evaluate(`location.pathname.split('/').pop()`);
+  const select = `select group_concat(cast(Quantity as real) || '|' || coalesce(Note, '') || '|' || Deleted, ';') from (select * from MealIngredient where MealId = '${up(mealId)}' order by Id)`;
+  check(server(select) === '500.0|browned|0;2.0||0', `the server holds both lines: 500 g browned, 2 onions (${server(select)})`);
+  for (const p of [a, b]) {
+    const q = await dump(p);
+    check(q(select) === '500.0|browned|0;2.0||0' && q('select count(*) from Outbox') === '0', `${p.name} SQLite holds the same two lines, outbox empty`);
+  }
+
+  await b.go(`meals/${mealId}`);
+  await phone(b); await costIs(b, 'meal-cost-batch', '$7.75', 30_000); await sleep(500);
+  console.log(`  phone screenshot: ${await screenshot(b, 'meal-with-ingredients')}`);
+  await click(b, '[data-testid=meal-ingredient-add]'); await sheetOpen(b);
+  await b.evaluate(typeInto('meal-ingredient-search', RUN)); await sleep(500);
+  console.log(`  phone screenshot: ${await screenshot(b, 'ingredient-sheet-search')}`);
+  await b.evaluate(`document.querySelector('[data-testid=meal-ingredient-choice]').click()`); await sleep(500);
+  console.log(`  phone screenshot: ${await screenshot(b, 'ingredient-sheet-quantity')}`);
+  await click(b, '[data-testid=meal-ingredient-cancel]'); await sheetClosed(b);
+  await b.go('meals'); await mb.has(meal, 30_000); await sleep(300);
+  console.log(`  phone screenshot: ${await screenshot(b, 'meals-with-costs')}`);
+  await phone(b, false);
+
+  // B removes the onion line; A's page drops it and the cost goes back to the mince alone.
+  await mb.open(meal);
+  await until(b, `!!${lineRow(b, onion)}`, 30_000);
+  await b.evaluate(`${lineRow(b, onion)}.click()`); await sheetOpen(b);
+  await click(b, '[data-testid=meal-ingredient-remove]'); await sheetClosed(b);
+  check(await until(a, `!${lineRow(a, onion)}`) && await costIs(a, 'meal-cost-batch', '$6.25'), 'B removes the onion line; A drops it and the batch is $6.25 again');
+
+  // Deleting the meal deletes its lines too.
+  await mb.edit();
+  await click(b, '[data-testid=meal-delete]');
+  await until(b, `document.querySelectorAll('.mud-dialog').length > 1`, 5000);
+  await clickDialogButton(b, 'Delete');
+  await until(b, `location.pathname.endsWith('/meals')`);
+  await settled(b); await settled(a);
+  check(server(`select group_concat(Deleted, '') from MealIngredient where MealId = '${up(mealId)}'`) === '11'
+    && server(`select Deleted from Meal where Id = '${up(mealId)}'`) === '1', 'B deletes the meal: the server holds it and both lines as tombstones');
 }
 
 finish();

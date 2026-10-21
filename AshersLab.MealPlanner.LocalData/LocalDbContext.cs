@@ -41,6 +41,8 @@ public class LocalDbContext(
 
     public DbSet<Meal> Meals => Set<Meal>();
 
+    public DbSet<MealIngredient> MealIngredients => Set<MealIngredient>();
+
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 
     /// <summary>This browser's edits the server has not confirmed. See <see cref="OutboxOp"/>.</summary>

@@ -73,6 +73,7 @@
     private List<Category>            _categories  = [];
     private Dictionary<Guid, string>  _stores      = [];
     private ILookup<Guid?, string>    _products    = Array.Empty<string>().ToLookup(_ => (Guid?)null);
+    private ILookup<Guid?, string>    _meals       = Array.Empty<string>().ToLookup(_ => (Guid?)null);
 
     private string? _newName;
 
@@ -86,6 +87,14 @@
         _products    = (await db.Products.AsNoTracking().Where(p => !p.Deleted && p.IngredientId != null).ToListAsync())
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToLookup(p => p.IngredientId, p => p.Name);
+
+        Dictionary<Guid, string> meals = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, m => m.Name);
+        _meals = (await db.MealIngredients.AsNoTracking().Where(l => !l.Deleted).Select(l => new { l.IngredientId, l.MealId }).ToListAsync())
+            .Where(l => meals.ContainsKey(l.MealId))
+            .Select(l => (Ingredient: (Guid?)l.IngredientId, Meal: meals[l.MealId]))
+            .Distinct()
+            .OrderBy(l => l.Meal, StringComparer.CurrentCultureIgnoreCase)
+            .ToLookup(l => l.Ingredient, l => l.Meal);
     }
 
     /// <summary>
@@ -153,6 +162,7 @@
             { e => e.Stores, [.. _stores.Select(s => new PickerOption(s.Key, s.Value))] },
             { e => e.OtherNames, [.. _ingredients.Where(i => i.Id != editing).Select(i => i.Name)] },
             { e => e.UsedByProducts, [.. _products[editing]] },
+            { e => e.UsedByMeals, [.. _meals[editing]] },
         };
         DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
 
