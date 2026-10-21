@@ -40,8 +40,8 @@ public static class CatalogueSeed
 
     public static readonly Hlc Clock = new(0, 0, Device);
 
-    public static readonly Guid Woolworths = new("00000000-5eed-7000-8000-000000000101");
-    public static readonly Guid Costco     = new("00000000-5eed-7000-8000-000000000102");
+    public static readonly Guid Woolworths = StoreRules.Woolworths;
+    public static readonly Guid Costco     = StoreRules.Costco;
 
     /// <summary>The shopping categories of the planner's spreadsheet, in its order.</summary>
     public static readonly IReadOnlyList<string> Categories =

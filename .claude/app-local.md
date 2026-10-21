@@ -236,7 +236,7 @@ the same days adds to them.
 
 **Receipts** (`/receipts`, `nav-receipts`): the file box `receipt-file` (an `<input type=file>` - set it with
 `DOM.setFileInputFiles`), then `receipt-summary` (`data-order`, `data-date`) or `receipt-error`; `receipt-totals`,
-`receipt-totals-ok` or `receipt-totals-problem`, `receipt-earlier` (already imported), `receipt-store` (native select),
+`receipt-totals-ok` or `receipt-totals-problem`, `receipt-earlier` (already imported),
 `receipt-show-file` and `receipt-file-view` (its pages as canvases); per line `receipt-line` (`data-position`,
 `data-match` = `None|Alias|StoreCode`, `data-choice`, `data-kind`) with `receipt-line-desc`, `receipt-line-amount`,
 `receipt-line-matched`, `receipt-line-suggest`, `receipt-line-choice` (native select: `""`, `p:<product>`,

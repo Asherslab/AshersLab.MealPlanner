@@ -92,18 +92,18 @@ public class WoolworthsInvoiceTests
     {
         ParsedReceipt receipt = WoolworthsInvoice.Parse(new SyntheticInvoice()
             .Heading("Meat")
-            .Weighed(17, "Woolworths chicken breast fillet skinless small", "459g - 749g", "$14.50/Kg", "1 @ 662g", "$9.60")
+            .Weighed(17, "Woolworths chicken breast fillet skinless small", "500g - 800g", "$13.00/Kg", "1 @ 700g", "$9.10")
             .Line(18, "Leg ham pdm 4 pack", 1, 1, "$6.70", "$6.70")
-            .Totals("$16.30", "$0.00", "$0.00", "$16.30", refund: "$1.26").Pages());
+            .Totals("$15.80", "$0.00", "$0.00", "$15.80", refund: "$1.30").Pages());
 
         ParsedLine chicken = receipt.Lines[0];
-        Assert.Equal("Woolworths chicken breast fillet skinless small 459g - 749g", chicken.Description);
-        Assert.Equal((1m, 662m, 1450L, 960L, (long?)null), (chicken.Supplied, chicken.WeightGrams!.Value, chicken.PerKgCents!.Value, chicken.AmountCents, chicken.UnitPriceCents));
+        Assert.Equal("Woolworths chicken breast fillet skinless small 500g - 800g", chicken.Description);
+        Assert.Equal((1m, 700m, 1300L, 910L, (long?)null), (chicken.Supplied, chicken.WeightGrams!.Value, chicken.PerKgCents!.Value, chicken.AmountCents, chicken.UnitPriceCents));
         // What this pack was seen at: what it cost, not the per-kilo price.
-        Assert.Equal(960, chicken.PackPriceCents);
+        Assert.Equal(910, chicken.PackPriceCents);
         Assert.Equal(("Leg ham pdm 4 pack", 670L), (receipt.Lines[1].Description, receipt.Lines[1].AmountCents));
         Assert.Equal(2, receipt.Lines.Count);
-        Assert.Equal(126, receipt.RefundCents);
+        Assert.Equal(130, receipt.RefundCents);
         Assert.Null(receipt.TotalsProblem());
     }
 
@@ -190,7 +190,7 @@ public class WoolworthsInvoiceTests
     [InlineData("$0.05", 5L)]
     [InlineData("$1,234.56", 123456L)]
     [InlineData("-$2.00", -200L)]
-    [InlineData("$14.50/Kg", null)]
+    [InlineData("$13.00/Kg", null)]
     [InlineData("$1.5", null)]
     [InlineData("1.00", null)]
     [InlineData("$1,23.00", null)]

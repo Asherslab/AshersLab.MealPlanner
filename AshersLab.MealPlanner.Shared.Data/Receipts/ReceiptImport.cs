@@ -28,6 +28,44 @@ public sealed record NewProduct(string Name, Guid? IngredientId, decimal PackQua
 /// <param name="Covers">The shopping-list tick this purchase replaces (<see cref="ReceiptStock"/>), or null.</param>
 public sealed record LineDecision(Guid? ProductId, NewProduct? New, bool Ignore, Guid? Covers);
 
+/// <summary>
+/// The review's choice for a line as the page holds it - "" not matched, "p:{product}", "n:{ingredient}" a new product of it,
+/// "h" a new product that is not food, "x" left out - and what it decides.
+/// </summary>
+public static class ReviewChoice
+{
+    public static (Guid? Product, Guid? Ingredient) Target(string choice) =>
+        choice.StartsWith("p:") && Guid.TryParse(choice[2..], out Guid p) ? (p, null)
+        : choice.StartsWith("n:") && Guid.TryParse(choice[2..], out Guid i) ? (null, i)
+        : (null, null);
+
+    public static bool MakesProduct(string choice) => choice.StartsWith("n:") || choice == "h";
+
+    /// <summary>
+    /// The decision, or null while a new product lacks a valid name or pack. <paramref name="tick"/> is the shopping-list tick
+    /// the purchase would replace; <b>it is replaced only while <paramref name="cover"/> is on</b> - the planner turns it off
+    /// for two shops of the same thing.
+    /// </summary>
+    public static LineDecision? Decide(string choice, string? newName, string? newPack, BaseUnit unit, Guid? tick, bool cover)
+    {
+        (Guid? product, Guid? ingredient) = Target(choice);
+        Guid? covers = cover ? tick : null;
+        if (choice == "x")
+            return new LineDecision(null, null, true, null);
+        if (product is { } p)
+            return new LineDecision(p, null, false, covers);
+        if (MakesProduct(choice))
+        {
+            string name = Names.Normalise(newName);
+            decimal? pack = PackSize.Parse(newPack, unit, out _);
+            return Names.Problem(name, "A product") is null && pack is { } size
+                ? new LineDecision(null, new NewProduct(name, ingredient, size), false, covers)
+                : null;
+        }
+        return new LineDecision(null, null, false, null);
+    }
+}
+
 /// <summary>A receipt line in the review: what it is, what it matched, what it might be, and what the planner decided.</summary>
 public sealed record ReviewLine(ParsedLine Line, LineMatch Match, LineDecision Decision);
 
@@ -56,7 +94,7 @@ public sealed class ReceiptImport
 
     public Guid ReceiptId => ReceiptRules.ReceiptId(StoreId, Parsed.OrderNumber);
 
-    /// <summary><b>The same order imported before</b>: a second import is refused, naming this one.</summary>
+    /// <summary><b>The same order imported before</b>, under any store: a second import is refused, naming this one.</summary>
     public Receipt? Earlier { get; }
 
     /// <summary>The store's live products.</summary>
@@ -72,8 +110,12 @@ public sealed class ReceiptImport
 
     public static async Task<ReceiptImport> LoadAsync(DbContext db, Guid storeId, ParsedReceipt parsed, CancellationToken cancellationToken = default)
     {
+        // The same order under any store: a receipt's id is derived from its store too, and an order imported under the
+        // wrong one must not let the same purchase in twice.
         Guid id = ReceiptRules.ReceiptId(storeId, parsed.OrderNumber);
-        Receipt? earlier = await db.Set<Receipt>().AsNoTracking().FirstOrDefaultAsync(r => r.Id == id && !r.Deleted, cancellationToken);
+        string order = Names.Normalise(parsed.OrderNumber);
+        Receipt? earlier = await db.Set<Receipt>().AsNoTracking().Where(r => !r.Deleted && (r.Id == id || r.OrderNumber == order))
+            .OrderBy(r => r.ImportedOn).FirstOrDefaultAsync(cancellationToken);
         Dictionary<Guid, Product> products = await db.Set<Product>().AsNoTracking().Where(p => !p.Deleted && p.StoreId == storeId)
             .ToDictionaryAsync(p => p.Id, cancellationToken);
         Dictionary<string, ProductAlias> aliases = (await db.Set<ProductAlias>().AsNoTracking().Where(a => !a.Deleted && a.StoreId == storeId)

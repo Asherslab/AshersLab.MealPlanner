@@ -10,14 +10,14 @@ namespace AshersLab.MealPlanner.Shared.Domain.Receipts;
 /// <remarks>
 /// The layout, as seven real invoices print it:
 /// <list type="bullet">
-/// <item>A header on every page: <c>Invoice/Order Number: 312345678</c> (the dedupe key) and <c>Date: 24 Jun 2026</c>.</item>
+/// <item>A header on every page: <c>Invoice/Order Number: 300000001</c> (the dedupe key) and <c>Date: 3 Mar 2026</c>.</item>
 /// <item>A table under the column headings <c>Line | Description | Ordered | Supplied | Price | Amount</c>, its lines grouped
 ///   under category headings that are rows of their own. Columns are found from the headings' positions, never fixed.</item>
 /// <item><b>A long description wraps above and below its numbers</b>: the row with the numbers can have no description of
 ///   its own, its text a few points above and below. Text rows that close to a row of numbers are its description; text
 ///   rows further away are category headings.</item>
 /// <item>Variable-weight meat: the numbered row has the price per kilo and no amount; the next row, "~ name", has
-///   "1 @ 662g" and the real amount.</item>
+///   "1 @ 700g" and the real amount.</item>
 /// <item>A "Substitutions" table: the original line with nothing supplied and $0.00, then "(Sub) replacement" charged at
 ///   the original's price - its shelf price is the Price column, what it cost is the Amount.</item>
 /// <item>Totals after the tables: Sub Total, the fees (Paper bags, Collection fee, Service fees), Invoice Total, Paid

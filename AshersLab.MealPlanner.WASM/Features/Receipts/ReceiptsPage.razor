@@ -11,6 +11,7 @@
 @using AshersLab.MealPlanner.Shared.Domain.Prices
 @using AshersLab.MealPlanner.Shared.Domain.Products
 @using AshersLab.MealPlanner.Shared.Domain.Receipts
+@using AshersLab.MealPlanner.Shared.Domain.Stores
 @using AshersLab.MealPlanner.WASM.Data
 @using AshersLab.MealPlanner.WASM.Features.Shopping
 @using Microsoft.EntityFrameworkCore
@@ -87,15 +88,6 @@
                 </MudAlert>
             }
             <div class="d-flex flex-wrap gap-2 mt-3">
-                <label class="native-select">
-                    <span>Store</span>
-                    <select value="@import.StoreId" @onchange="StoreChanged" data-testid="receipt-store">
-                        @foreach (Store store in _stores)
-                        {
-                            <option value="@store.Id">@store.Name</option>
-                        }
-                    </select>
-                </label>
                 <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" OnClick="ShowFile" data-testid="receipt-show-file">
                     @(_showingFile ? "Hide the invoice" : "Show the invoice")
                 </MudButton>
@@ -275,9 +267,10 @@
             if (!WoolworthsInvoice.Recognises(pages))
                 throw new ReceiptFormatException("This is not a Woolworths invoice. Costco receipts come later.");
             ParsedReceipt parsed = WoolworthsInvoice.Parse(pages);
-            Guid store = _stores.FirstOrDefault(s => Names.Same(s.Name, "Woolworths"))?.Id ?? _stores.FirstOrDefault()?.Id
-                         ?? throw new ReceiptFormatException("Add a store first.");
-            await OpenAsync(store, parsed);
+            // The reader names the store, by its seeded id: never a name, never a choice - a receipt's id is derived from it.
+            if (_stores.All(s => s.Id != StoreRules.Woolworths))
+                throw new ReceiptFormatException("The Woolworths store was deleted, so its invoices cannot be imported.");
+            await OpenAsync(StoreRules.Woolworths, parsed);
         }
         catch (Exception ex) when (ex is ReceiptFormatException or IOException or JSException)
         {
@@ -297,12 +290,6 @@
         _lines = [.. _review.Review().Select(r => new LineState(r))];
         await Reload();
         Covers();
-    }
-
-    private async Task StoreChanged(ChangeEventArgs e)
-    {
-        if (_review is not null && Guid.TryParse(e.Value?.ToString(), out Guid store))
-            await OpenAsync(store, _review.Parsed);
     }
 
     private void Choose(LineState state, string? choice)
@@ -334,10 +321,7 @@
         }
     }
 
-    private static (Guid? Product, Guid? Ingredient) Target(LineState state) =>
-        state.Choice.StartsWith("p:") && Guid.TryParse(state.Choice[2..], out Guid p) ? (p, null)
-        : state.Choice.StartsWith("n:") && Guid.TryParse(state.Choice[2..], out Guid i) ? (null, i)
-        : (null, null);
+    private static (Guid? Product, Guid? Ingredient) Target(LineState state) => ReviewChoice.Target(state.Choice);
 
     private BaseUnit UnitOf(LineState state)
     {
@@ -351,24 +335,8 @@
         return pack is { } p ? $"= {PackSize.Format(p, UnitOf(state))}" : problem;
     }
 
-    private LineDecision? DecisionOf(LineState state)
-    {
-        (Guid? product, Guid? ingredient) = Target(state);
-        Guid? covers = state.Cover ? state.Tick?.ItemId : null;
-        if (state.Choice == "x")
-            return new LineDecision(null, null, true, null);
-        if (product is { } p)
-            return new LineDecision(p, null, false, covers);
-        if (state.Choice.StartsWith("n:") || state.Choice == "h")
-        {
-            string name = Names.Normalise(state.NewName);
-            decimal? pack = PackSize.Parse(state.NewPack, UnitOf(state), out _);
-            return Names.Problem(name, "A product") is null && pack is { } size
-                ? new LineDecision(null, new NewProduct(name, ingredient, size), false, covers)
-                : null;
-        }
-        return new LineDecision(null, null, false, null);
-    }
+    private LineDecision? DecisionOf(LineState state) =>
+        ReviewChoice.Decide(state.Choice, state.NewName, state.NewPack, UnitOf(state), state.Tick?.ItemId, state.Cover);
 
     private ReceiptLineKind KindOf(LineState state) =>
         DecisionOf(state) is { } d && _review is not null ? _review.KindOf(state.Review.Line, d) : ReceiptLineKind.Food;

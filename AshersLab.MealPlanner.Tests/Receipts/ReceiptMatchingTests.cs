@@ -95,7 +95,7 @@ public class ReceiptMatchingTests
     [InlineData("Vitasoy unsweetened oat long life milk uht 1l", BaseUnit.Millilitre, "1000")]
     [InlineData("Abe's bagels the natural pdm 4 pack", BaseUnit.Each, "4")]
     [InlineData("tomato roma red each", BaseUnit.Each, "1")]
-    [InlineData("Chicken breast fillet skinless small 459g - 749g", BaseUnit.Gram, "749")]
+    [InlineData("Chicken breast fillet skinless small 500g - 800g", BaseUnit.Gram, "800")]
     [InlineData("Beef mince 8x250g", BaseUnit.Gram, "2000")]
     [InlineData("Beef mince 1.4KG", BaseUnit.Gram, "1400")]
     [InlineData("Vitasoy oat milk 1l", BaseUnit.Gram, null)]
@@ -136,13 +136,13 @@ public class ReceiptStockTests
     }
 
     private static ParsedLine Line(decimal supplied, decimal? grams = null) =>
-        new(0, "x", null, null, supplied, grams is null ? 100 : null, 100, grams, grams is null ? null : 1450, 0, false, false);
+        new(0, "x", null, null, supplied, grams is null ? 100 : null, 100, grams, grams is null ? null : 1300, 0, false, false);
 
     [Fact]
     public void Packs_supplied_times_the_pack_or_weighed_meat_by_its_weight_and_nothing_for_nothing_supplied()
     {
         Assert.Equal(3000m, ReceiptStock.Quantity(Line(3), 1000, BaseUnit.Millilitre));
-        Assert.Equal(662m, ReceiptStock.Quantity(Line(1, 662), 749, BaseUnit.Gram));
+        Assert.Equal(700m, ReceiptStock.Quantity(Line(1, 700), 800, BaseUnit.Gram));
         // Weighed, but counted each: the packs.
         Assert.Equal(2m, ReceiptStock.Quantity(Line(2, 900), 1, BaseUnit.Each));
         Assert.Null(ReceiptStock.Quantity(Line(0), 1000, BaseUnit.Gram));

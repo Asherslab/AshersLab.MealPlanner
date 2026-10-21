@@ -16,7 +16,7 @@ public sealed class SyntheticInvoice
     private readonly List<List<PdfItem>> _pages = [[]];
     private double _y;
 
-    public SyntheticInvoice(string orderNumber = "300000001", string date = "24 Jun 2026")
+    public SyntheticInvoice(string orderNumber = "300000001", string date = "3 Mar 2026")
     {
         OrderNumber = orderNumber;
         Date = date;
@@ -85,7 +85,7 @@ public sealed class SyntheticInvoice
         _y = 71.2;
         Bold(375, $"Date: {Date}");
         _y = 80.2;
-        Bold(375, "Pickup: 1300 - 1400");
+        Bold(375, "Pickup: 0900 - 1000");
     }
 
     private void TableHeader()

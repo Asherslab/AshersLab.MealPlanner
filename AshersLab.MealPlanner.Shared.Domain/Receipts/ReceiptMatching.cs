@@ -111,7 +111,7 @@ public static partial class ReceiptMatching
 
     /// <summary>
     /// The pack size a description prints, read in the ingredient's unit: "...bread 700g" is 700 g, "...4 pack" 4 each,
-    /// "...tomato each" 1, "...milk uht 1l" 1000 ml. The last size printed wins ("459g - 749g" is the heaviest tray). Null
+    /// "...tomato each" 1, "...milk uht 1l" 1000 ml. The last size printed wins ("500g - 800g" is the heaviest tray). Null
     /// when it prints none, or one in another kind of unit - never converted, as everywhere.
     /// </summary>
     public static decimal? PackGuess(string description, BaseUnit unit)

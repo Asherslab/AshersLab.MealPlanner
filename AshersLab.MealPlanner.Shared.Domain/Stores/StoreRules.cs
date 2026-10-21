@@ -15,6 +15,15 @@ public static class StoreRules
 
     public const string Noun = "A store";
 
+    /// <summary>
+    /// The seeded Woolworths: the same id in every database (the server's <c>CatalogueSeed</c>). A receipt reader names
+    /// its store by this id, never by a name the planner can change - a receipt's id is derived from its store.
+    /// </summary>
+    public static readonly Guid Woolworths = new("00000000-5eed-7000-8000-000000000101");
+
+    /// <summary>The seeded Costco, as <see cref="Woolworths"/>.</summary>
+    public static readonly Guid Costco = new("00000000-5eed-7000-8000-000000000102");
+
     public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal) { NameField };
 
     private static readonly string[] RequiredOnCreate = [NameField];

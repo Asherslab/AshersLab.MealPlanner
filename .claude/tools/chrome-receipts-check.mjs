@@ -90,9 +90,9 @@ check(!!tick && server(`select cast(Quantity as real) from StockMovement where S
 
 // --- B: the synthetic invoice ---------------------------------------------------------------------------------------------
 const order = String(Date.now()).slice(-9);
-const synthetic = (n, path) => invoicePdf(path, { order: n, date: printed, subtotal: '$16.60', bags: '$2.00', total: '$18.60', lines: [
+const synthetic = (n, path) => invoicePdf(path, { order: n, date: printed, subtotal: '$16.10', bags: '$2.00', total: '$18.10', lines: [
   { heading: 'Pantry', n: 4, desc: `Synthetic beans ${RUN} 420g`, ordered: 2, supplied: 2, price: '$1.00', amount: '$2.00' },
-  { heading: 'Meat', n: 17, name: `Synthetic chicken ${RUN} small`, range: '459g - 749g', perKg: '$14.50/Kg', supplied: '1 @ 662g', amount: '$9.60' },
+  { heading: 'Meat', n: 17, name: `Synthetic chicken ${RUN} small`, range: '500g - 800g', perKg: '$13.00/Kg', supplied: '1 @ 700g', amount: '$9.10' },
   { heading: 'Household Cleaning', n: 15, desc: `* Synthetic cleaner ${RUN} 750ml`, ordered: 1, supplied: 1, price: '$5.00', amount: '$5.00' },
 ] });
 const first = synthetic(order, join(scratch, `${RUN}-synthetic-1.pdf`));
@@ -122,12 +122,12 @@ check(await until(b, `document.getElementById('receipt-new-pack-0')?.value === '
 check(await until(b, `/Replaces the shopping list's tick/.test(${rline(0)}.querySelector('[data-testid=receipt-line-cover]')?.textContent ?? '')`),
   `and it offers to replace A's tick: "${await b.evaluate(`${rline(0)}.querySelector('[data-testid=receipt-line-cover]')?.textContent.trim()`)}"`);
 await choose(b, 1, `n:${ids.chicken}`);
-check(await until(b, `document.getElementById('receipt-new-pack-1')?.value === '749g'`), 'the weighed chicken → a product of the chicken, its pack the heaviest tray, 749g');
+check(await until(b, `document.getElementById('receipt-new-pack-1')?.value === '800g'`), 'the weighed chicken → a product of the chicken, its pack the heaviest tray, 800g');
 await choose(b, 2, 'h');
 await sleep(300);
 const will = await lines(b);
 console.log(will.map(l => `    ${l}`).join('\n'));
-check(will[0].includes('840 g of Beans') && will[1].includes('662 g of Chicken') && will[2].includes('Not food'), 'what each line will do: 840 g of beans, 662 g of chicken, the cleaner not food');
+check(will[0].includes('840 g of Beans') && will[1].includes('700 g of Chicken') && will[2].includes('Not food'), 'what each line will do: 840 g of beans, 700 g of chicken, the cleaner not food');
 console.log(`  phone screenshot: ${await screenshot(b, 'receipt-review')}`);
 await click(b, '[data-testid=receipt-import]');
 check(await until(b, `!!document.querySelector('[data-testid=receipt-done]')`), `B imports it: "${await text(b, 'receipt-done')}"`);
@@ -137,11 +137,11 @@ check(!!receipt, 'the server holds the receipt');
 const kinds = await serverHas(`select group_concat(Kind, ',') from (select Kind from ReceiptLine where ReceiptId = '${up(receipt)}' order by Position)`, v => v.split(',').length === 4);
 check(kinds === 'Food,Food,Household,Fee', `its four lines: ${kinds}`);
 check(server(`select group_concat(PriceCents || '/' || coalesce(PerKgCents, ''), ',') from (select * from PriceObservation where Source = 'Receipt' and ObservedOn = '${day(0)}'
-  and ProductId in (select ProductId from ReceiptLine where ReceiptId = '${up(receipt)}') order by PriceCents)`) === '100/,500/,960/1450',
-  'three receipt prices: the beans $1.00 a tin, the cleaner $5.00, the chicken tray $9.60 at $14.50/kg');
+  and ProductId in (select ProductId from ReceiptLine where ReceiptId = '${up(receipt)}') order by PriceCents)`) === '100/,500/,910/1300',
+  'three receipt prices: the beans $1.00 a tin, the cleaner $5.00, the chicken tray $9.10 at $13.00/kg');
 const covering = server(`select cast(Quantity as real) || '|' || lower(CoversItemId) from StockMovement where IngredientId = '${up(ids.beans)}' and CoversItemId is not null`);
 check(covering === `840.0|${tick}`, `the beans' purchase: 840 g, replacing A's tick (${covering})`);
-check(server(`select cast(Quantity as real) from StockMovement where IngredientId = '${up(ids.chicken)}'`) === '662.0', 'the chicken: 662 g, its weight');
+check(server(`select cast(Quantity as real) from StockMovement where IngredientId = '${up(ids.chicken)}'`) === '700.0', 'the chicken: 700 g, its weight');
 check(server(`select count(*) from ProductAlias where Text like '%${RUN}%'`) === '3', 'three aliases taught');
 
 await a.go('pantry');
@@ -165,7 +165,8 @@ check(await until(b, `[...document.querySelectorAll('[data-testid=receipt-line]'
 check(await b.evaluate(`!document.querySelector('[data-testid=receipt-line-cover]')`), 'and no tick offered - A\'s was replaced already');
 await click(b, '[data-testid=receipt-import]');
 check(await until(b, `!!document.querySelector('[data-testid=receipt-done]')`)
-  && await serverHas(`select count(*) from PriceObservation where Source = 'Receipt' and ObservedOn = '${day(0)}'`, v => v === '6') === '6',
+  && await serverHas(`select count(*) from PriceObservation where Source = 'Receipt' and ObservedOn = '${day(0)}'
+    and ProductId in (select ProductId from ReceiptLine where Description like '%${RUN}%')`, v => v === '6') === '6',
   'imported: three more receipt prices');
 
 // --- Real invoices -----------------------------------------------------------------------------------------------------

@@ -23,7 +23,7 @@ export function invoicePdf(path, { order, date, lines, subtotal, bags, total }) 
     put(p, 375, 53.2, `Invoice/Order Number: ${order}`, true);
     put(p, 375, 62.2, 'Customer: Sam Example', true);
     put(p, 375, 71.2, `Date: ${date}`, true);
-    put(p, 375, 80.2, 'Pickup: 1300 - 1400', true);
+    put(p, 375, 80.2, 'Pickup: 0900 - 1000', true);
     put(p, 112, 727.5, 'Registered Office: Woolworths Group Limited');
   }
   let y = 171;

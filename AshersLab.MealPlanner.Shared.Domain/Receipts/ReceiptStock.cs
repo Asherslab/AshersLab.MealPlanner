@@ -12,7 +12,7 @@ public sealed record TickBought(Guid ItemId, Guid IngredientId, DateOnly On, dec
 /// that describe the same purchase count once. Pure.
 /// </summary>
 /// <remarks>
-/// The tick is the shopper's note in the shop ("mince, in the trolley"); the receipt is the record of what came home - 662 g,
+/// The tick is the shopper's note in the shop ("mince, in the trolley"); the receipt is the record of what came home - 700 g,
 /// not "a pack". So when both describe one purchase <b>the receipt wins</b>: its movement names the tick it covers
 /// (<c>StockMovement.CoversItemId</c>), and from then on the tick's own movement does not count, on every device - the
 /// cover names the tick, whose id is derived, so it holds even for a tick's movement that arrives after the receipt. The

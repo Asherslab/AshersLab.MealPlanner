@@ -12,7 +12,7 @@ namespace AshersLab.MealPlanner.Shared.Domain.Receipts;
 /// <param name="Supplied">How many packs came home - 0 for one out of stock, or an original line a substitute replaced.</param>
 /// <param name="UnitPriceCents">The shelf price of one pack; for variable-weight meat, null - it was priced by the kilo.</param>
 /// <param name="AmountCents">What the line cost.</param>
-/// <param name="WeightGrams">Variable-weight meat: the weight supplied ("1 @ 662g").</param>
+/// <param name="WeightGrams">Variable-weight meat: the weight supplied ("1 @ 700g").</param>
 /// <param name="PerKgCents">Variable-weight meat: the price per kilogram.</param>
 /// <param name="DiscountCents">How much less the line cost than its packs at the shelf price: a substitute charged at the original's price.</param>
 /// <param name="Gst">Printed with the GST marker: mostly household things, a hint.</param>

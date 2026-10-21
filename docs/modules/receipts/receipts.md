@@ -43,7 +43,10 @@ matching, or anything that adds stock from a purchase. Costco receipts (OCR) are
 - **Every id is derived, never minted** (`ReceiptRules`): a receipt's from its store and order number, a line's from the
   receipt and its position, its price and stock movement from the line, an alias from the store and its text. So two phones
   importing one invoice offline make the same rows - one receipt, one lot of stock - and "already imported" is one lookup.
-  The price: a deleted receipt's id is a tombstone forever, so nothing offers to delete one. New products are the
+  **The store is the reader's, never the planner's**: a Woolworths invoice is the seeded Woolworths (`StoreRules.Woolworths`,
+  the same id in every database), with no store to pick in the review - a store picked differently would make a different
+  receipt id and let the same purchase in twice. For the same reason "already imported" also matches the order number under
+  any store (`ReceiptImport.LoadAsync`). A deleted seeded store refuses its receipts. The price: a deleted receipt's id is a tombstone forever, so nothing offers to delete one. New products are the
   exception (minted): two phones each making a product for the same line offline make two.
 - **A suggestion never matches by itself.** Only the store's code and an alias do; a wrong automatic match would price and
   stock the wrong thing with nothing on screen to say so.
@@ -62,12 +65,12 @@ positions and traps; nothing from a real invoice is in the repo).
 
 | Part | As printed | Read as |
 |---|---|---|
-| Header, every page | `Invoice/Order Number: 312345678`, `Date: 24 Jun 2026` | the order number (dedupe key), the date |
+| Header, every page | `Invoice/Order Number: 300000001`, `Date: 3 Mar 2026` | the order number (dedupe key), the date |
 | Column headings | `Line Description Ordered Supplied Price Amount` | each column starts 12 pt left of its heading - numbers are right-aligned. Found on each table, never fixed |
 | Category heading | a row of text alone ("Dairy, Eggs & Fridge") | `Category`, a hint only: names vary between orders |
 | A line | `4  Woolworths black beans pdm 420g  1  1  $1.00  $1.00` | supplied, the shelf price, the amount |
 | GST marker | `* Earth choice floor cleaner 750ml` | marker stripped, `Gst` kept as a household hint |
-| Weighed meat | numbered row with `$14.50/Kg` and no amount, then `~ name` with `1 @ 662g` and `$9.60` | one line: weight 662 g, $14.50/kg, $9.60 |
+| Weighed meat | numbered row with `$13.00/Kg` and no amount, then `~ name` with `1 @ 700g` and `$9.10` | one line: weight 700 g, $13.00/kg, $9.10 |
 | Substitutions | a table of its own: the original with `0` supplied and `$0.00`, then `(Sub) replacement` | two lines: the original "not supplied"; the substitute at its shelf price, its amount the original's price (the difference is `DiscountCents`) |
 | Totals | `Sub Total`, `Paper bags`, `Collection fee`, `Service fees`, `Invoice Total`, `Paid Amount`, sometimes `Refund Amount` | fees named by the label just left of their amount; a refund is weighed meat supplied under the maximum |
 
@@ -111,7 +114,7 @@ writes no price and no stock. **Staples get no movement** - their stock is the h
 The rule the scope left to this slice (`ReceiptStock`, `StockMovement.Counting`):
 
 - **The receipt wins.** A tick is the shopper's note in the shop - "beans, in the trolley", one pack; the receipt is what
-  came home - two tins, 662 g. Counting both would put the beans in the pantry twice.
+  came home - two tins, 700 g. Counting both would put the beans in the pantry twice.
 - **Which tick:** a bought tick of the same ingredient, ticked from 7 days before the receipt's date to 2 after (an online
   order ticked when placed; ticked in the shop, the invoice dated at pickup), not replaced already - the nearest in date,
   then the later. One tick per line, one line per tick.
@@ -130,7 +133,7 @@ The rule the scope left to this slice (`ReceiptStock`, `StockMovement.Counting`)
 **Receipts** in the menu (`/receipts`). "Pick a Woolworths invoice": the file is read on the phone and the review opens -
 the store and date, the order number, the sub total, fees and total, and "The lines add up to the sub total" (or, in red,
 both figures and that it cannot be imported). "Show the invoice" draws its pages. Then a card per line: its description,
-"2 × $1.00 = $2.00" (or "662 g at $14.50/kg = $9.60", "not supplied", "a substitute"), a green "matched" chip when its alias
+"2 × $1.00 = $2.00" (or "700 g at $13.00/kg = $9.10", "not supplied", "a substitute"), a green "matched" chip when its alias
 matched, an "Is it Black beans 420g?" button for the best suggestion (one tap confirms), and **It is** - a native select:
 the suggestions, the store's products, "a new product of" each ingredient, "a new product, not food", "leave it out". A new
 product shows its name and pack size, read from the description ("420g", "= 420 g"). A food line whose purchase a tick
@@ -149,9 +152,9 @@ A desktop-sized, B phone-sized - every check passing. A adds beans and chicken, 
 the beans bought: a 500 g movement naming the tick. B picks a synthetic invoice dated today (generated by
 `lib/synthetic-invoice.mjs`: two tins of beans, a weighed chicken, a cleaner, bags): it adds up, nothing matches by itself,
 "Show the invoice" draws its two pages. B makes a product of the beans (pack read as 420g; "Replaces the shopping list's tick
-of Thu 22 Oct (500 g)" offered), of the chicken (749g, the heaviest tray) and a household one: "840 g of Beans", "662 g of
+of Thu 22 Oct (500 g)" offered), of the chicken (800g, the heaviest tray) and a household one: "840 g of Beans", "700 g of
 Chicken", "Not food". Imported, the server holds the receipt and its four lines (Food, Food, Household, Fee), receipt prices
-$1.00, $5.00 and $9.60 at $14.50/kg, an 840 g movement naming A's tick, 662 g of chicken and three aliases. A's pantry reads
+$1.00, $5.00 and $9.10 at $13.00/kg, an 840 g movement naming A's tick, 700 g of chicken and three aliases. A's pantry reads
 "about 840 g" (not 1.34 kg); A's list still shows the beans bought. B picks the same file: refused, naming the day. A second
 synthetic order: every line matched by its alias, no tick offered. Then A imports each real invoice as it reads - all seven
 add up, 19, 25, 13, 18, 16, 21 and 18 lines and their fees - and B is refused the first again. Both profiles' SQLite hold the
@@ -164,7 +167,9 @@ before alias, alias whatever its case, an alias to a deleted product, suggestion
 a stable order, words, pack sizes in the ingredient's own unit), `ReceiptStockTests` (the nearest tick in the window, its
 edges, packs or weight), `ReceiptRulesTests.cs` (derived ids, every field accepted and what each refuses, a cover silencing a
 tick's movements whenever they arrive) and `ReceiptSyncTests.cs` (through the real host: what an import writes and the next
-receipt matching by itself, refused twice, never imported when it does not add up, two phones importing one receipt, a
-receipt and a tick counting once - and the list still reading it as bought - and two purchases when the cover is off).
+receipt matching by itself, refused twice - also under another store -, never imported when it does not add up, two phones
+importing one receipt, a receipt and a tick counting once - and the list still reading it as bought - and two purchases when
+the planner unticks the cover the review offered), and `ReviewChoiceTests.cs` (what the page decides from each choice and the
+cover's checkbox: `ReviewChoice.Decide`).
 Each was checked by breaking the code: no cover rule, no wrap distance, no fee check, ligatures spaced, no alias step,
 weighed meat at no price, a minted stock id, the list counting a covering purchase, no bold dedupe, the window a day short.
