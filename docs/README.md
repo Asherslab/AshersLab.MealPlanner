@@ -42,6 +42,8 @@ Present tense, kept current, no dates.
 - [Spreadsheet import](modules/import/spreadsheet-import.md) - the planner's sheet into drafts: where it finds meals,
   ingredients and prices, units marked as guesses, what it asks, one transaction, and why a second run adds only
   what is new.
+- [People, slots and plan templates](modules/planning/plan-templates.md) — the household, the slots of the day, and the
+  rotation of weeks: an entry per thing eaten, its meal choices as rows, who eats it, the week grid and the day view.
 - [Meals](modules/meals/meals.md) — meal groups, meals and their five kinds, a meal's ingredients, and its batch and
   per-serve cost (incomplete, never lower, when anything is unpriced).
 

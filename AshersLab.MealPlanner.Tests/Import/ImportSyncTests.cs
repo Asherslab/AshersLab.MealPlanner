@@ -2,6 +2,7 @@ using AshersLab.MealPlanner.LocalData;
 using AshersLab.MealPlanner.LocalData.Import;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
 using AshersLab.MealPlanner.Shared.Data.Import;
+using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using AshersLab.MealPlanner.Shared.Domain.Import;
 using AshersLab.MealPlanner.Shared.Domain.Ingredients;
@@ -65,14 +66,46 @@ public sealed class ImportSyncTests : IAsyncLifetime
         await b.SyncAsync();
 
         Assert.Equal(await CountsAsync(a), await CountsAsync(b));
-        Assert.Equal((17, 7, 15), ((await CountsAsync(b)).Ingredients, (await CountsAsync(b)).Meals, (await CountsAsync(b)).Lines));
+        // 7 meal ideas and the plan's 7 single-serve meals.
+        Assert.Equal((17, 14, 15), ((await CountsAsync(b)).Ingredients, (await CountsAsync(b)).Meals, (await CountsAsync(b)).Lines));
         Assert.Equal(0, await a.PendingAsync());
+        // The plan too: its template by its fixed id, every entry with its choices.
+        await using (LocalDbContext db = b.CreateDbContext())
+        {
+            PlanBook plans = await PlanBook.LoadAsync(db, Ct);
+            Assert.Equal(2, plans.Template(SheetImport.PlanTemplateId)!.WeekCount);
+            Assert.Equal(first.PlanCounts.Entries, plans.EntriesOf(SheetImport.PlanTemplateId).Count());
+            Assert.All(plans.EntriesOf(SheetImport.PlanTemplateId), e => Assert.NotEmpty(plans.ChoicesOf(e.Id)));
+        }
 
         ImportPlan againOnA = await ImportAsync(a, new ImportChoices { HouseholdStore = SheetImportTests.Costco });
         ImportPlan againOnB = await ImportAsync(b, new ImportChoices { HouseholdStore = SheetImportTests.Costco });
         Assert.True(againOnA.NothingToDo, string.Join("; ", againOnA.Edits.Select(e => e.Entity)));
         Assert.True(againOnB.NothingToDo);
         Assert.Equal(0, await b.PendingAsync());
+    }
+
+    [Fact]
+    public async Task A_plan_deleted_after_the_import_stays_deleted_and_so_do_its_meals()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();
+        await ImportAsync(a, new ImportChoices { HouseholdStore = SheetImportTests.Costco });
+
+        Guid porridge;
+        await using (LocalDbContext db = a.CreateDbContext())
+            porridge = (await db.Meals.SingleAsync(m => m.Name == "Porridge", Ct)).Id;
+        a.Now = a.Now.AddSeconds(1);
+        await a.WriteAsync(SyncedEntities.PlanTemplate, SheetImport.PlanTemplateId, OpKind.Delete, []);
+        await a.WriteAsync(SyncedEntities.Meal, porridge, OpKind.Delete, []);
+        await a.SyncAsync();
+
+        // A fresh browser, so what it compares with is what the server holds - tombstones included.
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        await b.SyncAsync();
+        ImportPlan again = await ImportAsync(b, new ImportChoices { HouseholdStore = SheetImportTests.Costco });
+        Assert.True(again.NothingToDo, string.Join("; ", again.Edits.Select(e => e.Entity)));
+        Assert.Contains("The plan: deleted here before, so not imported again.", again.LeftOut);
     }
 
     [Fact]

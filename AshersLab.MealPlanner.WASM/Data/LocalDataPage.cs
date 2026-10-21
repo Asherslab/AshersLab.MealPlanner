@@ -69,6 +69,21 @@ public abstract class LocalDataPage : ComponentBase, IDisposable
         await Reload();
     }
 
+    /// <summary>
+    /// Several edits as one (<see cref="LocalOps.WriteAllAsync"/>): all applied and queued, or none - for something
+    /// where half would be worse than nothing, like a plan entry and its choices.
+    /// </summary>
+    protected async Task WriteAllAsync(IReadOnlyList<LocalEdit> edits)
+    {
+        if (edits.Count == 0)
+            return;
+        await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
+            await LocalOps.WriteAllAsync(db, Start!.Device!.Id, DateTimeOffset.UtcNow, edits);
+
+        Sync.Kick();
+        await Reload();
+    }
+
     public virtual void Dispose()
     {
         Database.ChangedElsewhere -= Reload;

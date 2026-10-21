@@ -43,7 +43,15 @@ public sealed record MealIdea(
 /// One plan cell: "Leftovers/noodles/soup" is three choices; "Toast, jam + fruit" is one choice of three
 /// items. Read here, applied by the plan-template slice.
 /// </summary>
-public sealed record PlanCell(string Original, IReadOnlyList<IReadOnlyList<string>> Choices);
+public sealed record PlanCell(string Original, IReadOnlyList<IReadOnlyList<string>> Choices, SheetPlace? Place = null);
+
+/// <summary>
+/// One '/'-choice of a plan cell, as the import matches it against meals: the whole text first ("Fish, chips and peas" may
+/// be one meal), then each ','-part ("Eggs + soldiers" may be), then each part's '+'-items.
+/// </summary>
+public sealed record PlanChoiceText(string Text, IReadOnlyList<PlanPartText> Parts);
+
+public sealed record PlanPartText(string Text, IReadOnlyList<string> Items);
 
 /// <summary>The parsers for what one cell says. Pure, tested in <c>Tests/Import/SheetTextTests.cs</c>.</summary>
 public static partial class SheetText
@@ -343,6 +351,28 @@ public static partial class SheetText
                 choices.Add(items);
         }
         return new PlanCell(cell, choices);
+    }
+
+    [GeneratedRegex(@"\s*\+\s*", RegexOptions.CultureInvariant)]
+    private static partial Regex PlusSplit();
+
+    /// <summary>A plan cell split three ways, keeping each level's text (<see cref="PlanChoiceText"/>). Empty pieces dropped.</summary>
+    public static IReadOnlyList<PlanChoiceText> PlanChoices(string text)
+    {
+        List<PlanChoiceText> choices = [];
+        foreach (string choice in Names.Normalise(text).Split('/').Select(Names.Normalise).Where(c => c.Length > 0))
+        {
+            List<PlanPartText> parts = [];
+            foreach (string part in choice.Split(',').Select(Names.Normalise).Where(p => p.Length > 0))
+            {
+                string[] items = [.. PlusSplit().Split(part).Select(Names.Normalise).Where(i => i.Length > 0)];
+                if (items.Length > 0)
+                    parts.Add(new PlanPartText(part, items));
+            }
+            if (parts.Count > 0)
+                choices.Add(new PlanChoiceText(choice, parts));
+        }
+        return choices;
     }
 
     /// <summary>A plan row's slot: the leading word of "Lunch (sandwich for ...)".</summary>

@@ -27,6 +27,12 @@ public sealed record ImportKnown(
     IReadOnlyList<KnownProduct> Products,
     IReadOnlyList<KnownPrice> Prices)
 {
+    /// <summary>The slots of the day, for the plan's rows.</summary>
+    public IReadOnlyList<KnownOrdered> Slots { get; init; } = [];
+
+    /// <summary>The plan templates - only to know whether the sheet's plan is here already (<see cref="SheetImport.PlanTemplateId"/>).</summary>
+    public IReadOnlyList<KnownNamed> Templates { get; init; } = [];
+
     /// <summary>Every word the sheet may use for a store: the live stores' names, and the aliases of those.</summary>
     public IReadOnlyCollection<string> StoreWords =>
     [
@@ -77,6 +83,12 @@ public sealed class ImportChoices
     /// <summary>A meal (by <see cref="SheetImport.MealKey"/>): the serves a batch makes, or null for a single serve.</summary>
     public Dictionary<string, int?> Serves { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// A name in the plan that is not exactly a meal (by <see cref="ImportNames.Key"/>): the key of the meal it is, or null
+    /// for a new single-serve meal of that name.
+    /// </summary>
+    public Dictionary<string, string?> PlanMeals { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Where the non-food items are bought. Null: those with no store of their own are left out.</summary>
     public Guid? HouseholdStore { get; set; }
 
@@ -112,6 +124,13 @@ public sealed record ServesQuestion(string Key, string Meal, int? Suggested, str
 /// <paramref name="Note"/> is what the sheet said it is for when that is not a pack ("for 10 servings").
 public sealed record PriceQuestion(string Id, SheetPlace Place, string Item, bool Household, long Cents, string? Pack, Guid? Store, string? Note = null);
 
+/// <summary>
+/// A name in the plan that is not exactly a meal, but resembles one: "Lmab korma" for "Lamb korma". <paramref name="Places"/>
+/// are the cells it is in.
+/// </summary>
+public sealed record PlanMealQuestion(
+    string Key, string Name, IReadOnlyList<SheetPlace> Places, IReadOnlyList<(string Key, string Name)> Options, string? Suggested);
+
 public sealed record ImportReview(
     IReadOnlyList<HeadingQuestion> Categories,
     IReadOnlyList<HeadingQuestion> MealGroups,
@@ -119,7 +138,10 @@ public sealed record ImportReview(
     IReadOnlyList<ServesQuestion> Serves,
     IReadOnlyList<PriceQuestion> Prices,
     IReadOnlyList<string> HouseholdItems,
-    IReadOnlyList<UnreadCell> Unread);
+    IReadOnlyList<UnreadCell> Unread)
+{
+    public IReadOnlyList<PlanMealQuestion> PlanMeals { get; init; } = [];
+}
 
 /// <summary>One op the import writes, in order. The page writes them all in one transaction.</summary>
 public sealed record ImportEdit(string Entity, Guid Id, OpKind Kind, IReadOnlyList<OpField> Fields);
@@ -146,6 +168,9 @@ public sealed record ImportPlan(
     int ChangedUnits,
     IReadOnlySet<string> PricesAlreadyHere)
 {
+    /// <summary>What the plan adds: all zero when the sheet has none, or it is here already.</summary>
+    public PlanImportCounts PlanCounts { get; init; } = new(0, 0, 0, 0);
+
     public bool NothingToDo => Edits.Count == 0;
 }
 
@@ -164,7 +189,7 @@ public sealed record ImportPlan(
 /// when the sheet says something it did not say last time, whatever receipts or typed prices came since. So a later
 /// download of the sheet, with more prices filled in, adds exactly those prices.
 /// </remarks>
-public sealed class SheetImport
+public sealed partial class SheetImport
 {
     private readonly ParsedSheet _sheet;
     private readonly ImportKnown _known;
@@ -289,7 +314,7 @@ public sealed class SheetImport
             serves,
             prices,
             [.. _household.Select(h => h.Name)],
-            _sheet.Unread);
+            _sheet.Unread) { PlanMeals = PlanMealQuestions() };
     }
 
     /// <summary>Only the headings worth asking about: one exactly the same as a category or group is not.</summary>
@@ -450,6 +475,7 @@ public sealed class SheetImport
 
         // Meals and their ingredients.
         List<string> seen = [];
+        Dictionary<string, Guid> createdMeals = new(StringComparer.Ordinal);
         foreach (MealIdeaCell cell in _sheet.MealIdeas)
         {
             MealIdea idea = cell.Idea;
@@ -475,6 +501,7 @@ public sealed class SheetImport
                 : null;
 
             Guid meal = newId();
+            createdMeals.TryAdd(ImportNames.Key(idea.Name), meal);
             edits.Add(new(MealRules.Entity, meal, OpKind.Create,
                 new MealDraft(idea.Name, groups.GetValueOrDefault(cell.Header), kind, kind == MealKind.Cooked ? Math.Min(serves!.Value, MealRules.MaxServes) : 1, null, notes)
                     .FieldsChangedFrom(null)));
@@ -500,6 +527,9 @@ public sealed class SheetImport
                 newLines++;
             }
         }
+
+        // The plan, once its meals exist: it names them.
+        PlanImportCounts planCounts = ImportPlanTemplate(choices, targets, createdMeals, edits, leftOut, ref newMeals, ref newLines, newId);
 
         // Products and prices. Products tombstones and all, live ones first: one the planner deleted is not made again.
         HashSet<string>    samePrices = new(StringComparer.Ordinal);
@@ -605,7 +635,7 @@ public sealed class SheetImport
         }
 
         return new ImportPlan(edits, fresh, newCategories, newGroups, newMeals, newLines, newProducts, newPrices, alreadyHere, leftOut,
-            unitQuestions, changedUnits, samePrices);
+            unitQuestions, changedUnits, samePrices) { PlanCounts = planCounts };
     }
 
     /// <summary>A meal ingredient's note: what was in its own parentheses, then its alternatives - "basmati; or brown".</summary>

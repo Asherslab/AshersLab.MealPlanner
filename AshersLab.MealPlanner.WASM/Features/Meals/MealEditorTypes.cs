@@ -47,7 +47,8 @@ public static class MealDialogs
         MealDraft                  draft,
         bool                       isNew,
         IReadOnlyList<PickerOption> groups,
-        IReadOnlyList<string>      otherNames
+        IReadOnlyList<string>      otherNames,
+        IReadOnlyList<string>?     plannedIn = null
     )
     {
         bool phone = await viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
@@ -58,6 +59,7 @@ public static class MealDialogs
             { e => e.IsNew, isNew },
             { e => e.Groups, groups },
             { e => e.OtherNames, otherNames },
+            { e => e.PlannedIn, plannedIn ?? [] },
         };
         DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
 

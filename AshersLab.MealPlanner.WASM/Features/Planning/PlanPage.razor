@@ -1,0 +1,288 @@
+@page "/plans/{Id:guid}"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.LocalData.Sync
+@using AshersLab.MealPlanner.Shared.Data.Planning
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject IDialogService Dialogs
+@inject IBrowserViewportService Viewport
+@inject NavigationManager Navigation
+
+@*
+    One plan template, a week at a time. On a desktop the week is a grid - slots down, days across - with every entry
+    in its cell; on a phone, a day at a time, its slots down the screen. Tapping an entry opens its sheet; a slot's +
+    adds one. Each entry is its own op (with its choices, written together), so two phones planning different days
+    both keep theirs.
+*@
+
+<PageTitle>@(_template?.Name ?? "Plan") - Meal Planner</PageTitle>
+
+<MudButton Href="plans" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2"
+           data-testid="plan-back">Plans</MudButton>
+
+<LocalDataGate Start="Start">
+    @if (_template is null)
+    {
+        <MudAlert Severity="Severity.Info" data-testid="plan-gone">
+            This plan is not here - it may have been deleted on another device.
+        </MudAlert>
+    }
+    else
+    {
+        <div class="d-flex align-start gap-2">
+            <div class="flex-grow-1">
+                <MudText Typo="Typo.h5" Component="h1" data-testid="plan-title">@_template.Name</MudText>
+                <MudText Class="mud-text-secondary" data-testid="plan-summary">
+                    @PlanText.Weeks(_template.WeekCount), then it repeats
+                </MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditPlan"
+                       data-testid="plan-edit">Edit</MudButton>
+        </div>
+
+        @if (_template.WeekCount > 1)
+        {
+            <div class="d-flex flex-wrap gap-1 mt-3" role="tablist">
+                @for (int w = 1; w <= _template.WeekCount; w++)
+                {
+                    int week = w;
+                    <MudButton Size="Size.Small" Variant="@(week == _week ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                               OnClick="() => _week = week" role="tab" aria-selected="@(week == _week)"
+                               data-testid="plan-week" data-week="@week">Week @week</MudButton>
+                }
+            </div>
+        }
+
+        @if (_slots.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-4">There are no slots of the day - add them on the Slots page.</MudAlert>
+        }
+
+        @* A desktop: the whole week as a grid. *@
+        <MudHidden Breakpoint="Breakpoint.SmAndDown">
+            <div class="plan-grid-scroll mt-3">
+                <table class="plan-grid" data-testid="plan-grid">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            @foreach (DayOfWeek day in PlanDays.Week)
+                            {
+                                <th>@PlanDays.Short(day)</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (Slot slot in _slots)
+                        {
+                            <tr @key="slot.Id">
+                                <th class="plan-grid-slot">@slot.Name</th>
+                                @foreach (DayOfWeek day in PlanDays.Week)
+                                {
+                                    <td data-testid="plan-cell" data-day="@day" data-slot="@slot.Id">
+                                        @foreach (TemplateEntry entry in EntriesAt(day, slot.Id))
+                                        {
+                                            <div class="plan-entry" @key="entry.Id" role="button" tabindex="0"
+                                                 @onclick="() => EditEntry(entry, day, slot)" data-testid="plan-entry" data-id="@entry.Id">
+                                                <span data-testid="plan-entry-meals">@EntryText(entry)</span>
+                                                <PeopleDots People="PeopleOf(entry)"/>
+                                            </div>
+                                        }
+                                        <button type="button" class="plan-add" aria-label="@($"Add to {PlanDays.Format(day)} {slot.Name}")"
+                                                @onclick="() => AddEntry(day, slot)" data-testid="plan-cell-add">+</button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </MudHidden>
+
+        @* A phone: one day at a time. *@
+        <MudHidden Breakpoint="Breakpoint.MdAndUp">
+            <div class="d-flex flex-wrap gap-1 mt-3" role="tablist">
+                @foreach (DayOfWeek d in PlanDays.Week)
+                {
+                    DayOfWeek day = d;
+                    <MudButton Size="Size.Small" Variant="@(day == _day ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                               OnClick="() => _day = day" role="tab" aria-selected="@(day == _day)" Class="plan-day"
+                               data-testid="plan-day" data-day="@day">@PlanDays.Short(day)</MudButton>
+                }
+            </div>
+            <MudPaper Outlined="true" Class="mt-2" data-testid="plan-day-view">
+                @foreach (Slot slot in _slots)
+                {
+                    <div class="plan-day-slot px-4 py-2" @key="slot.Id" data-testid="plan-cell" data-day="@_day" data-slot="@slot.Id">
+                        <div class="d-flex align-center">
+                            <MudText Typo="Typo.overline" Class="flex-grow-1">@slot.Name</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add to {slot.Name}")"
+                                           OnClick="() => AddEntry(_day, slot)" data-testid="plan-cell-add"/>
+                        </div>
+                        @foreach (TemplateEntry entry in EntriesAt(_day, slot.Id))
+                        {
+                            <div class="plan-entry d-flex align-center gap-2" @key="entry.Id" role="button" tabindex="0"
+                                 @onclick="() => EditEntry(entry, _day, slot)" data-testid="plan-entry" data-id="@entry.Id">
+                                <MudText Class="flex-grow-1" data-testid="plan-entry-meals">@EntryText(entry)</MudText>
+                                <PeopleDots People="PeopleOf(entry)" Named="true"/>
+                            </div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        </MudHidden>
+    }
+</LocalDataGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private PlanTemplate?             _template;
+    private PlanBook                  _plans  = null!;
+    private List<Slot>                _slots  = [];
+    private List<Person>              _people = [];
+    private Dictionary<Guid, string>  _meals  = [];
+
+    private int       _week = 1;
+    private DayOfWeek _day  = DayOfWeek.Monday;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Ready)
+            await Reload();
+    }
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _plans    = await PlanBook.LoadAsync(db);
+        _template = _plans.Template(Id);
+        _slots    = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
+        _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
+        _meals    = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, m => m.Name);
+        if (_template is not null && _week > _template.WeekCount)
+            _week = 1;
+    }
+
+    private IEnumerable<TemplateEntry> EntriesAt(DayOfWeek day, Guid slot) =>
+        _plans.EntriesOf(Id).Where(e => e.Week == _week && e.Day == day && e.SlotId == slot);
+
+    private string EntryText(TemplateEntry entry) =>
+        _plans.ChoicesOf(entry.Id) is { Count: > 0 } choices
+            ? PlanText.Choices(choices.Select(c => _meals.GetValueOrDefault(c.MealId, "meal removed")))
+            : "nothing chosen";
+
+    /// <summary>The people it names, live ones only; empty for everyone.</summary>
+    private IReadOnlyList<Person> PeopleOf(TemplateEntry entry) =>
+        entry.PeopleIds() is { } ids ? [.. _people.Where(p => ids.Contains(p.Id))] : [];
+
+    private string Where(DayOfWeek day, Slot slot) =>
+        string.Join(" · ", new[] { _template!.WeekCount > 1 ? $"Week {_week}" : null, PlanDays.Format(day), slot.Name }.OfType<string>());
+
+    private List<PickerOption> MealOptions() =>
+        [.. _meals.OrderBy(m => m.Value, StringComparer.CurrentCultureIgnoreCase).Select(m => new PickerOption(m.Key, m.Value))];
+
+    private List<PersonOption> PersonOptions() => [.. _people.Select(p => new PersonOption(p.Id, p.Name, p.Colour))];
+
+    private async Task AddEntry(DayOfWeek day, Slot slot)
+    {
+        int week = _week;
+        TemplateEntrySheetResult? result = await PlanDialogs.EditEntryAsync(Dialogs, Viewport, new TemplateEntryDraft([], null),
+            isNew: true, Where(day, slot), MealOptions(), PersonOptions());
+        if (result?.Saved is not { } draft)
+            return;
+
+        Guid entry = Guid.CreateVersion7();
+        TemplateEntryChange change = draft.ChangesFrom(null);
+        await WriteAllAsync(
+        [
+            new LocalEdit(SyncedEntities.TemplateEntry, entry, OpKind.Create,
+            [
+                new OpField(TemplateEntryRules.TemplateField, OpValues.FormatId(Id)),
+                new OpField(TemplateEntryRules.WeekField, OpValues.FormatInt(week)),
+                new OpField(TemplateEntryRules.DayField, PlanDays.Format(day)),
+                new OpField(TemplateEntryRules.SlotField, OpValues.FormatId(slot.Id)),
+                .. change.EntryFields,
+            ]),
+            .. ChoiceCreates(entry, change.AddMeals),
+        ]);
+    }
+
+    private async Task EditEntry(TemplateEntry entry, DayOfWeek day, Slot slot)
+    {
+        IReadOnlyList<TemplateChoice> rows = _plans.ChoicesOf(entry.Id);
+        TemplateEntrySheetResult? result = await PlanDialogs.EditEntryAsync(Dialogs, Viewport,
+            new TemplateEntryDraft([.. rows.Select(c => c.MealId)], entry.PeopleIds()),
+            isNew: false, Where(day, slot), MealOptions(), PersonOptions());
+
+        if (result is { Remove: true })
+        {
+            await WriteAllAsync(
+            [
+                new LocalEdit(SyncedEntities.TemplateEntry, entry.Id, OpKind.Delete, []),
+                .. rows.Select(c => new LocalEdit(SyncedEntities.TemplateChoice, c.Id, OpKind.Delete, [])),
+            ]);
+            return;
+        }
+        if (result?.Saved is not { } draft)
+            return;
+
+        TemplateEntryChange change = draft.ChangesFrom((entry.PeopleIds(), [.. rows.Select(c => (c.Id, c.MealId))]));
+        if (change.IsEmpty)
+            return;
+        await WriteAllAsync(
+        [
+            .. change.EntryFields.Count > 0 ? [new LocalEdit(SyncedEntities.TemplateEntry, entry.Id, OpKind.Update, change.EntryFields)] : Array.Empty<LocalEdit>(),
+            .. change.RemoveChoices.Select(c => new LocalEdit(SyncedEntities.TemplateChoice, c, OpKind.Delete, [])),
+            .. ChoiceCreates(entry.Id, change.AddMeals),
+        ]);
+    }
+
+    /// <summary>
+    /// A choice row per meal, ids a millisecond apart: rows list by id, so the meals keep the order they were given in.
+    /// </summary>
+    private static IEnumerable<LocalEdit> ChoiceCreates(Guid entry, IReadOnlyList<Guid> meals)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        return meals.Select((meal, i) => new LocalEdit(SyncedEntities.TemplateChoice, Guid.CreateVersion7(now.AddMilliseconds(i)), OpKind.Create,
+        [
+            new OpField(TemplateChoiceRules.EntryField, OpValues.FormatId(entry)),
+            new OpField(TemplateChoiceRules.MealField, OpValues.FormatId(meal)),
+        ]));
+    }
+
+    private async Task EditPlan()
+    {
+        List<TemplateEntry> entries = [.. _plans.EntriesOf(Id)];
+        PlanEditorResult? result = await PlanDialogs.EditPlanAsync(Dialogs, Viewport, _template!.Name, _template.WeekCount,
+            [.. _plans.Templates.Where(t => t.Id != Id).Select(t => t.Name)],
+            entries.GroupBy(e => e.Week).ToDictionary(g => g.Key, g => g.Count()));
+        if (result is null)
+            return;
+
+        if (result.Delete)
+        {
+            // Its entries and their choices go too, one op each: nothing cascades on sync. One added elsewhere meanwhile
+            // is left behind, shown nowhere.
+            await WriteAllAsync(
+            [
+                new LocalEdit(SyncedEntities.PlanTemplate, Id, OpKind.Delete, []),
+                .. entries.Select(e => new LocalEdit(SyncedEntities.TemplateEntry, e.Id, OpKind.Delete, [])),
+                .. entries.SelectMany(e => _plans.ChoicesOf(e.Id)).Select(c => new LocalEdit(SyncedEntities.TemplateChoice, c.Id, OpKind.Delete, [])),
+            ]);
+            Navigation.NavigateTo("plans");
+            return;
+        }
+
+        List<OpField> fields = [];
+        if (result.Name != _template.Name)
+            fields.Add(new OpField(PlanTemplateRules.NameField, result.Name));
+        if (result.Weeks != _template.WeekCount)
+            fields.Add(new OpField(PlanTemplateRules.WeekCountField, OpValues.FormatInt(result.Weeks)));
+        if (fields.Count > 0)
+            await WriteAsync(SyncedEntities.PlanTemplate, Id, OpKind.Update, fields);
+    }
+}

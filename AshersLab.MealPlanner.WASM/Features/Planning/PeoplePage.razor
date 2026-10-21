@@ -1,0 +1,164 @@
+@page "/people"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Planning
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject IDialogService Dialogs
+
+@*
+    The household: a name and a colour each. Nobody is seeded - names are personal and the code is public - so the
+    planner adds everyone here. A plan entry is for everyone unless it names some of them. Someone a plan names cannot
+    be deleted.
+*@
+
+<PageTitle>People - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">People</MudText>
+<MudText Class="mt-1 mud-text-secondary">Everyone who eats from the plan. An entry is for everyone unless it says who.</MudText>
+
+<LocalDataGate Start="Start">
+    <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
+        <MudTextField T="string" @bind-Value="_newName" Label="New person" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
+                      Error="_addError is not null" ErrorText="@_addError"
+                      InputId="person-new-name" data-testid="person-new-name"/>
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
+                   data-testid="person-add">Add</MudButton>
+    </form>
+
+    <MudPaper Outlined="true" Class="mt-4">
+        @if (_people.Count == 0)
+        {
+            <MudText Class="pa-4 mud-text-secondary" data-testid="person-empty">Nobody yet - add each person in the household.</MudText>
+        }
+        @foreach (Person person in _people)
+        {
+            <div class="list-row px-4 py-2" @key="person.Id" data-testid="person-row" data-id="@person.Id">
+                @if (_editing == person.Id)
+                {
+                    <form @onsubmit="() => Save(person)" @onsubmit:preventDefault>
+                        <MudTextField T="string" @bind-Value="_editName" Label="Name" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" Immediate="true" AutoFocus="true" MaxLength="Names.MaxLength"
+                                      Error="_editError is not null" ErrorText="@_editError"
+                                      InputId="person-edit-name" data-testid="person-edit-name"/>
+                        <div class="d-flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Colour">
+                            @foreach (string colour in PersonRules.Palette)
+                            {
+                                <button type="button" class="@($"colour-swatch{(colour == _editColour ? " chosen" : "")}")"
+                                        style="@($"background:{colour}")" aria-label="@colour" aria-checked="@(colour == _editColour)"
+                                        role="radio" @onclick="() => _editColour = colour" data-testid="person-colour" data-colour="@colour"></button>
+                            }
+                        </div>
+                        @if (_inUse.Count > 0)
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" data-testid="person-in-use">
+                                @person.Name is named in @string.Join(", ", _inUse). Make those entries for everyone, or someone else, first.
+                            </MudAlert>
+                        }
+                        <div class="d-flex gap-2 mt-2">
+                            <MudButton Color="Color.Error" OnClick="() => Delete(person)" Class="mr-auto" data-testid="person-delete">Delete</MudButton>
+                            <MudButton OnClick="() => _editing = null" data-testid="person-cancel">Cancel</MudButton>
+                            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" data-testid="person-save">Save</MudButton>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div class="d-flex align-center gap-3" role="button" tabindex="0" @onclick="() => StartEdit(person)">
+                        <span class="person-dot" style="@($"background:{person.Colour}")"></span>
+                        <MudText Class="flex-grow-1" data-testid="person-name">@person.Name</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="mud-text-secondary"/>
+                    </div>
+                }
+            </div>
+        }
+    </MudPaper>
+</LocalDataGate>
+
+@code {
+    private List<Person> _people = [];
+    private PlanBook     _plans  = null!;
+
+    private string? _newName;
+    private string? _addError;
+
+    private Guid?        _editing;
+    private string?      _editName;
+    private string       _editColour = "";
+    private string?      _editError;
+    private List<string> _inUse = [];
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _people = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
+        _plans  = await PlanBook.LoadAsync(db);
+    }
+
+    private string? Problem(string name, Guid? id) =>
+        PersonRules.NameProblem(name)
+        ?? (_people.Any(p => p.Id != id && Names.Same(p.Name, name)) ? $"There is already someone called {name}." : null);
+
+    private async Task Add()
+    {
+        string name = Names.Normalise(_newName);
+        _addError = Problem(name, null);
+        if (_addError is not null)
+            return;
+
+        _newName = null;
+        await WriteAsync(SyncedEntities.Person, Guid.CreateVersion7(), OpKind.Create,
+        [
+            new OpField(PersonRules.NameField, name),
+            new OpField(PersonRules.ColourField, PersonRules.NextColour(_people.Select(p => p.Colour))),
+        ]);
+    }
+
+    private void StartEdit(Person person)
+    {
+        _editing    = person.Id;
+        _editName   = person.Name;
+        _editColour = person.Colour;
+        _editError  = null;
+        _inUse      = [];
+    }
+
+    private async Task Save(Person person)
+    {
+        string name = Names.Normalise(_editName);
+        _editError = Problem(name, person.Id);
+        if (_editError is not null)
+            return;
+
+        // Only what changed: an op that changes nothing would still win against an edit made elsewhere.
+        List<OpField> fields = [];
+        if (name != person.Name)
+            fields.Add(new OpField(PersonRules.NameField, name));
+        if (_editColour != person.Colour)
+            fields.Add(new OpField(PersonRules.ColourField, _editColour));
+        _editing = null;
+        if (fields.Count > 0)
+            await WriteAsync(SyncedEntities.Person, person.Id, OpKind.Update, fields);
+    }
+
+    private async Task Delete(Person person)
+    {
+        _inUse = [.. _plans.PlansWithPerson(person.Id)];
+        if (_inUse.Count > 0)
+            return;
+
+        bool? confirmed = await Dialogs.ShowMessageBoxAsync(
+            title: $"Delete {person.Name}?",
+            message: "They go from the household on every device.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true)
+            return;
+
+        _editing = null;
+        await WriteAsync(SyncedEntities.Person, person.Id, OpKind.Delete, []);
+    }
+}

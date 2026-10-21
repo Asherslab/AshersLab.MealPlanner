@@ -155,7 +155,14 @@ export async function screenshot(b, label) {
   return file;
 }
 
-export const server = sql => execFileSync('sqlite3', ['-readonly', SERVER_DB, sql], { encoding: 'utf8' }).trim();
+// Retried: a read-only open fails now and then ("unable to open database file") while the host is checkpointing a
+// large write - seen during a spreadsheet import of ~900 ops.
+export function server(sql) {
+  for (let attempt = 1; ; attempt++) {
+    try { return execFileSync('sqlite3', ['-readonly', SERVER_DB, sql], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
+    catch (e) { if (attempt >= 10) throw e; execFileSync('sleep', ['0.3']); }
+  }
+}
 
 /** Copies the profile's mealplanner.db and -wal out of OPFS (SAHPool: 4096-byte header naming the file); returns a query function. */
 export async function dump(b) {

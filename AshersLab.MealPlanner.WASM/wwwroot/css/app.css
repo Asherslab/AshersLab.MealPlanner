@@ -103,6 +103,99 @@
     text-transform: none;
 }
 
+/* A plan's week (PlanPage): slots down, days across. Scrolls sideways rather than squeezing a day to nothing. */
+.plan-grid-scroll {
+    overflow-x: auto;
+}
+
+.plan-grid {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+    min-width: 760px;
+    font-size: 0.85rem;
+}
+
+.plan-grid th,
+.plan-grid td {
+    border: 1px solid var(--mud-palette-lines-default);
+    padding: 4px;
+    vertical-align: top;
+    text-align: left;
+}
+
+.plan-grid thead th {
+    font-weight: 500;
+}
+
+.plan-grid-slot {
+    width: 84px;
+    font-weight: 500;
+}
+
+.plan-entry {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    background: var(--mud-palette-action-default-hover);
+}
+
+.plan-day-slot .plan-entry {
+    padding: 8px;
+    margin-bottom: 4px;
+}
+
+.plan-day-slot + .plan-day-slot {
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+.plan-add {
+    width: 100%;
+    border: 1px dashed var(--mud-palette-lines-default);
+    border-radius: 4px;
+    background: none;
+    color: var(--mud-palette-text-secondary);
+    cursor: pointer;
+}
+
+/* The day buttons fit seven across a phone. */
+.plan-day {
+    min-width: 0 !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+}
+
+.person-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-left: 2px;
+    vertical-align: middle;
+}
+
+.person-chip {
+    display: inline-block;
+    color: #fff;
+    border-radius: 10px;
+    padding: 0 8px;
+    font-size: 0.75rem;
+    margin-left: 2px;
+}
+
+.colour-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+}
+
+.colour-swatch.chosen {
+    border-color: var(--mud-palette-text-primary);
+}
+
 #blazor-error-ui {
     background: lightyellow;
     bottom: 0;

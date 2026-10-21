@@ -1,0 +1,177 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+
+@*
+    One thing eaten in a plan: the meals it may be (the first is the usual one; "Leftovers / Noodles / Pizza"
+    is three) and who eats it. Adding one is: tap the slot's +, type a few letters, tap the meal, Save. The search box
+    stays up after a tap so another choice is one more tap. Full screen on a phone. Like the other editors it only
+    answers; the page writes the ops.
+*@
+
+<MudDialog data-testid="entry-sheet">
+    <DialogContent>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="entry-where">@Where</MudText>
+
+        @if (_meals.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Class="d-block mt-2">@(_meals.Count == 1 ? "Meal" : "One of")</MudText>
+            @for (int i = 0; i < _meals.Count; i++)
+            {
+                Guid meal = _meals[i];
+                int at = i;
+                <div class="list-row d-flex align-center gap-2 px-2 py-1" @key="meal" data-testid="entry-choice" data-id="@meal">
+                    <MudText Class="flex-grow-1" data-testid="entry-choice-name">@MealName(meal)</MudText>
+                    @if (at > 0)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="Make it the usual one"
+                                       OnClick="() => MakeFirst(at)" data-testid="entry-choice-first"/>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="@($"Take out {MealName(meal)}")"
+                                   OnClick="() => _meals.RemoveAt(at)" data-testid="entry-choice-remove"/>
+                </div>
+            }
+        }
+
+        <MudTextField T="string" @ref="_searchField" @bind-Value="_search" Class="mt-2"
+                      Label="@(_meals.Count == 0 ? "Find a meal" : "Or another meal - a choice")" Variant="Variant.Outlined"
+                      Immediate="true" MaxLength="Names.MaxLength" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      InputId="entry-search" data-testid="entry-search"/>
+        @if (_meals.Count == 0 || !string.IsNullOrWhiteSpace(_search))
+        {
+            <div class="mt-1">
+                @foreach (PickerOption option in Matches().Take(8))
+                {
+                    <div class="list-row px-2 py-3" @key="option.Id" role="button" tabindex="0"
+                         @onclick="() => Choose(option)" data-testid="entry-meal-option" data-id="@option.Id">
+                        <MudText>@option.Name</MudText>
+                    </div>
+                }
+                @if (!Matches().Any())
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2" data-testid="entry-no-match">
+                        @(Meals.Count == 0 ? "No meals yet - add them on the Meals page first." : "No meal like that - add it on the Meals page first.")
+                    </MudText>
+                }
+            </div>
+        }
+
+        <MudText Typo="Typo.overline" Class="d-block mt-4">Who eats it</MudText>
+        <div class="d-flex flex-wrap gap-2">
+            <MudChip T="string" Color="@(_people is null ? Color.Primary : Color.Default)" Variant="@(_people is null ? Variant.Filled : Variant.Outlined)"
+                     OnClick="() => _people = null" data-testid="entry-everyone">Everyone</MudChip>
+            @foreach (PersonOption person in People)
+            {
+                bool chosen = _people?.Contains(person.Id) == true;
+                <MudChip T="string" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                         Style="@(chosen ? $"background:{person.Colour};color:#fff" : $"border-color:{person.Colour}")"
+                         OnClick="() => Toggle(person.Id)" data-testid="entry-person" data-id="@person.Id">@person.Name</MudChip>
+            }
+        </div>
+        @if (People.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">Add the household on the People page to plan for some of them.</MudText>
+        }
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3" data-testid="entry-error">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!IsNew)
+        {
+            <MudButton Color="Color.Error" OnClick="Remove" Class="mr-auto" data-testid="entry-remove">Remove</MudButton>
+        }
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="entry-cancel">Cancel</MudButton>
+        <MudButton OnClick="Save" Color="Color.Primary" Variant="Variant.Filled" data-testid="entry-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public TemplateEntryDraft Draft { get; set; } = new([], null);
+
+    [Parameter] public bool IsNew { get; set; }
+
+    /// <summary>"Week 2 · Tuesday · Lunch".</summary>
+    [Parameter] public string Where { get; set; } = "";
+
+    /// <summary>Every live meal, by name.</summary>
+    [Parameter] public IReadOnlyList<PickerOption> Meals { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<PersonOption> People { get; set; } = [];
+
+    private List<Guid>     _meals = [];
+    private HashSet<Guid>? _people;
+    private string?        _search;
+    private string?        _error;
+
+    private MudTextField<string>? _searchField;
+
+    protected override void OnInitialized()
+    {
+        _meals  = [.. Draft.Meals];
+        // Someone deleted since is dropped from the choice; nobody left is everyone.
+        _people = Draft.People is { } people && people.Any(p => People.Any(o => o.Id == p))
+            ? [.. people.Where(p => People.Any(o => o.Id == p))]
+            : null;
+    }
+
+    /// <summary>The search box takes focus once the dialog has opened - not AutoFocus, which its focus trap overrides.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && IsNew)
+        {
+            await Task.Delay(100);
+            await (_searchField?.FocusAsync() ?? ValueTask.CompletedTask);
+        }
+    }
+
+    private string MealName(Guid id) => Meals.FirstOrDefault(m => m.Id == id)?.Name ?? "meal removed";
+
+    private IEnumerable<PickerOption> Matches()
+    {
+        string filter = Names.Normalise(_search);
+        return Meals.Where(m => !_meals.Contains(m.Id) && (filter.Length == 0 || m.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase)))
+            .OrderBy(m => !m.Name.StartsWith(filter, StringComparison.CurrentCultureIgnoreCase))
+            .ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase);
+    }
+
+    private async Task Choose(PickerOption option)
+    {
+        _meals.Add(option.Id);
+        _search = null;
+        _error  = null;
+        await (_searchField?.FocusAsync() ?? ValueTask.CompletedTask);
+    }
+
+    private void MakeFirst(int at)
+    {
+        Guid meal = _meals[at];
+        _meals.RemoveAt(at);
+        _meals.Insert(0, meal);
+    }
+
+    private void Toggle(Guid person)
+    {
+        _people ??= [];
+        if (!_people.Remove(person))
+            _people.Add(person);
+        if (_people.Count == 0)
+            _people = null;
+    }
+
+    private void Save()
+    {
+        if (_meals.Count == 0)
+        {
+            _error = "Pick a meal, or Remove the entry.";
+            return;
+        }
+        Dialog.Close(DialogResult.Ok(new TemplateEntrySheetResult(new TemplateEntryDraft([.. _meals], _people?.ToList()), Remove: false)));
+    }
+
+    private void Remove() => Dialog.Close(DialogResult.Ok(new TemplateEntrySheetResult(null, Remove: true)));
+}

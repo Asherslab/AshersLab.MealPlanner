@@ -1,6 +1,7 @@
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Data.Meals;
+using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
@@ -30,5 +31,11 @@ public static class ImportKnownReader
             await db.Set<Product>().AsNoTracking()
                 .Select(p => new KnownProduct(p.Id, p.Name, p.StoreId, p.IngredientId, p.PackQuantity, p.Deleted)).ToListAsync(cancellationToken),
             await db.Set<PriceObservation>().AsNoTracking()
-                .Select(p => new KnownPrice(p.Id, p.ProductId, p.PriceCents, p.ObservedOn, p.Deleted, p.Source)).ToListAsync(cancellationToken));
+                .Select(p => new KnownPrice(p.Id, p.ProductId, p.PriceCents, p.ObservedOn, p.Deleted, p.Source)).ToListAsync(cancellationToken))
+        {
+            Slots = await db.Set<Slot>().AsNoTracking()
+                .Select(s => new KnownOrdered(s.Id, s.Name, s.Position, s.Deleted)).ToListAsync(cancellationToken),
+            Templates = await db.Set<PlanTemplate>().AsNoTracking()
+                .Select(t => new KnownNamed(t.Id, t.Name, t.Deleted)).ToListAsync(cancellationToken),
+        };
 }

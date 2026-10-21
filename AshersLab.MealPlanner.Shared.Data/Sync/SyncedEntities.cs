@@ -1,11 +1,13 @@
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Data.Meals;
+using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Domain;
 using AshersLab.MealPlanner.Shared.Domain.Meals;
+using AshersLab.MealPlanner.Shared.Domain.Planning;
 using AshersLab.MealPlanner.Shared.Domain.Products;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using System.Globalization;
@@ -47,8 +49,21 @@ public static class SyncedEntities
 
     public static readonly MealIngredientEntity MealIngredient = new();
 
+    public static readonly PersonEntity Person = new();
+
+    public static readonly SlotEntity Slot = new();
+
+    public static readonly PlanTemplateEntity PlanTemplate = new();
+
+    public static readonly TemplateEntryEntity TemplateEntry = new();
+
+    public static readonly TemplateChoiceEntity TemplateChoice = new();
+
     public static readonly IReadOnlyList<SyncedEntity> All =
-        [Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal, MealIngredient];
+    [
+        Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal, MealIngredient,
+        Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice,
+    ];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -150,6 +165,55 @@ public static class SyncedEntities
             // A meal's ingredients, and "is this ingredient still used?" Not foreign keys.
             line.HasIndex(l => l.MealId);
             line.HasIndex(l => l.IngredientId);
+        });
+
+        modelBuilder.Entity<Person>(person =>
+        {
+            person.ToTable("Person");
+            person.HasKey(p => p.Id);
+            person.Property(p => p.Id).ValueGeneratedNever();
+            person.Property(p => p.Name).HasMaxLength(Names.MaxLength);
+            person.Property(p => p.Colour).HasMaxLength(7);
+        });
+
+        modelBuilder.Entity<Slot>(slot =>
+        {
+            slot.ToTable("Slot");
+            slot.HasKey(s => s.Id);
+            slot.Property(s => s.Id).ValueGeneratedNever();
+            slot.Property(s => s.Name).HasMaxLength(Names.MaxLength);
+        });
+
+        modelBuilder.Entity<PlanTemplate>(template =>
+        {
+            template.ToTable("PlanTemplate");
+            template.HasKey(t => t.Id);
+            template.Property(t => t.Id).ValueGeneratedNever();
+            template.Property(t => t.Name).HasMaxLength(Names.MaxLength);
+        });
+
+        modelBuilder.Entity<TemplateEntry>(entry =>
+        {
+            entry.ToTable("TemplateEntry");
+            entry.HasKey(e => e.Id);
+            entry.Property(e => e.Id).ValueGeneratedNever();
+            // By name, as the op carries it.
+            entry.Property(e => e.Day).HasConversion<string>().HasMaxLength(10);
+            // At most PlanPeople.Max ids of 36 characters and their commas.
+            entry.Property(e => e.People).HasMaxLength(PlanPeople.Max * 37);
+            // A template's entries, and "is this slot still used?" Not foreign keys.
+            entry.HasIndex(e => e.TemplateId);
+            entry.HasIndex(e => e.SlotId);
+        });
+
+        modelBuilder.Entity<TemplateChoice>(choice =>
+        {
+            choice.ToTable("TemplateChoice");
+            choice.HasKey(c => c.Id);
+            choice.Property(c => c.Id).ValueGeneratedNever();
+            // An entry's choices, and "is this meal still planned?" Not foreign keys.
+            choice.HasIndex(c => c.EntryId);
+            choice.HasIndex(c => c.MealId);
         });
     }
 }

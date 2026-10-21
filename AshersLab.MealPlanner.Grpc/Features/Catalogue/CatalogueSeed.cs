@@ -5,6 +5,7 @@ using AshersLab.MealPlanner.Shared.Data.Sync;
 using AshersLab.MealPlanner.Shared.Domain;
 using AshersLab.MealPlanner.Shared.Domain.Categories;
 using AshersLab.MealPlanner.Shared.Domain.Meals;
+using AshersLab.MealPlanner.Shared.Domain.Planning;
 using AshersLab.MealPlanner.Shared.Domain.Stores;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AshersLab.MealPlanner.Grpc.Features.Catalogue;
 
 /// <summary>
-/// The stores, shopping categories and meal groups every household starts with, written into the op log as the server's own ops - so they reach
+/// The stores, shopping categories, meal groups and slots of the day every household starts with, written into the op log as the server's own ops - so they reach
 /// every browser like any other edit, and the household can rename or delete them.
 /// </summary>
 /// <remarks>
@@ -56,6 +57,15 @@ public static class CatalogueSeed
     /// <summary>The seeded meal group's id, by its position in <see cref="MealGroups"/> (0 is Beef).</summary>
     public static Guid MealGroup(int index) => new($"00000000-5eed-7000-8000-000000000{301 + index}");
 
+    /// <summary>
+    /// The slots of the planner's day, in its order - two snacks, told apart by position. No people: names are personal
+    /// and the repo is public; the planner adds the household in the app.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Slots = ["Breakfast", "Snack", "Lunch", "Snack", "Dinner"];
+
+    /// <summary>The seeded slot's id, by its position in <see cref="Slots"/> (0 is Breakfast).</summary>
+    public static Guid Slot(int index) => new($"00000000-5eed-7000-8000-000000000{401 + index}");
+
     public sealed record Seed(SyncedEntity Type, Guid Id, IReadOnlyList<OpField> Fields);
 
     public static readonly IReadOnlyList<Seed> All =
@@ -71,6 +81,11 @@ public static class CatalogueSeed
         [
             new OpField(MealGroupRules.NameField, name),
             new OpField(MealGroupRules.PositionField, ListPosition.Format(i + 1)),
+        ])),
+        .. Slots.Select((name, i) => new Seed(SyncedEntities.Slot, Slot(i),
+        [
+            new OpField(SlotRules.NameField, name),
+            new OpField(SlotRules.PositionField, ListPosition.Format(i + 1)),
         ])),
     ];
 

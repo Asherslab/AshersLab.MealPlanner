@@ -3,7 +3,7 @@ title: Spreadsheet import
 kind: reference
 status: current
 module: import
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.Shared.Domain/Import
   - AshersLab.MealPlanner.Shared.Data/Import/ImportKnownReader.cs
@@ -61,7 +61,7 @@ with none of the headings is a flat list; a row of it with no name is reported w
 
 | Region | Becomes |
 |---|---|
-| "WEEK 1".."WEEK n", one row per slot, columns per day | Read into `PlanWeek`s (slot = the label's leading word, cells split into choices on `/` and items on `,` and `+`; only weekday columns - sums or notes the sheet keeps beside them are not days) - **not imported yet**: plan templates are slice 8, which consumes `ParsedSheet.Plan` |
+| "WEEK 1".."WEEK n", one row per slot, columns per day | A plan template, "Spreadsheet plan" - see "The plan" below. Only weekday columns: sums or notes the sheet keeps beside them are not days |
 | "MEAL IDEAS", one column per meal group | `Meal`s in that group, with their ingredients as lines with no quantity |
 | "COSTS", one column per shopping category | `Ingredient`s in that category; the non-food column ("Non-food", "Household") becomes products with no ingredient |
 | A sheet with no headings | More ingredients (no category), merged by key; prices on their rows |
@@ -106,6 +106,41 @@ values in `SheetTextTests`:
 | `2 for 5` | not read: which is the price is not guessed |
 | `<$12 (only on sale)` | not a price: the name is added with none, and "Not imported" lists the cell's words |
 
+## The plan
+
+`SheetImport.Plan.cs`. The "WEEK n" regions become one [plan template](../planning/plan-templates.md) of as many weeks
+as the highest week number, with an entry per thing eaten, every entry for everyone.
+
+**Imported once, ever** (trap): the template has a fixed id, `SheetImport.PlanTemplateId`
+(`00000000-5eed-7000-8000-000000000501`). A database that holds it - renamed or not - or its tombstone gets no plan
+from any later run: no entries, no slots, no plan meals, no plan questions, and "Not imported" says why ("The plan:
+already here as ..." / "deleted here before, so not imported again."). After the first run the plan is the app's, as
+everything else the sheet gave. The fixed id also means two devices importing offline make one template, not two
+(their entries still duplicate - see the duplicate trap above).
+
+**A cell's names** are found by matching as few as possible against the meals - the app's live meals and the meal ideas
+this run adds, by `ImportNames.Key` (case, punctuation and plurals ignored): the whole '/'-choice if it is a meal ("Muesli
++ yoghurt"), else each ','-part that is one ("Eggs + soldiers"), else that part's '+'-items
+(`SheetText.PlanChoices`, `SheetImport.PlanNames`). Then:
+
+| The cell | Becomes |
+|---|---|
+| One choice of one or more names ("Rice cakes, cheese, apple") | an entry per name, one choice each |
+| Several choices of one name each ("Leftovers/noodles/pizza") | one entry, a choice per name, in the sheet's order |
+| Several choices, one of several names ("Takeaway, salad/soup") | left out: "a choice between several things eaten together - add it on the plan's page." |
+| The same meal twice in a cell ("Crumpet, eggs + crumpet") | planned once, and said, with every cell it happened in |
+
+**A name becomes a meal**: the meal of that key if there is one; "Leftovers" and "Family dinner" a meal of kind
+`Leftovers` / `NoCost` of that name when there is none; a name like a meal is asked (below); any other name a new
+single-serve (`Simple`) meal, in no group, made of the ingredient of the same key when there is one ("Apple" of
+"Apples") - **made on first sight and reused after**, however many cells name it. A name whose meal was deleted here is
+left out of the plan, said once, and not made again.
+
+**Slots** are the row label's leading word ("Lunch (packed for work)" is Lunch; the rest of the label is listed under
+"Not imported", since who an entry is for is not something the sheet says). The nth row of a word in a week is the nth
+slot of that name - the two snacks. A slot the day lacks is added at the end, once for every week; one deleted here
+leaves its rows out rather than coming back.
+
 ## Stores, when the sheet names none
 
 A price's store is, in order: the planner's answer for that price; a store word beside it; the ingredient's usual store
@@ -130,6 +165,7 @@ unit chosen in the review is not a guess.
 | Which ingredient is "cheese"? | a meal names something that is not exactly an ingredient, but resembles one (`ImportNames.Candidates`: a letter or two wrong or swapped, one name wholly inside the other - offered first - or a word in common) | a likely misspelling; otherwise a new ingredient. Nothing like it at all: a new one, not asked |
 | Is "Sweet chili sauce" one already here? | on a later import, a shopping-list name resembling an ingredient here, and not answered before (a product of that name) | the same: a likely misspelling, else new |
 | Units the prices disagree with | an ingredient here whose unit is still the import's guess, and a price's pack is counted another way ("guessed as g · the sheet says $2.00 for 1 each") | keep; until changed, that price is left out with why. Changing it sends the unit and `UnitGuessed = false` |
+| Which meal is "Lmab korma"? | a plan name that is not exactly a meal but resembles one (`ImportNames.Candidates`, as for ingredients) - only while the plan will be imported | a likely misspelling (a letter or two wrong or swapped); otherwise "A new single-serve meal". Nothing like any meal: new, not asked |
 | How many serves? | a meal with ingredients and no `Nx`, or `N?x` | empty (single serve), or N |
 | Headings | a meal-ideas or costs heading not exactly a group or category ("Snacks/sweets") | the closest ("Snack"), or a new one at the end |
 | A price's store and pack | always shown, each "Will be imported", "Already here - the same as its latest price" or "Left out: why" | the store and pack the sheet gave |
@@ -214,3 +250,11 @@ passing. Those fixes have their own tests, each failing when its fix was broken,
 other: the sheet's own last prices as the comparison (any source instead, every day instead of the last), product and
 household-product tombstones, the plural "Costs" heading, the gap between side-by-side regions and their column limit,
 a flat-list row with no name, the multi-buy, nested parentheses, and the likely-match fallback taken unanswered.
+
+2026-10-22, with the plan: the same script, the same two sheets, a fresh server database. The first sheet's review
+added "a 4-week plan of 287 entries" and asked about 9 plan names, one with a likely meal chosen (a swapped-letter
+spelling), the rest left as new single-serve meals. Import wrote 826 ops in 12 s: 4 weeks, 287 entries, 298 choices
+(7 entries with alternatives), 1 Leftovers and 1 NoCost meal, the 5 seeded slots and no new one. Every entry had a
+choice and every choice named a live meal, on the server and in both profiles' SQLite; the done message linked to the
+plan. B, A after a reload, and the later sheet on top: the plan's rows unchanged, nothing new. The plan's tests
+(`PlanImportTests`) were checked by breaking the imported-once guard and the likely-match suggestion: each failed tests.

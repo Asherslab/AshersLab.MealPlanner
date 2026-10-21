@@ -227,6 +227,129 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                     b.ToTable("MealIngredient", (string)null);
                 });
 
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.Person", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Colour")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Person", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.PlanTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("WeekCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlanTemplate", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.Slot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Position")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Slot", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.TemplateChoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("EntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MealId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntryId");
+
+                    b.HasIndex("MealId");
+
+                    b.ToTable("TemplateChoice", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.TemplateEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Day")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("People")
+                        .HasMaxLength(740)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SlotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Week")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SlotId");
+
+                    b.HasIndex("TemplateId");
+
+                    b.ToTable("TemplateEntry", (string)null);
+                });
+
             modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Prices.PriceObservation", b =>
                 {
                     b.Property<Guid>("Id")

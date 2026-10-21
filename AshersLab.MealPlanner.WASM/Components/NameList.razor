@@ -100,6 +100,9 @@
 
     [Parameter, EditorRequired] public Func<Guid, Task> OnDelete { get; set; } = null!;
 
+    /// <summary>Two items may share a name - the day's two snacks, told apart by where they sit.</summary>
+    [Parameter] public bool AllowSameName { get; set; }
+
     /// <summary>Set to make the list reorderable: the item, and -1 for up or +1 for down.</summary>
     [Parameter] public Func<Guid, int, Task>? OnMove { get; set; }
 
@@ -122,7 +125,7 @@
     /// <summary>Null when <paramref name="name"/> is acceptable for <paramref name="id"/> (null for a new one).</summary>
     private string? Problem(string name, Guid? id) =>
         NameProblem(name)
-        ?? (Items.Any(i => i.Id != id && Names.Same(i.Name, name)) ? $"There is already a {Noun} called {name}." : null);
+        ?? (!AllowSameName && Items.Any(i => i.Id != id && Names.Same(i.Name, name)) ? $"There is already a {Noun} called {name}." : null);
 
     private async Task Add()
     {

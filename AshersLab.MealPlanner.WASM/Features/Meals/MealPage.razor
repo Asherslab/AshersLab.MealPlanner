@@ -2,6 +2,7 @@
 @using AshersLab.MealPlanner.LocalData
 @using AshersLab.MealPlanner.Shared.Data.Ingredients
 @using AshersLab.MealPlanner.Shared.Data.Meals
+@using AshersLab.MealPlanner.Shared.Data.Planning
 @using AshersLab.MealPlanner.Shared.Data.Sync
 @using AshersLab.MealPlanner.Shared.Domain.Ingredients
 @using AshersLab.MealPlanner.Shared.Domain.Meals
@@ -126,6 +127,7 @@
     private List<MealGroup> _groups     = [];
     private List<string>    _otherNames = [];
     private MealCostBook    _costs      = null!;
+    private PlanBook        _plans      = null!;
 
     // The same page instance shows another meal when only the id in the address changes.
     protected override async Task OnParametersSetAsync()
@@ -140,6 +142,7 @@
         _groups     = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
         _otherNames = await db.Meals.AsNoTracking().Where(m => !m.Deleted && m.Id != Id).Select(m => m.Name).ToListAsync();
         _costs      = await MealCostBook.LoadAsync(db);
+        _plans      = await PlanBook.LoadAsync(db);
     }
 
     /// <summary>"Beef · makes 4 serves".</summary>
@@ -193,7 +196,7 @@
     {
         MealDraft before = _meal!.Draft();
         MealEditorResult? result = await MealDialogs.EditAsync(Dialogs, Viewport, before, isNew: false,
-            [.. _groups.Select(g => new PickerOption(g.Id, g.Name))], _otherNames);
+            [.. _groups.Select(g => new PickerOption(g.Id, g.Name))], _otherNames, _plans.PlansWithMeal(Id));
 
         if (result is { Delete: true })
         {

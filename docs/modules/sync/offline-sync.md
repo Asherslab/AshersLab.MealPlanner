@@ -3,7 +3,7 @@ title: Offline sync
 kind: reference
 status: current
 module: sync
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.Shared.Domain/Sync
   - AshersLab.MealPlanner.Shared.Domain/Ingredients/IngredientRules.cs
@@ -200,8 +200,14 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
 - **Several edits as one** (`LocalOps.WriteAllAsync`, which `WriteAsync` is the one-edit case of): every edit is
   checked with the server's rules before anything is written, then all are applied and queued in one transaction,
   each with its own clock tick in the order given - all of them or none. For something written as a whole, where
-  half would be worse than nothing: the [spreadsheet import](../import/spreadsheet-import.md), a couple of hundred ops.
-  They push in batches like any other queued ops.
+  half would be worse than nothing: the [spreadsheet import](../import/spreadsheet-import.md) - about 900 ops with its
+  plan - and a plan entry with its choices. They push in batches like any other queued ops. **Each edit is saved and
+  the change tracker cleared before the next**, inside the one transaction: kept tracked, every save scanned every row
+  the batch had touched, and the import with its plan took 54 s in desktop Chrome; cleared, 12 s.
+- **Pulled pages and snapshots are forgotten op by op, row by row, too** (`LocalOps.ApplyPulledAsync`,
+  `ApplySnapshotAsync`), for the same reason: `OpApplier` saves per op. A fresh browser's first load after that import
+  (a snapshot of about 900 rows) took 147 s to show anything; cleared, 22 s, most of it the WASM app starting. The
+  server's push path is native .NET and was not the bottleneck; it still saves op by op without clearing.
 - **When a round runs** (`WASM/Sync/SyncLoop.cs`, its decisions in `LocalData/Sync/SyncSchedule.cs` and tested in
   `Tests/Sync/SyncScheduleTests.cs`): on start; after every edit; when the change stream reports a seq other than
   the cursor's (a restored server reports one *below* it), or reconnects after a drop; on the browser's `online`

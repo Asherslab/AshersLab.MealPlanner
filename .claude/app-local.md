@@ -167,6 +167,25 @@ download of the sheet it imports that on top and checks nothing already there ch
 database (stop the app, delete `mealplanner.db*`, start it) - against one already holding the import it can only say
 "nothing new".
 
+The import's review also asks about plan names (`import-plan-meal-question`, `data-key`, a native select whose empty value
+is "a new single-serve meal"), and the done message links to the plan (`import-plan-link`). The check reports the plan's
+weeks, entries and choices from the server, and with a later sheet includes the plan's rows in "nothing changed".
+
+**People** (`/people`, `nav-people`): `person-new-name` (input id too) and `person-add`; per row `person-row` (`data-id`;
+its `[role=button]` opens the inline editor) and `person-name`; the editor: `person-edit-name` (input id),
+`person-colour` (`data-colour`), `person-save`, `person-cancel`, `person-delete`, `person-in-use`. **Slots**
+(`/slots`, `nav-slots`) is a `NameList` with the prefix `slot`. **Plans** (`/plans`, `nav-plans`): `plan-new-name`,
+`plan-new-weeks` (input ids), `plan-add`; per plan `plan-row` (an `<a>`, `data-id`), `plan-name`, `plan-detail`. A
+plan's page: `plan-title`, `plan-summary`, `plan-edit`, `plan-week` (`data-week`); on a desktop-wide viewport
+`plan-grid`, on a phone `plan-day` (`data-day`) and `plan-day-view`; either way `plan-cell` (`data-day`, `data-slot`)
+holding `plan-entry` (`data-id`) with `plan-entry-meals` / `plan-entry-people`, and `plan-cell-add`. The entry sheet:
+`entry-where`, `entry-search` (input id), `entry-meal-option` (`data-id`), `entry-choice` with `entry-choice-first` /
+`entry-choice-remove`, `entry-everyone`, `entry-person` (`data-id`), `entry-save`, `entry-cancel`, `entry-remove`,
+`entry-error`. The plan editor: `plan-edit-name`, `plan-edit-weeks`, `plan-edit-hidden`, `plan-save`, `plan-delete`.
+**Headless Chrome's default window is 800 px - the phone layout**; set a desktop size with
+`Emulation.setDeviceMetricsOverride` to see the grid. `node .claude/tools/chrome-plans-check.mjs <scratch>/plans`
+(ports 19354/19355, about a minute) drives all of it, A desktop-sized and B phone-sized.
+
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
 

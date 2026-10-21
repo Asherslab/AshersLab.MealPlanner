@@ -2,6 +2,7 @@ using AshersLab.MealPlanner.Shared.Domain.Categories;
 using AshersLab.MealPlanner.Shared.Domain.Import;
 using AshersLab.MealPlanner.Shared.Domain.Ingredients;
 using AshersLab.MealPlanner.Shared.Domain.Meals;
+using AshersLab.MealPlanner.Shared.Domain.Planning;
 using AshersLab.MealPlanner.Shared.Domain.Prices;
 using AshersLab.MealPlanner.Shared.Domain.Products;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
@@ -91,7 +92,8 @@ public class SheetImportTests
     {
         ImportPlan plan = Plan(Seeds());
 
-        Assert.Equal(7, plan.NewMeals);
+        // The meal ideas; the plan's own single-serve meals ("Porridge", "Eating out"...) are PlanImportTests'.
+        Assert.Equal(7, plan.NewMeals - plan.PlanCounts.NewMeals);
         ImportEdit shepherd = Named(plan, MealRules.Entity, "Shepherd pie");
         Assert.Equal("Cooked", Field(shepherd, MealRules.KindField));
         Assert.Equal("4", Field(shepherd, MealRules.ServesPerBatchField));
@@ -544,6 +546,10 @@ public class SheetImportTests
                 CategoryRules.Entity         => CategoryRules.OpProblem(edit.Kind, edit.Fields),
                 ProductRules.Entity          => ProductRules.OpProblem(edit.Kind, edit.Fields),
                 PriceRules.Entity            => PriceRules.OpProblem(edit.Kind, edit.Fields),
+                SlotRules.Entity             => SlotRules.OpProblem(edit.Kind, edit.Fields),
+                PlanTemplateRules.Entity     => PlanTemplateRules.OpProblem(edit.Kind, edit.Fields),
+                TemplateEntryRules.Entity    => TemplateEntryRules.OpProblem(edit.Kind, edit.Fields),
+                TemplateChoiceRules.Entity   => TemplateChoiceRules.OpProblem(edit.Kind, edit.Fields),
                 _                            => $"unexpected {edit.Entity}",
             };
             Assert.Null(problem);

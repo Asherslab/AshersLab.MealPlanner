@@ -116,6 +116,13 @@ public static class LocalOps
             };
             db.Outbox.Add(op);
             ops.Add(op);
+
+            // Saved and forgotten edit by edit, inside the one transaction: otherwise the change tracker keeps every
+            // row, clock and op the batch has touched, and each save scans them all - quadratic. Seen 2026-10-21: the
+            // spreadsheet import with its plan, about 900 edits, took 54 s in Chrome on a desktop.
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+            db.Attach(state);
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -197,6 +204,11 @@ public static class LocalOps
             clock                    = Hlc.Observe(clock, op.Clock, deviceId);
             state.PulledThroughSeq   = op.Seq;
             state.PulledThroughChain = op.Chain;
+
+            // Forgotten op by op, as in WriteAllAsync: a page is up to the server's limit of ops.
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+            db.Attach(state);
         }
 
         List<Guid> confirmed = [.. ops.Select(o => o.OpId)];
@@ -285,6 +297,11 @@ public static class LocalOps
             await OpApplier.ApplySnapshotRowAsync(db, row, cancellationToken);
             foreach ((OpField _, Hlc fieldClock) in row.Fields)
                 clock = Hlc.Observe(clock, fieldClock, deviceId);
+
+            // Forgotten row by row, as in WriteAllAsync: a first load after the spreadsheet import is about 900 rows.
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+            db.Attach(state);
         }
 
         state.ServerEpoch        = serverEpoch;

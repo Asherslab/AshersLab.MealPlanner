@@ -2,6 +2,7 @@ using AshersLab.MealPlanner.Grpc.Data.Models.Sync;
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Data.Meals;
+using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
@@ -33,6 +34,16 @@ public partial class MealPlannerDbContext
     public DbSet<Meal> Meals => Set<Meal>();
 
     public DbSet<MealIngredient> MealIngredients => Set<MealIngredient>();
+
+    public DbSet<Person> People => Set<Person>();
+
+    public DbSet<Slot> Slots => Set<Slot>();
+
+    public DbSet<PlanTemplate> PlanTemplates => Set<PlanTemplate>();
+
+    public DbSet<TemplateEntry> TemplateEntries => Set<TemplateEntry>();
+
+    public DbSet<TemplateChoice> TemplateChoices => Set<TemplateChoice>();
 
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 

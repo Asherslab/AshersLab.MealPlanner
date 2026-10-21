@@ -1,0 +1,85 @@
+@page "/plans"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Planning
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@inherits LocalDataPage
+@inject NavigationManager Navigation
+
+@*
+    The plan templates: rotations of one or more weeks the calendar is filled from. Adding one is a name and how many
+    weeks, then its page.
+*@
+
+<PageTitle>Plans - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Plans</MudText>
+<MudText Class="mt-1 mud-text-secondary">A plan is a rotation of weeks - what is eaten each day, slot by slot.</MudText>
+
+<LocalDataGate Start="Start">
+    <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
+        <MudTextField T="string" @bind-Value="_newName" Label="New plan" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength" Class="flex-grow-1"
+                      Error="_addError is not null" ErrorText="@_addError"
+                      InputId="plan-new-name" data-testid="plan-new-name"/>
+        <MudTextField T="string" @bind-Value="_newWeeks" Label="Weeks" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Immediate="true" InputMode="InputMode.numeric" Style="max-width:6rem"
+                      Error="_weeksError is not null" ErrorText="@_weeksError"
+                      InputId="plan-new-weeks" data-testid="plan-new-weeks"/>
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
+                   data-testid="plan-add">Add</MudButton>
+    </form>
+
+    <MudPaper Outlined="true" Class="mt-4">
+        @if (_plans is null || !_plans.Templates.Any())
+        {
+            <MudText Class="pa-4 mud-text-secondary" data-testid="plan-empty">
+                No plans yet. Add one, or import the spreadsheet's.
+            </MudText>
+        }
+        else
+        {
+            @foreach (PlanTemplate template in _plans.Templates)
+            {
+                int entries = _plans.EntriesOf(template.Id).Count(e => e.Week <= template.WeekCount);
+                <a class="list-row meal-row d-block px-4 py-2" href="@($"plans/{template.Id}")" @key="template.Id"
+                   data-testid="plan-row" data-id="@template.Id">
+                    <MudText data-testid="plan-name">@template.Name</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="plan-detail">@($"{PlanText.Weeks(template.WeekCount)} · {entries} {(entries == 1 ? "entry" : "entries")}")</MudText>
+                </a>
+            }
+        }
+    </MudPaper>
+</LocalDataGate>
+
+@code {
+    private PlanBook? _plans;
+
+    private string? _newName;
+    private string? _newWeeks = "1";
+    private string? _addError;
+    private string? _weeksError;
+
+    protected override async Task LoadAsync(LocalDbContext db) => _plans = await PlanBook.LoadAsync(db);
+
+    private async Task Add()
+    {
+        string name = Names.Normalise(_newName);
+        _addError   = PlanTemplateRules.NameProblem(name)
+                      ?? (_plans!.Templates.Any(t => Names.Same(t.Name, name)) ? $"There is already a plan called {name}." : null);
+        _weeksError = PlanText.ReadWeeks(_newWeeks, out int weeks);
+        if (_addError is not null || _weeksError is not null)
+            return;
+
+        Guid id = Guid.CreateVersion7();
+        await WriteAsync(SyncedEntities.PlanTemplate, id, OpKind.Create,
+        [
+            new OpField(PlanTemplateRules.NameField, name),
+            new OpField(PlanTemplateRules.WeekCountField, OpValues.FormatInt(weeks)),
+        ]);
+        Navigation.NavigateTo($"plans/{id}");
+    }
+}

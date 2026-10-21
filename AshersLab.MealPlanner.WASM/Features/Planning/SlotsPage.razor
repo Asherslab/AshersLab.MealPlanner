@@ -1,0 +1,63 @@
+@page "/slots"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Planning
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+
+@*
+    The slots of the day - Breakfast, Snack, Lunch, Snack, Dinner - in the order a plan shows them. Seeded; arranged
+    with the arrows, like the meal groups. Two may share a name. A slot a plan uses cannot be deleted.
+*@
+
+<PageTitle>Slots - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Slots of the day</MudText>
+<MudText Class="mt-1 mud-text-secondary">A plan shows each day's meals in this order.</MudText>
+
+<LocalDataGate Start="Start">
+    <NameList Items="_items" Noun="slot" TestId="slot" NewLabel="New slot" UsedByNoun="plan" AllowSameName="true"
+              NameProblem="SlotRules.NameProblem"
+              InUseHint="Move its entries to another slot first."
+              OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
+</LocalDataGate>
+
+@code {
+    private List<Slot>         _slots = [];
+    private List<NameListItem> _items = [];
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _slots = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
+        PlanBook plans = await PlanBook.LoadAsync(db);
+        _items = [.. _slots.Select(s => new NameListItem(s.Id, s.Name, plans.PlansWithSlot(s.Id)))];
+    }
+
+    private Task Add(string name) =>
+        WriteAsync(SyncedEntities.Slot, Guid.CreateVersion7(), OpKind.Create,
+        [
+            new OpField(SlotRules.NameField, name),
+            new OpField(SlotRules.PositionField, ListPosition.Format(ListPosition.AtEnd(_slots.Select(s => s.Position)))),
+        ]);
+
+    private Task Rename(Guid id, string name) =>
+        WriteAsync(SyncedEntities.Slot, id, OpKind.Update, [new OpField(SlotRules.NameField, name)]);
+
+    private Task Delete(Guid id) => WriteAsync(SyncedEntities.Slot, id, OpKind.Delete, []);
+
+    private async Task Move(Guid id, int direction)
+    {
+        int index = _slots.FindIndex(s => s.Id == id);
+        if (index < 0)
+            return;
+
+        List<Slot> before = _slots;
+        foreach ((int at, decimal position) in ListPosition.Move([.. before.Select(s => s.Position)], index, direction))
+            await WriteAsync(SyncedEntities.Slot, before[at].Id, OpKind.Update,
+                [new OpField(SlotRules.PositionField, ListPosition.Format(position))]);
+    }
+}

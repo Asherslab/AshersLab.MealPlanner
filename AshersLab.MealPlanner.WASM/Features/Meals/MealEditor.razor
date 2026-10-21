@@ -62,6 +62,13 @@
             <MudTextField T="string" @bind-Value="_notes" Label="Notes (optional)" Variant="Variant.Outlined"
                           Lines="3" AutoGrow="true" MaxLines="10" MaxLength="MealRules.MaxNotesLength" Class="mt-4"
                           Immediate="true" InputId="meal-edit-notes" data-testid="meal-edit-notes"/>
+
+            @if (_inUse)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4" data-testid="meal-in-use">
+                    @Draft.Name is planned in @string.Join(", ", PlannedIn). Take it out of the plan first.
+                </MudAlert>
+            }
         </form>
     </DialogContent>
     <DialogActions>
@@ -89,6 +96,11 @@
 
     /// <summary>Every other meal's name, to warn about a duplicate.</summary>
     [Parameter] public IReadOnlyList<string> OtherNames { get; set; } = [];
+
+    /// <summary>The plans it is in. Not empty: it cannot be deleted - the plan would point at nothing.</summary>
+    [Parameter] public IReadOnlyList<string> PlannedIn { get; set; } = [];
+
+    private bool _inUse;
 
     private string?  _name;
     private string   _groupId = "";
@@ -151,6 +163,12 @@
 
     private async Task Delete()
     {
+        if (PlannedIn.Count > 0)
+        {
+            _inUse = true;
+            return;
+        }
+
         bool? confirmed = await Dialogs.ShowMessageBoxAsync(
             title: $"Delete {Draft.Name}?",
             message: "It goes from the meals on every device, with its ingredients.",

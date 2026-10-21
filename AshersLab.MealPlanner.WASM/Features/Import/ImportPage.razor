@@ -46,6 +46,10 @@
             <MudButton Href="ingredients" Variant="Variant.Outlined">Ingredients</MudButton>
             <MudButton Href="meals" Variant="Variant.Outlined">Meals</MudButton>
             <MudButton Href="prices" Variant="Variant.Outlined">Prices</MudButton>
+            @if (done.PlanCounts.Weeks > 0)
+            {
+                <MudButton Href="@($"plans/{SheetImport.PlanTemplateId}")" Variant="Variant.Outlined" data-testid="import-plan-link">Plan</MudButton>
+            }
         </div>
     }
 
@@ -83,6 +87,27 @@
                         <span>"@q.Name" @(q.Meals.Count > 0 ? $"in {string.Join(", ", q.Meals)}" : $"in the shopping list ({q.Place}) - is it one already here?")</span>
                         <select value="@(Chosen(q) ?? "")" @onchange="e => Set(_choices.Ingredients, q.Key, Empty(e))">
                             <option value="">A new ingredient, "@q.Name"</option>
+                            @foreach ((string key, string name) in q.Options)
+                            {
+                                <option value="@key">@name</option>
+                            }
+                        </select>
+                    </label>
+                }
+            </MudPaper>
+        }
+
+        @if (_review.PlanMeals.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Which meal is it?</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">The plan names something that is not exactly a meal in the list.</MudText>
+            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+                @foreach (PlanMealQuestion q in _review.PlanMeals)
+                {
+                    <label class="native-select" data-testid="import-plan-meal-question" data-key="@q.Key">
+                        <span>"@q.Name" in the plan (@Places(q.Places))</span>
+                        <select value="@(PlanMeal(q) ?? "")" @onchange="e => Set(_choices.PlanMeals, q.Key, Empty(e))">
+                            <option value="">A new single-serve meal, "@q.Name"</option>
                             @foreach ((string key, string name) in q.Options)
                             {
                                 <option value="@key">@name</option>
@@ -286,9 +311,6 @@
             </MudPaper>
         }
 
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-6">
-            The 4-week plan in the sheet (@_import.PlanWeeks weeks) is read but not imported yet: plan templates come next.
-        </MudText>
     }
 </LocalDataGate>
 
@@ -387,6 +409,8 @@
             Count(plan.NewCategories, "category", "categories"),
             Count(plan.NewProducts, "product"),
             Count(plan.NewPrices, "price"),
+            Count(plan.PlanCounts.NewSlots, "slot"),
+            plan.PlanCounts.Weeks > 0 ? $"a {plan.PlanCounts.Weeks}-week plan of {Count(plan.PlanCounts.Entries, "entry", "entries") ?? "no entries"}" : null,
             plan.ChangedUnits > 0 ? $"{Count(plan.ChangedUnits, "unit")} changed" : null,
         }.OfType<string>()) is { Length: > 0 } text ? text : "nothing";
 
@@ -394,6 +418,12 @@
         n == 0 ? null : $"{n} {(n == 1 ? noun : plural ?? noun + "s")}";
 
     private string? Chosen(IngredientQuestion q) => _choices.Ingredients.TryGetValue(q.Key, out string? key) ? key : q.Suggested;
+
+    private string? PlanMeal(PlanMealQuestion q) => _choices.PlanMeals.TryGetValue(q.Key, out string? key) ? key : q.Suggested;
+
+    /// <summary>"Sheet1 B5, D5 and 3 more".</summary>
+    private static string Places(IReadOnlyList<SheetPlace> places) =>
+        string.Join(", ", places.Take(3)) + (places.Count > 3 ? $" and {places.Count - 3} more" : "");
 
     private int? Serves(ServesQuestion q) => _choices.Serves.TryGetValue(q.Key, out int? serves) ? serves : q.Suggested;
 

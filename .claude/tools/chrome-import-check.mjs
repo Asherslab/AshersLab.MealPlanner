@@ -35,7 +35,9 @@ async function pick(p, file = sheet) {
 const text = (p, testid) => p.evaluate(`document.querySelector('[data-testid=${testid}]')?.textContent.trim().replace(/\\s+/g, ' ') ?? null`);
 const count = (p, testid) => p.evaluate(`document.querySelectorAll('[data-testid=${testid}]').length`);
 
-const TABLES = ['Ingredient', 'Category', 'MealGroup', 'Meal', 'MealIngredient', 'Product', 'PriceObservation'];
+const TABLES = ['Ingredient', 'Category', 'MealGroup', 'Meal', 'MealIngredient', 'Product', 'PriceObservation',
+  'Slot', 'PlanTemplate', 'TemplateEntry', 'TemplateChoice'];
+const PLAN = '00000000-5EED-7000-8000-000000000501';
 const counts = q => TABLES.map(t => `${t} ${q(`select count(*) from ${t} where not Deleted`)}`).join(', ')
   + `, guessed ${q('select count(*) from Ingredient where UnitGuessed and not Deleted')}`
   + `, spreadsheet prices ${q(`select count(*) from PriceObservation where Source = 'Sheet' and not Deleted`)}`;
@@ -47,6 +49,10 @@ console.log(`  review: ${await text(a, 'import-summary')}`);
 console.log(`  questions: ${await count(a, 'import-ingredient-question')} ingredient, ${await count(a, 'import-serves-question')} serves, `
   + `${await count(a, 'import-group-question')} group, ${await count(a, 'import-category-question')} category, `
   + `${await count(a, 'import-price')} prices; ${await count(a, 'import-new-ingredient')} new ingredients to check`);
+const planQuestions = await count(a, 'import-plan-meal-question');
+const planSuggested = await a.evaluate(`[...document.querySelectorAll('[data-testid=import-plan-meal-question] select')].filter(s => s.value !== '').length`);
+console.log(`  plan: ${planQuestions} names asked about, ${planSuggested} with a likely meal chosen, the rest a new meal unless answered`);
+check(planQuestions > 0, 'the plan names something not exactly a meal, and the review asks rather than guessing');
 
 /** Picks a store by name in one of the review's store selects; null when the review has no such select. */
 const chooseStore = (p, testid, store) => p.evaluate(`(() => { const s = document.querySelector('[data-testid=${testid}] select');
@@ -97,6 +103,18 @@ for (const p of [a, b]) {
   check(same, `${p.name} SQLite holds the same counts as the server, outbox empty`);
 }
 check(server(`select count(*) from MealIngredient where Quantity is not null`) === '0', 'every imported meal ingredient has no quantity yet');
+const weeks = server(`select WeekCount from PlanTemplate where Id = '${PLAN}'`);
+const entries = server(`select count(*) from TemplateEntry where TemplateId = '${PLAN}' and not Deleted`);
+console.log(`  plan: ${weeks} weeks, ${entries} entries, ${server(`select count(*) from TemplateChoice where not Deleted`)} choices, `
+  + `${server(`select count(*) from TemplateEntry e where (select count(*) from TemplateChoice c where c.EntryId = e.Id) > 1`)} entries with alternatives, `
+  + `${server(`select count(*) from Meal where Kind = 'Leftovers'`)} leftovers meal, ${server(`select count(*) from Meal where Kind = 'NoCost'`)} no-cost meal, `
+  + `slots ${server(`select count(*) from Slot where not Deleted`)}`);
+check(Number(weeks) > 0 && Number(entries) > 0, 'the plan is a template of the sheet\'s weeks, with entries');
+check(server(`select count(*) from TemplateEntry e where not exists (select 1 from TemplateChoice c where c.EntryId = e.Id)`) === '0',
+  'every entry has at least one choice');
+check(server(`select count(*) from TemplateChoice c where not exists (select 1 from Meal m where m.Id = c.MealId and not m.Deleted)`) === '0',
+  'every choice names a meal that is here');
+check(await until(a, `!!document.querySelector('[data-testid=import-plan-link]')`, 5000), 'the done message links to the plan');
 
 // --- Again, on the other profile and then this one ----------------------------------------------------------------
 check(await pick(b), 'B picks the same sheet');
@@ -132,7 +150,11 @@ if (later) {
     union all select 'P', Id, Name, StoreId, cast(PackQuantity as real), coalesce(IngredientId, ''), Deleted from Product
     union all select 'O', Id, ProductId, PriceCents, ObservedOn, Source, Deleted from PriceObservation
     union all select 'C', Id, Name, cast(Position as real), Deleted, '', '' from Category
-    union all select 'G', Id, Name, cast(Position as real), Deleted, '', '' from MealGroup`).split('\n');
+    union all select 'G', Id, Name, cast(Position as real), Deleted, '', '' from MealGroup
+    union all select 'S', Id, Name, cast(Position as real), Deleted, '', '' from Slot
+    union all select 'T', Id, Name, WeekCount, Deleted, '', '' from PlanTemplate
+    union all select 'E', Id, TemplateId, Week, Day, SlotId, coalesce(People, '') || Deleted from TemplateEntry
+    union all select 'H', Id, EntryId, MealId, Deleted, '', '' from TemplateChoice`).split('\n');
   const old = new Map(rows().map(r => [r.split('|').slice(0, 2).join('|'), r]));
 
   await a.go('import');

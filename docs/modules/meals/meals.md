@@ -82,7 +82,9 @@ opens its page (`/meals/{id}`): the name, "Beef · makes 4 serves", the notes, a
 phone) is Name, Group (the phone's own picker), the kind as five radio buttons each with what it means, then the
 fields that kind needs, then Notes; Delete is in it, with a confirmation, and goes back to the list. Saving a new meal
 opens its page. Adding a batch meal: type the name, Add, pick the group, type the serves, Save - two taps and two
-fields. A page left open on a meal deleted elsewhere says "This meal is not here".
+fields. A page left open on a meal deleted elsewhere says "This meal is not here". **A meal a plan uses cannot be
+deleted**: Delete in the editor says "... is planned in Spreadsheet plan. Take it out of the plan first."
+([plan templates](../planning/plan-templates.md#deleting-something-a-plan-uses)).
 
 ## A meal's ingredients
 

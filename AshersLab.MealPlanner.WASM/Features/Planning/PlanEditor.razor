@@ -1,0 +1,87 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@inject IDialogService Dialogs
+
+@*
+    A plan's own fields - name and how many weeks it runs - and delete. Fewer weeks hides the later weeks' entries
+    rather than deleting them: they come back if the plan grows again, and nothing is lost to a mistyped number.
+*@
+
+<MudDialog data-testid="plan-editor">
+    <DialogContent>
+        <form id="plan-editor-form" @onsubmit="Save" @onsubmit:preventDefault>
+            <MudTextField T="string" @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Immediate="true"
+                          MaxLength="Names.MaxLength" Error="_nameError is not null" ErrorText="@_nameError"
+                          InputId="plan-edit-name" data-testid="plan-edit-name"/>
+            <MudTextField T="string" @bind-Value="_weeks" Label="Weeks before it repeats" Variant="Variant.Outlined"
+                          Immediate="true" Class="mt-4" InputMode="InputMode.numeric"
+                          Error="_weeksError is not null" ErrorText="@_weeksError"
+                          InputId="plan-edit-weeks" data-testid="plan-edit-weeks"/>
+            @if (Hidden() is { } hidden)
+            {
+                <MudText Typo="Typo.caption" Class="mud-warning-text d-block mt-1" data-testid="plan-edit-hidden">@hidden</MudText>
+            }
+        </form>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Error" OnClick="Delete" Class="mr-auto" data-testid="plan-delete">Delete</MudButton>
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="plan-cancel">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="plan-editor-form" Color="Color.Primary" Variant="Variant.Filled"
+                   data-testid="plan-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public string Name { get; set; } = "";
+
+    [Parameter] public int Weeks { get; set; } = 1;
+
+    [Parameter] public IReadOnlyList<string> OtherNames { get; set; } = [];
+
+    /// <summary>How many entries each week holds, to say what fewer weeks would hide.</summary>
+    [Parameter] public IReadOnlyDictionary<int, int> EntriesByWeek { get; set; } = new Dictionary<int, int>();
+
+    private string? _name;
+    private string? _weeks;
+    private string? _nameError;
+    private string? _weeksError;
+
+    protected override void OnInitialized()
+    {
+        _name  = Name;
+        _weeks = Weeks.ToString();
+    }
+
+    /// <summary>"Weeks 3-4 hold 40 entries: hidden, not deleted - they come back if it grows again."</summary>
+    private string? Hidden()
+    {
+        if (!int.TryParse(_weeks?.Trim(), out int weeks) || weeks < 1)
+            return null;
+        int hidden = EntriesByWeek.Where(w => w.Key > weeks).Sum(w => w.Value);
+        return hidden == 0 ? null
+            : $"Later weeks hold {hidden} {(hidden == 1 ? "entry" : "entries")}: hidden, not deleted - they come back if it grows again.";
+    }
+
+    private void Save()
+    {
+        string name = Names.Normalise(_name);
+        _nameError  = PlanTemplateRules.NameProblem(name)
+                      ?? (OtherNames.Any(n => Names.Same(n, name)) ? $"There is already a plan called {name}." : null);
+        _weeksError = PlanText.ReadWeeks(_weeks, out int weeks);
+        if (_nameError is not null || _weeksError is not null)
+            return;
+        Dialog.Close(DialogResult.Ok(new PlanEditorResult(name, weeks, Delete: false)));
+    }
+
+    private async Task Delete()
+    {
+        bool? confirmed = await Dialogs.ShowMessageBoxAsync(
+            title: $"Delete {Name}?",
+            message: "It goes on every device, with everything planned in it. The meals stay.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed == true)
+            Dialog.Close(DialogResult.Ok(new PlanEditorResult(null, Weeks, Delete: true)));
+    }
+}

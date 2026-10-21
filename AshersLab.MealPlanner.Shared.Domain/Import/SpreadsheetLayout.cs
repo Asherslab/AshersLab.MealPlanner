@@ -173,7 +173,7 @@ public static partial class SpreadsheetLayout
             rows.Add(new PlanRow(
                 Names.Normalise(label.Text),
                 SheetText.SlotName(label.Text),
-                [.. days.Select(d => sheet.At(row, d.Column) is { } cell ? SheetText.PlanCell(cell.Text) : null)]));
+                [.. days.Select(d => sheet.At(row, d.Column) is { } cell ? SheetText.PlanCell(cell.Text) with { Place = Place(sheet, cell) } : null)]));
         }
         return new PlanWeek(number, [.. days.Select(d => Names.Normalise(d.Text))], rows);
     }
