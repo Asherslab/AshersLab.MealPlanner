@@ -219,10 +219,12 @@
                     <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Edit" Class="mt-1" OnClick="() => EditLine(line)"
                                data-testid="receipt-line-edit">Correct what was read</MudButton>
                 }
-                @if (state.Choice == "" && state.Review.Match.Suggestions.FirstOrDefault(s => s.ProductId is not null) is { } guess)
+                @* The best guess, one tap: a product, or - the first time something is bought - a new product of an ingredient
+                   ("Ayam Red Curry Paste 185g" is curry paste), its pack read from the description. *@
+                @if (state.Choice == "" && state.Review.Match.Suggestions.FirstOrDefault(s => s.ProductId is not null || s.IngredientId is not null) is { } guess)
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1"
-                               OnClick="@(() => Choose(state, "p:" + guess.ProductId))" data-testid="receipt-line-suggest">
+                               OnClick="@(() => Choose(state, guess.ProductId is { } p ? "p:" + p : "n:" + guess.IngredientId))" data-testid="receipt-line-suggest">
                         Is it @guess.Name?
                     </MudButton>
                 }
