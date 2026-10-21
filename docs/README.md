@@ -36,7 +36,8 @@ Present tense, kept current, no dates.
   names, hand-set order by position, an ingredient's unit, no foreign keys, and why deleting something in use is
   refused.**
 - [Products and prices](modules/catalogue/products-and-prices.md) — what each store sells, pack sizes typed as the
-  pack says them, and why aliases are not a field.
+  pack says them, price history, an ingredient's price per unit (usual store first, rounded once), and why aliases
+  are not a field.
 
 ## The other three directories
 

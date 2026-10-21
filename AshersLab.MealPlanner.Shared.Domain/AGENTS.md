@@ -5,8 +5,9 @@ merge rules. The browser computes costs offline from its local data, so these mu
 server and in WASM — never re-implemented on one side.
 
 `Sync/` holds the op clock and merge rules (`docs/modules/sync/offline-sync.md`); each synced entity's
-validation lives beside it (`Ingredients/IngredientRules.cs`). Costing arrives in slice 6 of
-`docs/work/2026-10-v1-scope.md`. Applying a merge to EF tables is not here - that is `Shared.Data`, which may
+validation lives beside it (`Ingredients/IngredientRules.cs`). Costing starts in `Prices/`: an ingredient's
+price per base unit (`IngredientPricing`, `UnitPrice` - a ratio rounded once, in `CostOf`); meal costs arrive in
+slice 6 of `docs/work/2026-10-v1-scope.md` and build on it. Applying a merge to EF tables is not here - that is `Shared.Data`, which may
 reference EF Core because this project must not.
 
 - **No I/O and no framework.** No EF Core, no gRPC, no protobuf attributes, no `HttpClient`, no clock —

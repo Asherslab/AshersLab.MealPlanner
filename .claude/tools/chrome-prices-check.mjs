@@ -161,10 +161,16 @@ const ingredient = `mince ${RUN}`, product = `Beef mince 8x250g ${RUN}`;
     return { focused, closed: await sheetClosed(p) };
   }
 
+  const unitIs = (p, text) => until(p, `[...document.querySelectorAll('[data-testid=price-ingredient]')]
+    .find(r => r.querySelector('[data-testid=price-ingredient-name]')?.textContent.trim() === ${JSON.stringify(ingredient)})
+    ?.querySelector('[data-testid=price-ingredient-unit-price]')?.textContent.trim() === ${JSON.stringify(text)}`);
+  check(await unitIs(a, 'unpriced'), 'before any price the ingredient shows "unpriced"');
+
   const r = await enter(a, product, '24.99');
   check(r.focused && r.closed, 'A taps the product: the price box is focused, typing 24.99 and Enter saves');
   check(await showsPrice(a, product, '$24.99'), 'A shows $24.99 on the row');
   check(await showsPrice(b, product, '$24.99'), 'B shows $24.99');
+  check(await unitIs(b, '$16.66/kg at Costco'), 'B prices the ingredient at $16.66/kg at Costco ($24.99 for 1.5 kg)');
 
   check((await enter(b, product, '22.50', { date: '2026-10-01' })).closed, 'B back-fills $22.50 seen on 1 Oct');
   await sleep(1500);
@@ -173,6 +179,7 @@ const ingredient = `mince ${RUN}`, product = `Beef mince 8x250g ${RUN}`;
 
   check((await enter(a, product, '18.73', { perKg: '14.99' })).closed, 'A enters $18.73 at $14.99/kg (variable weight)');
   check(await showsPrice(b, product, '$18.73'), 'B shows $18.73');
+  check(await unitIs(b, '$14.99/kg at Costco'), 'B prices the ingredient by the kilo: $14.99/kg, not $18.73 for the pack');
 
   // A typo is refused, saying why, and nothing is written.
   await pb.tap(product); await sheetOpen(b);
@@ -194,6 +201,23 @@ const ingredient = `mince ${RUN}`, product = `Beef mince 8x250g ${RUN}`;
   const small = `Mince 500g ${RUN}`;
   check(await pa.addUnder(ingredient, { name: small, store: 'Woolworths', pack: '500g', price: '7.50' }), 'A adds a Woolworths product with its first price');
   check(await showsPrice(b, small, '$7.50'), 'B shows it at $7.50');
+  check(await unitIs(b, '$16.66/kg at Costco'), 'the usual store still prices it, though Woolworths is cheaper ($15.00/kg)');
+
+  // Change the usual store to one with no product: the cheapest anywhere, said as such.
+  await b.go('ingredients');
+  const ib = ingredients(b);
+  await ib.has(ingredient, 30_000);
+  await ib.open(ingredient); await sleep(300);
+  await ib.fill({ store: '' });
+  await ib.save();
+  // The dialog closes before the write lands; navigating (a full reload here) at once would lose it.
+  check(await until(b, `[...document.querySelectorAll('[data-testid=ingredient-row]')].find(r => r.textContent.includes(${JSON.stringify(ingredient)}))
+    ?.querySelector('[data-testid=ingredient-detail]')?.textContent.trim() === 'counted in g'`) && await settled(b),
+    'B takes away the usual store');
+  await b.go('prices');
+  check(await unitIs(b, '$15.00/kg - cheapest, at Woolworths'),
+    `with no usual store: "$15.00/kg - cheapest, at Woolworths" (${await pb.unitPrice(ingredient)})`);
+  check(await unitIs(a, '$15.00/kg - cheapest, at Woolworths'), 'A shows the same');
 
   await settled(a); await settled(b);
   const rows = `select PriceCents || '|' || ObservedOn || '|' || Source || '|' || ifnull(PerKgCents, '-') || '|' || Deleted from PriceObservation

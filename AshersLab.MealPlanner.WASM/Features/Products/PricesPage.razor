@@ -66,7 +66,12 @@
                     @if (ingredient is not null)
                     {
                         <div class="d-flex align-center pl-4 pr-1">
-                            <MudText Class="flex-grow-1 py-2" Typo="Typo.subtitle1" data-testid="price-ingredient-name">@ingredient.Name</MudText>
+                            <div class="flex-grow-1 py-2">
+                                <MudText Typo="Typo.subtitle1" data-testid="price-ingredient-name">@ingredient.Name</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="price-ingredient-unit-price">
+                                    @UnitPriceText(ingredient)
+                                </MudText>
+                            </div>
                             <MudIconButton Icon="@Icons.Material.Filled.Add" aria-label="@($"Add a product for {ingredient.Name}")"
                                            OnClick="() => Add(ingredient)" data-testid="price-ingredient-add"/>
                         </div>
@@ -182,6 +187,24 @@
 
         if (Shown(null).Count > 0)
             yield return ("Not food", [null]);
+    }
+
+    /// <summary>
+    /// What costing will use for the ingredient (IngredientPricing): "$12.50/kg at Costco", "$12.00/kg - cheapest, at
+    /// Woolworths" when the usual store has no price, or "unpriced". Over every store, whatever chip is picked.
+    /// </summary>
+    private string UnitPriceText(Ingredient ingredient)
+    {
+        IngredientPrice? price = IngredientPricing.Price(ingredient.BaseUnit, ingredient.UsualStoreId,
+            _products.Where(p => p.IngredientId == ingredient.Id)
+                .Select(p => new PricedProduct(p.Id, p.StoreId, p.PackQuantity, [.. _readings[p.Id]])));
+
+        return price switch
+        {
+            null                         => "unpriced",
+            { FromUsualStore: true }     => $"{price.UnitPrice.Format(ingredient.BaseUnit)} at {StoreName(price.StoreId)}",
+            _                            => $"{price.UnitPrice.Format(ingredient.BaseUnit)} - cheapest, at {StoreName(price.StoreId)}",
+        };
     }
 
     private string StoreName(Guid store) => _stores.GetValueOrDefault(store) ?? "store removed";
