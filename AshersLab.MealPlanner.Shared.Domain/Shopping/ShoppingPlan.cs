@@ -57,6 +57,16 @@ public static class ShoppingPlan
             : new LinePlan(LineNeed.Buy, needed, stock, shortfall, Choose(shortfall, usualStoreId, packs));
     }
 
+    /// <summary>
+    /// A ticked line the plan no longer needs (the toast skipped after the bread was bought). <b>What was bought stays
+    /// bought</b>: the packs covering <paramref name="bought"/> - what its tick put in the pantry - still a line to buy and
+    /// still in the Spend. Nothing bought (ticked "have it"): one pack, so ticking it bought after all buys one.
+    /// </summary>
+    public static LinePlan Unplanned(decimal? bought, Guid? usualStoreId, IEnumerable<PackOption> packs) =>
+        bought is > 0 and { } quantity
+            ? new LinePlan(LineNeed.Buy, 0, 0, quantity, Choose(quantity, usualStoreId, packs))
+            : new LinePlan(LineNeed.Buy, 0, 0, 0, Choose(null, usualStoreId, packs));
+
     /// <summary>A staple running low or out: one pack, of the cheapest at its usual store.</summary>
     public static LinePlan Staple(Guid? usualStoreId, IEnumerable<PackOption> packs) =>
         new(LineNeed.Staple, 0, 0, 0, Choose(null, usualStoreId, packs));

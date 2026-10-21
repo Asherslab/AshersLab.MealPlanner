@@ -1,6 +1,8 @@
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Data.Meals;
 using AshersLab.MealPlanner.Shared.Data.Planning;
+using AshersLab.MealPlanner.Shared.Data.Shopping;
+using AshersLab.MealPlanner.Shared.Domain.Shopping;
 using AshersLab.MealPlanner.Shared.Domain.Meals;
 using AshersLab.MealPlanner.Shared.Domain.Pantry;
 using AshersLab.MealPlanner.Shared.Domain.Planning;
@@ -70,8 +72,10 @@ public sealed class PantryBook
     {
         Dictionary<Guid, Ingredient> ingredients = await db.Set<Ingredient>().AsNoTracking().Where(i => !i.Deleted)
             .ToDictionaryAsync(i => i.Id, cancellationToken);
-        List<StockMovement> movements = [.. (await db.Set<StockMovement>().AsNoTracking().Where(m => !m.Deleted).ToListAsync(cancellationToken))
-            .Where(m => ingredients.TryGetValue(m.IngredientId, out Ingredient? i) && !i.IsStaple
+        Dictionary<Guid, ShoppingTick> ticks = await db.Set<ShoppingListItem>().AsNoTracking().Where(i => !i.Deleted && i.IngredientId != null)
+            .ToDictionaryAsync(i => i.Id, i => i.Tick, cancellationToken);
+        List<StockMovement> movements = [.. StockMovement.Counting(await db.Set<StockMovement>().AsNoTracking().Where(m => !m.Deleted).ToListAsync(cancellationToken), ticks)
+            .Where(m =>ingredients.TryGetValue(m.IngredientId, out Ingredient? i) && !i.IsStaple
                         && !(m.ShoppingItemId is { } item && ignoringItems?.Contains(item) == true))];
 
         DateOnly first = movements.Count > 0 && movements.Min(m => m.OccurredOn) is var earliest && earliest < from ? earliest : from;

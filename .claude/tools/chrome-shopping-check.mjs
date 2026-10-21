@@ -3,7 +3,8 @@
 // counted, soy sauce running low. B opens the list on the phone: one pack of mince (1.6 kg spare), the soy sauce, the mayo
 // "in the pantry", Spend and Eaten. B goes offline, ticks the mince and soy sauce bought and adds bin bags; A sees nothing
 // until B is back online, then everything. A unticks the mince (its pack leaves the pantry) and says "have it" instead.
-// The rows are read back from both profiles' SQLite and the server's.
+// Then both tick it bought offline (one pack in the pantry), B removes the bags from their menu, and the menu's list and
+// the calendar's button are checked to be the same list. The rows are read back from both profiles' SQLite and the server's.
 //
 //   node .claude/tools/chrome-shopping-check.mjs <scratchDir>
 //
@@ -193,6 +194,45 @@ check(await lineIs(b, ids.mince, 'HaveIt | have it | ', 30_000) && await textIs(
   `A taps "Have": B "${await lineText(b, ids.mince)}", Spend "${await text(b, 'shop-spend')}"`);
 check(await serverHas(`select cast(Quantity as real) from StockMovement where ShoppingItemId = '${up(tickId)}' and Reason = 'Adjusted' and Deleted = 0`) === '400.0',
   'and the pantry is told the 400 g it lacked (Adjusted, naming the tick)');
+
+// --- Both in the shop offline, both tick the mince bought: one pack in the pantry, not two -------------------------------
+await settled(a); await settled(b);
+await a.offline(true); await b.offline(true);
+await a.evaluate(`${line(ids.mince)}.querySelector('[data-testid=shop-line-tap]').click()`);
+await sleep(300);
+await b.evaluate(`${line(ids.mince)}.querySelector('[data-testid=shop-line-tap]').click()`);
+check(await until(a, `${line(ids.mince)}?.dataset.tick === 'Bought'`) && await until(b, `${line(ids.mince)}?.dataset.tick === 'Bought'`),
+  'both offline, A and B each tick the mince bought');
+await a.offline(false); await b.offline(false);
+await settled(a, 30_000); await settled(b, 30_000);
+check(await serverHas(`select count(*) from StockMovement where ShoppingItemId = '${up(tickId)}' and Reason = 'Bought' and Deleted = 0`, v => v === '2') === '2',
+  'back online: the server holds two live Bought movements naming the one tick');
+await a.go('pantry');
+check(await until(a, `${pantryRow}?.querySelector('[data-testid=pantry-level]')?.textContent.trim() === 'about 2.6 kg'`, 30_000),
+  `A's pantry counts one pack: "${await a.evaluate(`${pantryRow}?.querySelector('[data-testid=pantry-level]')?.textContent.trim()`)}" (600 g + 2 kg, not 4.6 kg)`);
+
+// --- Removing an extra is behind its menu, not at the thumb's edge -------------------------------------------------------
+const bags = `[...document.querySelectorAll('[data-testid=shop-extra]')].find(r => r.querySelector('[data-testid=shop-extra-name]')?.textContent.trim() === 'Bin bags ${RUN}')`;
+await b.go(listUrl);
+await until(b, `!!${bags}`, 30_000);
+check(await b.evaluate(`!${bags}.querySelector('[data-testid=shop-extra-delete]')`), 'no remove button on the bin bags row itself');
+await b.evaluate(`${bags}.querySelector('[data-testid=shop-extra-more] button').click()`);
+check(await until(b, `!!document.querySelector('[data-testid=shop-extra-delete]')`), 'its ⋮ menu offers "Remove"');
+await b.evaluate(`document.querySelector('[data-testid=shop-extra-delete]').click()`);
+check(await serverHas(`select Deleted from ShoppingListItem where Name = 'Bin bags ${RUN}'`, v => v === '1') === '1' && await until(b, `!${bags}`, 30_000),
+'removed from the menu: gone from B, deleted on the server');
+
+// --- The nav and the calendar open the same list ------------------------------------------------------------------------
+await b.go('shopping');
+await until(b, `!!document.querySelector('[data-testid=shop-range]')`, 30_000);
+const navRange = await text(b, 'shop-range');
+await b.go(`calendar?week=${mondayOf(day(0))}`);
+await until(b, `!!document.querySelector('[data-testid=cal-shopping]')`, 30_000);
+const calHref = await b.evaluate(`document.querySelector('[data-testid=cal-shopping]').getAttribute('href')`);
+await b.go(calHref);
+await until(b, `!!document.querySelector('[data-testid=shop-range]')`, 30_000);
+check(navRange === await text(b, 'shop-range') && calHref.includes(mondayOf(day(0))),
+  `"Shopping" in the menu and the calendar's button open the same list: "${navRange}" (${calHref})`);
 
 // --- The calendar's week shows both costs --------------------------------------------------------------------------------
 await a.go(`calendar?week=${mondayOf(day(1))}`);

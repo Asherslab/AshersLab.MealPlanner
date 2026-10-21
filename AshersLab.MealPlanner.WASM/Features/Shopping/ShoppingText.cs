@@ -29,8 +29,8 @@ public static class ShoppingText
         return plan.Need switch
         {
             LineNeed.Staple   => $"{packs ?? "some"} · {line.Ingredient.StapleStock.Label().ToLowerInvariant()}",
-            LineNeed.InPantry when !line.Planned => "not on the plan now",
-            LineNeed.InPantry => $"need {Quantity.Format(plan.Needed, unit)}, have about {Quantity.Format(plan.Have, unit)}",
+            _ when !line.Planned => packs is null ? "not on the plan now" : $"{packs} · not on the plan now",
+            LineNeed.InPantry =>$"need {Quantity.Format(plan.Needed, unit)}, have about {Quantity.Format(plan.Have, unit)}",
             _                 => (packs ?? Quantity.Format(plan.Shortfall, unit))
                                  + (plan.Have > 0 ? $" · need {Quantity.Format(plan.Needed, unit)}, have about {Quantity.Format(plan.Have, unit)}" : ""),
         };

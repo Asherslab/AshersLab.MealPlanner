@@ -49,8 +49,9 @@ shopping list (which subtracts it), receipts (which add to it) or anything else 
 `StockMovement (Id, IngredientId, Quantity, OccurredOn, Reason, ShoppingItemId, Deleted)`, in the ingredient's base unit.
 Rules in `Shared.Domain/Pantry/StockRules.cs`; appended and deleted (undo), never edited - updates are accepted only so a
 restored server can be given its fields back, as for prices. `ShoppingItemId` names the shopping-list tick that wrote it,
-null for one made here: the list reads stock without its own ticks' movements, and unticking deletes them
-([the shopping list](../shopping/shopping-list.md)).
+null for one made here: the list reads stock without its own ticks' movements, and unticking deletes them. **A tick's
+movements count only while the tick says so, and only the newest** (`StockMovement.Counting`): two phones ticking one line
+bought offline leave two live rows and one pack ([the shopping list](../shopping/shopping-list.md)).
 
 | `Reason` | `Quantity` | Does |
 |---|---|---|

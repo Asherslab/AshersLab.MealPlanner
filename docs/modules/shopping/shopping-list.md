@@ -33,20 +33,29 @@ and Eaten costs, or anything that writes stock from a tick.
   movement naming the tick, then writes the new one. Bought → Have → Bought adds one pack, not three; unticking takes the
   pack back out of the pantry on every device. All of a tap's ops go in one `WriteAllAsync`: all or none.
 - **Lines are computed, never stored.** Only ticks and extra items are rows. A ticked line the plan no longer needs (the
-  toast skipped after the bread was bought) stays on the list, marked "not on the plan now", so a tick never vanishes.
+  toast skipped after the bread was bought) stays on the list, marked "1 pack · not on the plan now", so a tick never
+  vanishes - and **what was bought stays bought** (`ShoppingPlan.Unplanned`): the packs its tick put in the pantry, still
+  under its store and still in the Spend. Planned-for-nothing would be "in the pantry" at $0 while the pack sat in stock.
+  Changed to "have it" it tells the pantry nothing (the plan needs none); bought again, one pack.
 - **Ids are derived, so two phones converge.** A list's id is a hash of its two dates (`ShoppingListRules.ListId`); a
   tick's is a hash of the list and the ingredient (`ShoppingItemRules.TickId`). Two phones making "this week's list"
   offline make one list; two ticking the same line tick one row, and the later tick wins. A tick is never deleted -
   unticking is `Tick = None` - because a deleted id is a tombstone that would ignore the next tick. Extra items have
   minted ids and are deleted like anything else.
-- **Two phones ticking the same line differently offline both reach the pantry.** A ticks the bread bought, B (later)
-  says "have it": the tick ends `HaveIt`, but A's pack and B's adjustment are both movements. Each is a real statement
-  from someone in a kitchen or a shop; neither is dropped. The pantry's sheet puts it right in two taps.
+- **Stock follows the tick, not the movement rows** (`StockMovement.Counting`, applied by `PantryBook`). A tick undoes
+  only the movements its own phone can see: two people both ticking the mince bought offline each write a 2 kg pack,
+  and after sync both are live rows - counted as rows, the pantry would hold 4 kg and next week's list buy too little,
+  with nothing wrong on screen. So a movement a tick wrote counts only while it is what the tick says now (`Bought` for
+  bought, `Adjusted` for "have it", nothing when unticked), and only the newest of those. A ticks bread bought and B
+  (later) says "have it": the tick ends `HaveIt` and only B's adjustment counts. Both rows stay in the log.
+- **The nav and the calendar open the same list.** A list's id is its dates, so "this week" must mean one range
+  everywhere: with no list covering today the page opens this calendar week, Monday to Sunday - what the calendar's
+  "Shopping list" links to - never "today plus six", which on a Thursday was another list whose ticks never met.
 
 ## A list
 
 `ShoppingList (Id, StartsOn, EndsOn)` - a date range, at most 35 days. A different range is a different list. The page
-opens on the list covering today (the latest started), else today to six days on; "Change days" picks another range,
+opens on the list covering today (the latest started), else this week Monday to Sunday; "Change days" picks another range,
 "Other lists" lists the recent ones. Nothing is written until the first tick or extra item.
 
 ## A line
@@ -91,7 +100,9 @@ is already in the kitchen. Both toggle. What each writes (`ShoppingTicking`), af
 | Have it | an `Adjusted` movement of the shortfall, when the pantry had less than the meals need; nothing for a line it covered | back to Have |
 | None (untick) | nothing more | back to Running low (not when someone has since said Out) |
 
-Extra items tick bought only, and write nothing to the pantry: they have no ingredient.
+Extra items tick bought only, and write nothing to the pantry: they have no ingredient. **Removing one is behind its ⋮
+menu** ("Remove bin bags"), not a button at the row's right edge: that is where every ingredient row has Have, under a
+thumb working down the list, and a removed extra is gone from every device with no undo.
 
 ## What it costs: Spend and Eaten
 
@@ -122,12 +133,21 @@ holds a 2 kg `Bought` movement naming the tick; A's pantry shows about 2.6 kg. A
 the movement deleted - then taps Have: B shows "have it", Spend $16.99, and a 400 g `Adjusted` movement. One list, three
 items and every movement identical in the server's SQLite and both profiles', outboxes empty.
 
+Same day, after the review fixes, the same script further on: both profiles offline tick the mince bought; back online the
+server holds two live `Bought` rows naming the one tick and A's pantry reads "about 2.6 kg" (one pack, not 4.6 kg). The
+bin bags row has no remove button of its own; its ⋮ menu removes it, deleted on the server. "Shopping" in the menu and the
+calendar's button both open "Mon 19 Oct – Sun 25 Oct". All checks passing.
+
 In-process: `Tests/Domain/ShoppingPlanTests.cs` (750 g in 2 kg packs, the pantry first and only the shortfall rounded,
 covered → in the pantry, out and probably out holding nothing, the usual store then the cheapest for the packs needed, priced
 before unpriced then least spare then id, no pack size, the 999-pack limit, a staple's one pack, exact decimals, serves and
 sums incomplete never low), `Tests/Domain/ShoppingRulesTests.cs` (derived ids, a list's dates, a tick's fields, a tick or an
 extra never both, an extra's fields changed only) and `Tests/Shopping/ShoppingSyncTests.cs` (through the real host: the
 week's lines, groups, Spend and Eaten to the cent; offline ticks reaching the desktop and the pack in next week's pantry;
-untick taking it back; bought → have → bought adding one pack; two phones ticking one line; a ticked line dropped from the
-plan staying). Rounding packs down, forgetting the usual store, counting an incomplete serve's every missing input, reading
-the pantry with the list's own ticks, not undoing a line's last tick, or charging a "have it" line each fails them.
+untick taking it back; bought → have → bought adding one pack; two phones ticking one line differently, and both ticking it
+bought - one pack in the pantry; a ticked line dropped from the plan staying, with its pack and in the Spend; an unpriced line
+and an unpriced extra each one missing in the Spend; a line with no pack size bought as its shortfall; a staple marked Out on
+the list and left Out by an untick). Rounding packs down, forgetting the usual store, counting an incomplete serve's every
+missing input, reading the pantry with the list's own ticks, not undoing a line's last tick, charging a "have it" line,
+counting every movement a tick wrote, costing a dropped line at nothing, leaving unpriced lines out of the Spend, buying
+nothing for a line with no pack, listing only running-low staples, or unticking Out to running low each fails them.

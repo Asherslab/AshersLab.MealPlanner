@@ -5,6 +5,7 @@
 @using AshersLab.MealPlanner.Shared.Data.Stores
 @using AshersLab.MealPlanner.Shared.Data.Sync
 @using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Planning
 @using AshersLab.MealPlanner.Shared.Domain.Prices
 @using AshersLab.MealPlanner.Shared.Domain.Shopping
 @using AshersLab.MealPlanner.Shared.Domain.Sync
@@ -119,8 +120,13 @@
                                 <MudText Class="flex-grow-1 shop-name" data-testid="shop-extra-name">@extra.Name</MudText>
                                 <MudText Typo="Typo.body2" Class="text-nowrap" data-testid="shop-extra-cost">@(extra.PriceCents is { } c ? Money.Format(c) : "unpriced")</MudText>
                             </div>
-                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" aria-label="@($"Remove {extra.Name}")" OnClick="() => RemoveExtra(extra)"
-                                           data-testid="shop-extra-delete"/>
+                            @* Not a delete button: the right edge is where every ingredient row has Have, under a thumb working down
+                               the list, and a removed extra is gone from every device. A menu makes it two deliberate taps. *@
+                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" AriaLabel="@($"More for {extra.Name}")" AnchorOrigin="Origin.BottomRight"
+                                     TransformOrigin="Origin.TopRight" data-testid="shop-extra-more">
+                                <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" OnClick="() => RemoveExtra(extra)"
+                                             data-testid="shop-extra-delete">Remove @extra.Name</MudMenuItem>
+                            </MudMenu>
                         </div>
                     }
                 </MudPaper>
@@ -243,10 +249,12 @@
         List<ShoppingList> lists = await db.ShoppingLists.AsNoTracking().Where(l => !l.Deleted).ToListAsync();
         if (!_chosen)
         {
-            // The list covering today, the latest started; otherwise the coming seven days.
+            // The list covering today, the latest started; otherwise this calendar week, Monday to Sunday - the list the
+            // calendar's "Shopping list" opens. The list's id is its dates, so any other default (today + 6) would put two
+            // phones' ticks on two lists that never meet.
             (_from, _to) = lists.Where(l => l.StartsOn <= Today && l.EndsOn >= Today).OrderByDescending(l => l.StartsOn).FirstOrDefault() is { } current
                 ? (current.StartsOn, current.EndsOn)
-                : (Today, Today.AddDays(6));
+                : (Rotation.MondayOf(Today), Rotation.MondayOf(Today).AddDays(6));
             _chosen = true;
         }
         _book   = await ShoppingBook.LoadAsync(db, _from, _to);

@@ -317,7 +317,83 @@ public sealed class ShoppingSyncTests : IAsyncLifetime
             Assert.Equal(1, await db.ShoppingLists.CountAsync(Ct));
             Assert.Equal(ShoppingTick.HaveIt, (await db.ShoppingListItems.SingleAsync(Ct)).Tick);
             Assert.Equal(ShoppingTick.HaveIt, (await ListAsync(browser)).Lines.Single(l => l.Ingredient.Id == k.Bread).Tick);
+            // Both movements are rows, but stock follows the tick: B's "have it" (the 4 slices it lacked), not A's pack too.
+            Assert.Equal(2, (await MovementsAsync(browser)).Count(m => m.ShoppingItemId is not null));
+            Assert.Equal(4, (await PantryAsync(browser)).At(k.Bread, Mon).Quantity);
         }
+    }
+
+    [Fact]
+    public async Task Two_phones_both_ticking_the_mince_bought_offline_put_one_pack_in_the_pantry_not_two()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        Kitchen k = await KitchenAsync(a);
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        // Two people in the shop, no reception, both put the mince in a trolley and tick it.
+        b.Now = a.Now.AddMinutes(1);
+        await TickAsync(a, k.Mince, ShoppingTick.Bought, Mon);
+        await TickAsync(b, k.Mince, ShoppingTick.Bought, Mon);
+        await a.SyncAsync();
+        await b.SyncAsync();
+        await a.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { a, b })
+        {
+            // Each phone wrote a pack; the line was bought once. 600 g + one 2 kg pack - two stews = 1.6 kg next week, not 3.6 kg.
+            Assert.Equal(2, (await MovementsAsync(browser)).Count(m => m.Reason == StockReason.Bought && m.ShoppingItemId is not null));
+            Assert.Equal(1600, (await PantryAsync(browser)).At(k.Mince, Mon.AddDays(7)).Quantity);
+        }
+
+        // A unticks: no pack at all, though B's movement was never A's to delete.
+        await TickAsync(a, k.Mince, ShoppingTick.None, Mon);
+        await a.SyncAsync();
+        await b.SyncAsync();
+        Assert.Equal(StockState.ProbablyOut, (await PantryAsync(b)).At(k.Mince, Mon.AddDays(7)).State);
+    }
+
+    [Fact]
+    public async Task Spend_counts_an_unpriced_line_and_an_unpriced_extra_as_missing_and_a_line_with_no_pack_buys_its_shortfall()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        Kitchen k = await KitchenAsync(a);
+        // 400 g of the counted mayo thrown out: 100 g left of the 300 g the salad needs. Mayo has no product at all.
+        await a.WriteAsync(SyncedEntities.StockMovement, NextId(a), OpKind.Create, new StockEntry(k.Mayo, -400, Mon.AddDays(-1), StockReason.Adjusted).Fields());
+        await a.WriteAsync(SyncedEntities.ShoppingListItem, NextId(a), OpKind.Create,
+            new ExtraItemDraft("Candles", null, null).FieldsChangedFrom(ShoppingListRules.ListId(Mon, Sun), null));
+
+        ShoppingBook list = await ListAsync(a);
+        ShoppingLine mayo = list.Lines.Single(l => l.Ingredient.Id == k.Mayo);
+        Assert.Equal((LineNeed.Buy, 200m, (PackChoice?)null), (mayo.Plan.Need, mayo.Plan.Shortfall, mayo.Plan.Pack));
+        // The priced packs and the pizza, and two things nobody priced: "from $... + 2 unpriced", never a quietly low total.
+        Assert.Equal(new Cost(2499 + 300 + 400 + 2000, 2), list.Spend);
+
+        // Bought with no pack size known: the 200 g it was short goes into the pantry.
+        await TickAsync(a, k.Mayo, ShoppingTick.Bought, Mon);
+        StockMovement bought = (await MovementsAsync(a)).Single(m => m.IngredientId == k.Mayo && m.ShoppingItemId is not null);
+        Assert.Equal((StockReason.Bought, 200m), (bought.Reason, bought.Quantity));
+    }
+
+    [Fact]
+    public async Task A_staple_marked_out_is_on_the_list_and_unticking_leaves_out_alone()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        Kitchen k = await KitchenAsync(a);
+        a.Now = a.Now.AddSeconds(1);
+        await a.WriteAsync(SyncedEntities.Ingredient, k.Oil, OpKind.Update, [new OpField(IngredientRules.StapleStockField, "Out")]);
+
+        ShoppingLine oil = (await ListAsync(a)).Lines.Single(l => l.Ingredient.Id == k.Oil);
+        Assert.Equal((LineNeed.Staple, 1, true), (oil.Plan.Need, oil.Plan.Pack!.Packs, oil.Planned));
+
+        // Bought: back to Have. Then someone says it is out after all, and the tick is undone: still out, not "running low".
+        await TickAsync(a, k.Oil, ShoppingTick.Bought, Mon);
+        Assert.Equal(StapleStock.Have, (await ListAsync(a)).Lines.Single(l => l.Ingredient.Id == k.Oil).Ingredient.StapleStock);
+        a.Now = a.Now.AddSeconds(1);
+        await a.WriteAsync(SyncedEntities.Ingredient, k.Oil, OpKind.Update, [new OpField(IngredientRules.StapleStockField, "Out")]);
+        await TickAsync(a, k.Oil, ShoppingTick.None, Mon);
+        Assert.Equal(StapleStock.Out, (await ListAsync(a)).Lines.Single(l => l.Ingredient.Id == k.Oil).Ingredient.StapleStock);
     }
 
     [Fact]
@@ -336,7 +412,20 @@ public sealed class ShoppingSyncTests : IAsyncLifetime
                 [new OpField(CalendarEntryRules.StatusField, CalendarEntryRules.FormatStatus(CalendarStatus.Skipped))], Ct);
         }
 
-        ShoppingLine bread = (await ListAsync(a)).Lines.Single(l => l.Ingredient.Id == k.Bread);
+        ShoppingBook list = await ListAsync(a);
+        ShoppingLine bread = list.Lines.Single(l => l.Ingredient.Id == k.Bread);
         Assert.Equal((false, ShoppingTick.Bought, 0m), (bread.Planned, bread.Tick, bread.Plan.Needed));
+        // What was bought stays bought: still a line to buy with its pack, under its store, and still in the Spend.
+        Assert.Equal((LineNeed.Buy, 1, 300L), (bread.Plan.Need, bread.Plan.Pack!.Packs, bread.Plan.Pack.Cents));
+        Assert.DoesNotContain(list.InPantry, l => l.Ingredient.Id == k.Bread);
+        Assert.Equal(new Cost(2499 + 300 + 400 + 2000, 0), list.Spend);
+
+        // Changed to "have it": the pack leaves the pantry and nothing is claimed missing - the plan needs none.
+        await TickAsync(a, k.Bread, ShoppingTick.HaveIt, Mon);
+        Assert.DoesNotContain(await MovementsAsync(a), m => m.IngredientId == k.Bread && m.ShoppingItemId is not null);
+        // And bought after all: one pack again.
+        await TickAsync(a, k.Bread, ShoppingTick.Bought, Mon);
+        Assert.Equal([(StockReason.Bought, 10m)],
+            (await MovementsAsync(a)).Where(m => m.IngredientId == k.Bread && m.ShoppingItemId is not null).Select(m => (m.Reason, m.Quantity)));
     }
 }

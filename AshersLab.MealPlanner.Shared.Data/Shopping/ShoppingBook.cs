@@ -28,7 +28,7 @@ public sealed record ShoppingLine(Ingredient Ingredient, Guid ItemId, LinePlan P
     /// What a <see cref="ShoppingTick.HaveIt"/> tick tells the pantry: the shortfall - it had less than the meals need, and
     /// the shopper says there is enough. Zero for a line already covered.
     /// </summary>
-    public decimal HaveItAdjustment => Plan.Need == LineNeed.Buy ? Plan.Shortfall : 0;
+    public decimal HaveItAdjustment => Planned && Plan.Need == LineNeed.Buy ? Plan.Shortfall : 0;
 }
 
 /// <summary>One store's part of a list: its lines by category, then its extra items.</summary>
@@ -119,7 +119,13 @@ public sealed class ShoppingBook
         Dictionary<Guid, ShoppingListItem> ticks = items.Where(i => i.IngredientId is not null)
             .GroupBy(i => i.IngredientId!.Value).ToDictionary(g => g.Key, g => g.First());
 
-        PantryBook pantry = await PantryBook.LoadAsync(db, startsOn, endsOn, cancellationToken, items.Select(i => i.Id).ToHashSet());
+        HashSet<Guid> itemIds = [.. items.Select(i => i.Id)];
+        PantryBook pantry = await PantryBook.LoadAsync(db, startsOn, endsOn, cancellationToken, itemIds);
+        // What each tick put in the pantry: a line the plan has since dropped still bought it.
+        Dictionary<Guid, decimal> bought = StockMovement.Counting((await db.Set<StockMovement>().AsNoTracking()
+                .Where(m => !m.Deleted && m.ShoppingItemId != null).ToListAsync(cancellationToken)).Where(m => itemIds.Contains(m.ShoppingItemId!.Value)),
+                ticks.Values.ToDictionary(t => t.Id, t => t.Tick))
+            .Where(m => m.Reason == StockReason.Bought).ToDictionary(m => m.ShoppingItemId!.Value, m => m.Quantity);
         ILookup<Guid?, Product> products = (await db.Set<Product>().AsNoTracking().Where(p => !p.Deleted && p.IngredientId != null)
             .ToListAsync(cancellationToken)).ToLookup(p => p.IngredientId);
         ILookup<Guid, PriceReading> readings = (await db.Set<PriceObservation>().AsNoTracking().Where(o => !o.Deleted)
@@ -143,7 +149,9 @@ public sealed class ShoppingBook
             decimal needed = pantry.UsesOf(ingredient.Id).Where(u => u.Day >= startsOn && u.Day <= endsOn).Sum(u => u.Quantity);
             if (needed == 0 && tick == ShoppingTick.None)
                 continue;
-            LinePlan plan = ShoppingPlan.Line(needed, pantry.At(ingredient.Id, startsOn), ingredient.UsualStoreId, PacksOf(ingredient.Id));
+            LinePlan plan = needed > 0
+                ? ShoppingPlan.Line(needed, pantry.At(ingredient.Id, startsOn), ingredient.UsualStoreId, PacksOf(ingredient.Id))
+                : ShoppingPlan.Unplanned(bought.GetValueOrDefault(itemId), ingredient.UsualStoreId, PacksOf(ingredient.Id));
             lines.Add(new ShoppingLine(ingredient, itemId, plan, tick, needed > 0));
         }
 
