@@ -102,7 +102,7 @@ Costco"), `ingredient-staple-chip`; group headings `ingredient-group`. The edito
 `<select>`s - set `.value` and dispatch `change`), `ingredient-staple` (the checkbox input itself), `ingredient-save`,
 `ingredient-cancel`, `ingredient-delete` (then a message box over the editor: click "Delete" in the *last*
 `.mud-dialog`). `ingredients(b)` in `.claude/tools/lib/profiles.mjs` drives all of it. The sync chip at the right of the app bar is `data-testid` `sync-status`, with
-`data-state` (`connecting|online|offline|failed|refused`) and `data-pending` (outbox count, including ops accepted
+`data-state` (`connecting|online|offline|failed|refused|waitingforchoice`) and `data-pending` (outbox count, including ops accepted
 but not yet pulled back). Sync calls are
 `/gRPC/AshersLab.MealPlanner.Sync/Push|Pull|Changes`; `Changes` stays open.
 
@@ -171,6 +171,20 @@ Ports 19343/19344. Every catalogue edit on profile A seen on B, then both profil
 back; saves phone-sized screenshots (`<run>-catA-<page>.png`) under `<scratch>/cat`. Its harness -
 launching, `until`, `typeInto`, the OPFS dump, a `NameList` driver - is `.claude/tools/lib/profiles.mjs`; new checks
 should import it rather than copy it.
+
+### The server wiped, with both profiles open
+
+```bash
+node .claude/tools/chrome-server-reset-check.mjs <scratch>/reset     # run_in_background; ports 19349/19350
+```
+
+Profile A has two windows, B one. It prints `WIPE NOW` twice with a signal file: stop the app (the kill commands
+above - in zsh, kill each pid on its own; `kill $(…)` with two pids on separate lines fails *after* you have deleted
+the files under a running app), delete `mealplanner.db`, `-wal`, `-shm`, start the AppHost run configuration, wait
+for `_framework/blazor.webassembly.js` to answer 200, `touch` the file. About three minutes. The dialog is
+`server-replaced` (`server-replaced-send`, `-clear`, then `-clear-confirm` or `-back`; `-count`, `-clear-warning`).
+**A second window must be a window, not a tab**: Chrome throttles a hidden tab's timers and its rounds run minutes
+apart, so it never asks in time (seen on the first run).
 
 ### A server restore, with both profiles open
 

@@ -10,6 +10,13 @@ public record PushRequest
 
     /// <summary>In clock order. Applied in one transaction.</summary>
     public List<SyncOp> Ops { get; init; } = [];
+
+    /// <summary>
+    /// The server database the client's cursor belongs to; null before its first pull. A different one (the server's
+    /// database was replaced) logs nothing and answers no results: whether this browser's copy goes to the new
+    /// database is the planner's choice, made after the pull that finds out.
+    /// </summary>
+    public Guid? ServerEpoch { get; init; }
 }
 
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]

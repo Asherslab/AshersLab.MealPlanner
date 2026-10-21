@@ -90,6 +90,15 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.Property<long>("PulledThroughSeq")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("ReplacedByEpoch")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ReplacedMissingRows")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SendCopyOnNextSnapshot")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("ServerEpoch")
                         .HasColumnType("TEXT");
 

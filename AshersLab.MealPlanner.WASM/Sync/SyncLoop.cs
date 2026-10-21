@@ -22,7 +22,9 @@ namespace AshersLab.MealPlanner.WASM.Sync;
 /// event, every 5 s while rounds are failing, and every 30 s regardless.
 /// A failure to reach the server counts as "offline" and is retried every 5 s - the outbox is in SQLite, so nothing
 /// is lost by waiting. Any other failure is "failed": logged as an error, shown on the chip, retried every 30 s
-/// (<see cref="SyncFailure"/>). The server refusing this build's sync protocol version reloads the app once.
+/// (<see cref="SyncFailure"/>). The server refusing this build's sync protocol version reloads the app once. A server
+/// that came back empty while this browser holds what it lacks stops every round until the planner answers
+/// <see cref="DecideAsync"/> (<c>ServerReplacedDialog</c> asks).
 /// <para>
 /// Every window of the app runs its own loop on the one shared database. That is safe because every step is
 /// idempotent - the server ignores an op id it already has, and a pulled op already applied changes nothing - so
@@ -70,6 +72,10 @@ public sealed class SyncLoop(
 
         _started  = true;
         _deviceId = deviceId;
+
+        // Only while waiting on the planner (OnChangedElsewhere): kicking on every other window's commit would have
+        // two windows' rounds wake each other forever.
+        database.ChangedElsewhere += OnChangedElsewhere;
 
         _ = RunRounds();
         _ = WatchChanges();
@@ -127,6 +133,15 @@ public sealed class SyncLoop(
 
             _epoch         = result.ServerEpoch;
             _pulledThrough = result.PulledThroughSeq;
+
+            if (result.Replaced is { } replaced)
+            {
+                if (Status.Replaced is null)
+                    logger.LogWarning("The server's database is new and lacks {Rows} row(s) this browser holds; waiting for the planner",
+                        replaced.MissingRows);
+                await SetStatus(SyncConnection.WaitingForChoice, null, Status.LastSyncedAt, replaced);
+                return;
+            }
 
             string? note = null;
             if (result.Refused.Count > 0)
@@ -205,7 +220,7 @@ public sealed class SyncLoop(
             {
                 logger.LogInformation("Change stream dropped, reconnecting in {Seconds}s: {Message}", backoff.TotalSeconds, ex.Message);
                 // Only the rounds say Failed; a dropped stream says nothing about whether they work.
-                if (Status.Connection is not (SyncConnection.Refused or SyncConnection.Failed))
+                if (Status.Connection is not (SyncConnection.Refused or SyncConnection.Failed or SyncConnection.WaitingForChoice))
                     await SetStatus(SyncConnection.Offline, null, Status.LastSyncedAt);
             }
 
@@ -241,13 +256,45 @@ public sealed class SyncLoop(
         }
     }
 
-    private async Task SetStatus(SyncConnection connection, string? note, DateTimeOffset? lastSyncedAt)
+    /// <summary>
+    /// The planner's answer to the server coming back empty. The first answer in any window is the one that applies;
+    /// a later one (another window got there first) changes nothing. Either way a round runs, and every window's
+    /// question closes when its next round finds it answered.
+    /// </summary>
+    public async Task DecideAsync(ServerReplacedChoice choice)
+    {
+        if (Status.Replaced is not { } replaced)
+            return;
+
+        bool applied;
+        await using (LocalDbContext db = await database.Contexts.CreateDbContextAsync())
+            applied = await LocalOps.DecideAsync(db, replaced.By, choice);
+
+        logger.LogWarning(applied ? "The planner chose {Choice} for the new server database" : "{Choice} was chosen too late - another window answered first",
+            choice);
+
+        if (applied && choice == ServerReplacedChoice.ClearMyCopy && DataChanged is { } handlers)
+            foreach (Func<Task> handler in handlers.GetInvocationList().Cast<Func<Task>>())
+                await handler();
+
+        Kick();
+    }
+
+    /// <summary>Another window may have answered the question this one is showing.</summary>
+    private Task OnChangedElsewhere()
+    {
+        if (Status.Connection == SyncConnection.WaitingForChoice)
+            Kick();
+        return Task.CompletedTask;
+    }
+
+    private async Task SetStatus(SyncConnection connection, string? note, DateTimeOffset? lastSyncedAt, ServerReplaced? replaced = null)
     {
         int pending;
         await using (LocalDbContext db = await database.Contexts.CreateDbContextAsync())
             pending = await db.Outbox.CountAsync();
 
-        Status = new SyncStatus(connection, pending, note, lastSyncedAt);
+        Status = new SyncStatus(connection, pending, note, lastSyncedAt, replaced);
 
         if (StatusChanged is { } handlers)
             foreach (Func<Task> handler in handlers.GetInvocationList().Cast<Func<Task>>())
@@ -256,6 +303,7 @@ public sealed class SyncLoop(
 
     public async ValueTask DisposeAsync()
     {
+        database.ChangedElsewhere -= OnChangedElsewhere;
         await _stopping.CancelAsync();
         _stopping.Dispose();
     }
@@ -272,8 +320,13 @@ public enum SyncConnection
 
     /// <summary>The server was reachable and the round still failed - see <see cref="SyncFailure"/>.</summary>
     Failed,
+
+    /// <summary>The server came back empty; nothing syncs until the planner chooses - see <see cref="SyncStatus.Replaced"/>.</summary>
+    WaitingForChoice,
 }
 
 /// <param name="Pending">Edits in the outbox, not yet confirmed by the server.</param>
 /// <param name="Note">Something the planner should read - a refused change, an out-of-date app.</param>
-public sealed record SyncStatus(SyncConnection Connection, int Pending, string? Note, DateTimeOffset? LastSyncedAt);
+/// <param name="Replaced">The open question while <see cref="SyncConnection.WaitingForChoice"/>.</param>
+public sealed record SyncStatus(
+    SyncConnection Connection, int Pending, string? Note, DateTimeOffset? LastSyncedAt, ServerReplaced? Replaced = null);

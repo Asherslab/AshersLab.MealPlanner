@@ -1,0 +1,57 @@
+@using AshersLab.MealPlanner.LocalData.Sync
+@implements IDisposable
+@inject SyncLoop Sync
+@inject IDialogService Dialogs
+
+@*
+    Shows ServerReplacedDialog while this window's sync is waiting on the planner, and closes it when it stops waiting
+    - which is how a window learns that another window answered: the database is shared, so the first answer anywhere
+    is the answer everywhere. In the layout, so it is over every page. Renders nothing itself.
+*@
+
+@code {
+    private IDialogReference? _open;
+
+    protected override void OnInitialized() => Sync.StatusChanged += Changed;
+
+    private Task Changed() => InvokeAsync(async () =>
+    {
+        if (Sync.Status is { Connection: SyncConnection.WaitingForChoice, Replaced: { } replaced })
+        {
+            if (_open is null)
+                await Ask(replaced.MissingRows);
+        }
+        else if (_open is { } open)
+        {
+            _open = null;
+            open.Close();
+        }
+    });
+
+    private async Task Ask(int missingRows)
+    {
+        DialogParameters<ServerReplacedDialog> parameters = new() { { d => d.MissingRows, missingRows } };
+        DialogOptions options = new()
+        {
+            FullWidth = true, MaxWidth = MaxWidth.Small, BackdropClick = false, CloseOnEscapeKey = false, CloseButton = false,
+        };
+
+        IDialogReference dialog = await Dialogs.ShowAsync<ServerReplacedDialog>("The server has lost its copy", parameters, options);
+        _open = dialog;
+
+        // Not awaited here: StatusChanged handlers run in turn, and this one would hold up the rest until answered.
+        _ = Answered(dialog);
+    }
+
+    private async Task Answered(IDialogReference dialog)
+    {
+        DialogResult? result = await dialog.Result;
+        if (_open == dialog)
+            _open = null;
+
+        if (result is { Canceled: false, Data: ServerReplacedChoice choice })
+            await Sync.DecideAsync(choice);
+    }
+
+    public void Dispose() => Sync.StatusChanged -= Changed;
+}

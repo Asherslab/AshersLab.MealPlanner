@@ -15,7 +15,18 @@ namespace AshersLab.MealPlanner.LocalData.Sync;
 /// <param name="PushedBack">
 /// Ops this browser queued to give back to a server restored from an older backup (0 almost always).
 /// </param>
-public sealed record SyncRoundResult(bool Changed, (int Count, string? FirstReason) Refused, Guid ServerEpoch, long PulledThroughSeq, int PushedBack = 0);
+/// <param name="Replaced">
+/// The server's database was replaced and this browser holds what the new one lacks: nothing was pushed or pulled,
+/// and nothing will be until the planner chooses (<see cref="LocalOps.DecideAsync"/>).
+/// </param>
+public sealed record SyncRoundResult(
+    bool Changed, (int Count, string? FirstReason) Refused, Guid? ServerEpoch, long PulledThroughSeq, int PushedBack = 0,
+    ServerReplaced? Replaced = null);
+
+/// <summary>An open question to the planner: the server came back empty. See <see cref="SyncState.ReplacedByEpoch"/>.</summary>
+/// <param name="By">The new server database.</param>
+/// <param name="MissingRows">How many rows this browser holds that it lacks.</param>
+public sealed record ServerReplaced(Guid By, int MissingRows);
 
 /// <summary>
 /// One sync round: push the whole outbox, then pull until caught up - and after a snapshot, push and pull once
@@ -47,11 +58,21 @@ public static class SyncRound
         int                               pullBatch         = PullBatch
     )
     {
+        // Waiting on the planner, perhaps asked in another window: no push, no pull.
+        SyncState before;
+        await using (LocalDbContext db = await contexts.CreateDbContextAsync(cancellationToken))
+            before = await db.SyncStates.AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? new SyncState();
+        if (Waiting(before) is { } waiting)
+            return new SyncRoundResult(false, (0, null), before.ServerEpoch, before.PulledThroughSeq, Replaced: waiting);
+
         (int count, string? reason) refused = await PushAsync(contexts, server, deviceId, cancellationToken);
         Pulled pulled = await PullAsync(contexts, server, deviceId, pullBatch, cancellationToken);
 
         bool changed    = pulled.Changed;
         int  pushedBack = pulled.Queued;
+
+        if (pulled.Replaced is { } replaced)
+            return new SyncRoundResult(false, refused, pulled.Epoch, pulled.Seq, Replaced: replaced);
 
         if (pulled.TookSnapshot)
         {
@@ -63,7 +84,7 @@ public static class SyncRound
             pushedBack += pulled.Queued;
         }
 
-        return new SyncRoundResult(changed, refused, pulled.Epoch, pulled.Seq, pushedBack);
+        return new SyncRoundResult(changed, refused, pulled.Epoch, pulled.Seq, pushedBack, pulled.Replaced);
     }
 
     private static async Task<(int, string?)> PushAsync(
@@ -73,8 +94,12 @@ public static class SyncRound
         string? firstReason = null;
 
         List<OutboxOp> pending;
+        Guid?          epoch;
         await using (LocalDbContext db = await contexts.CreateDbContextAsync(ct))
+        {
             pending = await LocalOps.PendingAsync(db, ct);
+            epoch   = (await db.SyncStates.AsNoTracking().SingleOrDefaultAsync(ct))?.ServerEpoch;
+        }
 
         foreach (OutboxOp[] batch in pending.Chunk(PushBatch))
         {
@@ -82,7 +107,12 @@ public static class SyncRound
             {
                 ProtocolVersion = SyncProtocol.Current,
                 Ops             = [.. batch.Select(op => ToContract(op, deviceId))],
+                ServerEpoch     = epoch,
             }, ct);
+
+            // Another database: it logged nothing, and the pull that follows finds out why.
+            if (epoch is { } expected && response.ServerEpoch != expected)
+                break;
 
             foreach (PushResult r in response.Results.Where(r => r.Outcome == PushOutcome.Rejected))
             {
@@ -98,7 +128,10 @@ public static class SyncRound
         return (refused, firstReason);
     }
 
-    private sealed record Pulled(bool Changed, Guid Epoch, long Seq, bool TookSnapshot, int Queued);
+    private sealed record Pulled(bool Changed, Guid? Epoch, long Seq, bool TookSnapshot, int Queued, ServerReplaced? Replaced = null);
+
+    private static ServerReplaced? Waiting(SyncState state) =>
+        state.ReplacedByEpoch is { } by ? new ServerReplaced(by, state.ReplacedMissingRows) : null;
 
     private static async Task<Pulled> PullAsync(
         IDbContextFactory<LocalDbContext> contexts, ISyncService server, Guid deviceId, int pullBatch, CancellationToken ct)
@@ -127,8 +160,14 @@ public static class SyncRound
             {
                 if (response.Snapshot is { } s)
                 {
-                    queued += await LocalOps.ApplySnapshotAsync(db, deviceId, response.ServerEpoch, KindOf(s.Reason),
+                    SnapshotApplied applied = await LocalOps.ApplySnapshotAsync(db, deviceId, response.ServerEpoch, KindOf(s.Reason),
                         s.AsOfSeq, s.AsOfChain, [.. s.Entities.Select(FromContract)], DateTimeOffset.UtcNow, ct);
+
+                    if (applied.Held)
+                        return new Pulled(changed, state.ServerEpoch, state.PulledThroughSeq, false, queued,
+                            new ServerReplaced(response.ServerEpoch, (await db.SyncStates.AsNoTracking().SingleAsync(ct)).ReplacedMissingRows));
+
+                    queued  += applied.Queued;
                     changed  = true;
                     snapshot = true;
                     seq      = s.AsOfSeq;

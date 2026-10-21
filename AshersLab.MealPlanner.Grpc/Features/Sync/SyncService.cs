@@ -43,6 +43,11 @@ public class SyncService(
         if (request.Ops.Count > MaxPushOps)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"At most {MaxPushOps} ops per push."));
 
+        // Pushed at a database this browser has never pulled from: this one replaced it. The browser asks the
+        // planner whether to send its copy, so nothing it pushes before that pull may land here.
+        if (request.ServerEpoch is { } expected && expected != signal.Epoch)
+            return new PushResponse { ServerEpoch = signal.Epoch };
+
         CancellationToken ct = context.CancellationToken;
         List<PushResult>  results = new(request.Ops.Count);
         DateTime          now = DateTime.UtcNow;

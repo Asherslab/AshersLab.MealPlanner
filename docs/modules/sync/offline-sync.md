@@ -25,6 +25,7 @@ code:
   - AshersLab.MealPlanner.Tests/Domain
   - .claude/tools/chrome-sync-check.mjs
   - .claude/tools/chrome-restore-check.mjs
+  - .claude/tools/chrome-server-reset-check.mjs
 ---
 
 # Offline sync
@@ -158,7 +159,7 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   | Reason | When | What the browser does |
   |---|---|---|
   | `FirstLoad` | no cursor yet | merges it |
-  | `NewDatabase` | the cursor names another epoch: the server database was wiped and started again | forgets every synced row (they are not in the new database), replays its outbox, merges |
+  | `NewDatabase` | the cursor names another epoch: the server was reinstalled without a backup | holding nothing the new database lacks: forgets the old rows and merges. Otherwise **applies nothing and asks the planner** (below) |
   | `HistoryLost` | same epoch, but the op at the cursor's seq is missing or has a different chain: **restored from an older backup** | queues everything it holds that the snapshot lacks, merges, pushes |
 
   Seq alone cannot detect a restore: the restored log numbers new ops from the backup's head again, so a
@@ -192,9 +193,8 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   send one op id and the server logs it once. A tombstone the snapshot lacks goes back as a new delete from this
   device (a delete needs no clock - it wins). Seen: a restore that lost a create, a rename and another browser's
   create got all three back from the first browser to reconnect; the second found nothing missing.
-- **A wiped server is not a restore.** `NewDatabase` forgets what the old database held - including rows only the
-  browsers still have. That is what wiping means while nothing is in production; once real data exists, a server
-  lost without a backup is a reinstall that should be handled as `HistoryLost` instead, and is not yet.
+- **A server that came back empty is the planner's call, never the browser's** - see "The server came back empty"
+  below. Until they answer, that browser pushes and pulls nothing.
 - **When a round runs** (`WASM/Sync/SyncLoop.cs`): on start; after every edit; when the change stream reports a
   seq other than the cursor's (a restored server reports one *below* it), or reconnects after a drop; on the
   browser's `online` event (`wwwroot/js/connectivity.js`); every 5 s while the server cannot be reached; and every
@@ -210,7 +210,41 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
 
 **What the planner sees** is the chip at the right of the app bar (`WASM/Sync/SyncStatusChip.razor`), on every
 page: "Synced", "Saving 2", "Offline · 3 waiting", "Sync problem · 3 waiting" (red; the tooltip says what failed
-and that changes are kept), or "Update needed". Tapping it syncs now. An edit made offline shows in the list at
+and that changes are kept), "Update needed", or "Paused · needs you" (amber, while the question below is open). Tapping
+it syncs now.
+
+## The server came back empty
+
+The Pi reinstalled without a backup, or the add-on's data deleted: a new database with a new epoch, under browsers
+that still hold the old one's rows. **Those rows may be the only copy left**, so no browser decides alone what
+happens to them.
+
+- **When it asks.** A `NewDatabase` snapshot is compared with what the browser holds, exactly as after a restore
+  (`LocalOps.WhatTheServerLacksAsync`): a row the snapshot lacks, a field newer here, a tombstone of a row it has, or
+  anything in the outbox. Any of those - the question is recorded in `SyncState.ReplacedByEpoch` and nothing is
+  applied. None (a browser that only ever saw the seeds, which are the same rows at clock zero in every database) -
+  it takes the new database without asking. A tombstone of a row the new database never had does not ask on its own.
+- **Nothing reaches the new database first.** A round pushes before it pulls, so the push carries the epoch the
+  browser's cursor belongs to (`PushRequest.ServerEpoch`); the server logs nothing from a push aimed at another
+  database and answers with no results (`SyncService.Push`). Every later round sees the open question and returns
+  before touching the network (`SyncRound.RunAsync`, `SyncRoundResult.Replaced`).
+- **Every window shows it.** The question lives in the shared database, so every window's next round finds it; the
+  chip says "Paused · needs you" and `ServerReplacedPrompt` (in the layout) opens `ServerReplacedDialog` - no close
+  button, no backdrop click, no Escape. The first answer in any window applies (`LocalOps.DecideAsync` checks the
+  question is still open, in one transaction); the other windows hear the commit (`LocalDatabase.ChangedElsewhere`),
+  run a round, find nothing open and close theirs.
+- **"Send my copy"** resets the cursor and sets `SendCopyOnNextSnapshot`. The next pull is a first load from the new
+  database, compared with every row held here, and everything it lacks is queued with the clock that set it and the
+  device that made it - the restore mechanism above, so several browsers sending their copies merge by the ordinary
+  rules: the same edit from two of them is one op id, logged once; different edits to a field go to the later one;
+  a delete wins; a renamed seed beats the new database's seed. The outbox goes as it is.
+- **"Clear my copy"** asks a second time, in red, how many items will be gone for good, then deletes every synced
+  row and every queued edit here and takes the server as it is. "Go back" changes nothing.
+
+What the planner sees: the dialog "The server has lost its copy" - "This device still has 14 items the server
+doesn't", **Send my copy** (one tap) or **Clear my copy** (two taps, the second "Delete them for good"). Each phone or
+computer asks once, the first time it reaches the new server. `Tests/Sync/ServerReplacedTests.cs` covers the
+decision and the merge; `.claude/tools/chrome-server-reset-check.mjs` the running app. An edit made offline shows in the list at
 once and waits in the outbox; nothing is lost by closing the tab. "Saving" includes edits the server has accepted
 but this browser has not yet pulled back - normally for well under a second.
 
@@ -248,6 +282,7 @@ The browser's reload-on-refusal has not been seen in a browser: it needs a serve
 | Inside Home Assistant (ingress), opened with no signal | **No.** Home Assistant's own frontend must load first, and the companion app's web view is unlikely to support service workers. Accepted. |
 | iOS Safari evicts site storage after weeks unused | Data re-syncs from the server (a snapshot); only unsynced edits are lost. Accepted. |
 | The Pi restored from a Home Assistant backup | Edits made since the backup come back from whichever browsers hold them, on their next round. Nothing to do on any phone. |
+| The add-on reinstalled with no backup | Each phone or computer that still has data asks once; "Send my copy" on each rebuilds the server from all of them. |
 
 ## As measured
 
@@ -276,6 +311,21 @@ and the app started again:
 | B adds one more (seq 18); A comes back with cursor 17, which now names B's pushed-back op (different chain) | A got `HistoryLost`, queued nothing (the server had it all), showed B's addition |
 | Rows in both profiles' SQLite and the server's | Same five ingredients; outboxes empty; both cursors at 18, the server's head |
 
+2026-10-21, the server wiped twice in the running app, `.claude/tools/chrome-server-reset-check.mjs` - profile A in two
+windows, profile B in one, every check passing:
+
+| Check | Result |
+|---|---|
+| A holds two ingredients and B's, B holds a rename of A's still queued; wipe | Both A windows and B asked ("3 items"); chip "Paused · needs you"; the new server held only its seeds |
+| A's second window sends | A's first window's dialog closed by itself; the server had A's three ingredients |
+| B sends | B's later rename won on the server and in all three windows; both profiles' SQLite matched the server - same rows, outbox empty, cursor at the head, no question open |
+| B adds one offline; wipe; A sends; B chooses clear | B asked "1 item" (the rest the server already had from A); the red second step; "Go back" changed nothing; confirmed, B's extra was gone from B and never reached the server, and both profiles' SQLite matched it |
+
+A dialog on a phone-sized viewport: the text and both buttons fit without scrolling. A first run with A's second
+window as a *tab* failed: Chrome throttled the hidden tab, whose rounds then ran minutes apart and whose chip
+flapped to "Offline" each time its idle change stream dropped. Windows side by side, as the owner uses them, are
+not throttled.
+
 The chip in the user's Chrome with a page's `fetch` patched: a `Pull` answered with gRPC status 13 showed red "Sync
 problem" and logged `fail: ... Sync round failed` with the exception; a rejected `fetch` showed "Offline"; restored,
 "Synced".
@@ -285,8 +335,9 @@ The in-process tests cover the same cases against real hosts over gRPC-Web: `Tes
 applier, the server, a snapshot and a pull, more than one pull page, the change stream, overlapping writes in one
 window, rejected ops and the browser refusing exactly what the server would) and `Tests/Sync/SyncRecoveryTests.cs`
 (a second host started on the first's backup: cursor past the end, and seqs renumbered by another browser; an
-accepted op lost to a restore; a new database). `Tests/Sync/HookedServer.cs` lets a test edit between a round's push
+accepted op lost to a restore) and `Tests/Sync/ServerReplacedTests.cs` (a new database: asking, sending from two
+browsers in either order, clearing, one answer only). `Tests/Sync/HookedServer.cs` lets a test edit between a round's push
 and its pull, lose an answer, or cut the network mid-round - without it the outbox is always empty when a snapshot
 arrives and the snapshot paths go untested. Each of these was checked by breaking the code it covers (no outbox
-replay, no wipe on a new database, no chain check, dropping accepted ops, no tombstone, `HasMore` always false, no
-push-back): every one failed at least one test.
+replay, no chain check, dropping accepted ops, no tombstone, `HasMore` always false, no push-back): every one failed at
+least one test. `ServerReplacedTests` has not had that treatment.

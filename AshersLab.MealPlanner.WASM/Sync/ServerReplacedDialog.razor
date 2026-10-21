@@ -1,0 +1,69 @@
+@using AshersLab.MealPlanner.LocalData.Sync
+
+@*
+    The server came back empty - reinstalled without a backup - and this device still holds what it had. Asked of the
+    planner, not decided for them: sending the copy rebuilds the server, clearing it loses whatever no other device
+    sends. Nothing syncs until one is chosen. Plain words; the planner is not a developer.
+
+    Two steps: the choice, then - for clearing only - a second, unmistakable confirmation. Answers the choice; the
+    host (ServerReplacedPrompt) applies it. Cannot be dismissed: no close button, no backdrop click, no Escape.
+*@
+
+<MudDialog data-testid="server-replaced">
+    <DialogContent>
+        @if (!_confirmingClear)
+        {
+            <MudText Class="mb-3">
+                The meal planner on the server has started again from empty. It may have been reinstalled.
+            </MudText>
+            <MudText Class="mb-3" data-testid="server-replaced-count">
+                This device still has @Items(MissingRows) the server doesn't - meals, ingredients, prices and the like.
+            </MudText>
+            <MudText Class="mb-1"><b>Send my copy</b> puts them back on the server. Other phones and computers can send
+                theirs too, and everything is combined.</MudText>
+            <MudText Class="mud-text-secondary" Typo="Typo.body2">
+                Nothing is saved to the server until you choose.
+            </MudText>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense="true" Class="mb-3">
+                This can't be undone.
+            </MudAlert>
+            <MudText Class="mb-3" data-testid="server-replaced-clear-warning">
+                Clearing deletes @Items(MissingRows) from this device for good. If no other phone or computer sends
+                its copy, they are lost - the server doesn't have them.
+            </MudText>
+            <MudText>Only clear if you know the server should start empty.</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!_confirmingClear)
+        {
+            <MudButton Color="Color.Error" OnClick="() => _confirmingClear = true" Class="mr-auto"
+                       data-testid="server-replaced-clear">Clear my copy</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="() => Answer(ServerReplacedChoice.SendMyCopy)"
+                       data-testid="server-replaced-send">Send my copy</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="() => _confirmingClear = false" Class="mr-auto"
+                       data-testid="server-replaced-back">Go back</MudButton>
+            <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="() => Answer(ServerReplacedChoice.ClearMyCopy)"
+                       data-testid="server-replaced-clear-confirm">Delete them for good</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    /// <summary>Rows on this device the new server database lacks.</summary>
+    [Parameter] public int MissingRows { get; set; }
+
+    private bool _confirmingClear;
+
+    private void Answer(ServerReplacedChoice choice) => Dialog.Close(DialogResult.Ok(choice));
+
+    private static string Items(int count) => count == 1 ? "1 item" : $"{count} items";
+}

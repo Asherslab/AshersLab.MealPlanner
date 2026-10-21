@@ -22,6 +22,23 @@ public enum SnapshotKind
     HistoryLost,
 }
 
+/// <param name="Queued">Ops queued to give the server what it lacks; the caller pushes them.</param>
+/// <param name="Held">
+/// A new server database, and this browser holds what it lacks: nothing was applied, and nothing syncs until the
+/// planner chooses (<see cref="LocalOps.DecideAsync"/>).
+/// </param>
+public sealed record SnapshotApplied(int Queued, bool Held);
+
+/// <summary>What the planner chose when the server came back empty.</summary>
+public enum ServerReplacedChoice
+{
+    /// <summary>Rebuild the server from this browser: every row held here, and its queued edits.</summary>
+    SendMyCopy,
+
+    /// <summary>Throw away this browser's rows and queued edits, and start again from the server.</summary>
+    ClearMyCopy,
+}
+
 /// <summary>
 /// Every write to the browser's synced tables. A page never sets an entity's properties and saves - it calls
 /// <see cref="WriteAsync"/>, which applies the edit and queues it in one transaction.
@@ -172,15 +189,18 @@ public static class LocalOps
     /// Takes a snapshot of the server's data and moves the cursor to it. Unsynced local edits survive: a snapshot is
     /// merged field by field like ops. What else happens depends on <paramref name="kind"/>:
     /// <list type="bullet">
-    /// <item><see cref="SnapshotKind.NewDatabase"/>: everything synced is forgotten first (the old server's rows are
-    ///   not in the new one) and the outbox is replayed on top.</item>
+    /// <item><see cref="SnapshotKind.NewDatabase"/>: the server was reinstalled without a backup. If this browser
+    ///   holds anything the new database lacks - a row, a newer field, a tombstone, a queued edit - nothing is
+    ///   applied: the snapshot is <see cref="SnapshotApplied.Held"/> and the planner chooses
+    ///   (<see cref="DecideAsync"/>). Otherwise it is taken as it is.</item>
     /// <item><see cref="SnapshotKind.HistoryLost"/>: the server was restored from an older backup, so this browser
     ///   holds edits the server no longer has - its own and other devices'. Every field newer here than in the
-    ///   snapshot, and every tombstone the snapshot lacks, is queued to be pushed back, with its original clock.</item>
+    ///   snapshot, and every tombstone the snapshot lacks, is queued to be pushed back, with its original clock.
+    ///   The same happens on the first snapshot after the planner chose to send this browser's copy.</item>
     /// </list>
-    /// Returns how many ops it queued; the caller pushes them.
+    /// The caller pushes what it queued.
     /// </summary>
-    public static async Task<int> ApplySnapshotAsync(
+    public static async Task<SnapshotApplied> ApplySnapshotAsync(
         LocalDbContext             db,
         Guid                       deviceId,
         Guid                       serverEpoch,
@@ -201,23 +221,37 @@ public static class LocalOps
 
         if (kind == SnapshotKind.NewDatabase)
         {
-            // The server's database was replaced. Rows synced from the old one are not in the new one, so they go;
-            // edits still queued are replayed and will be pushed to the new database.
+            // The server's database was replaced. Whether what only this browser holds goes to the new one, or is
+            // thrown away, is the planner's to say - unless there is nothing of the kind, when the new database is
+            // simply taken (an unedited seed is the same row at the same zero clock in every database).
+            // A tombstone of a row the new database never had is nothing the planner would miss: it is not asked
+            // about on its own (it still goes back if the copy is sent). A deleted seed is - the seed is back.
+            HashSet<(string, Guid)> held = [.. rows.Select(r => (r.Entity, r.EntityId))];
+            (List<OutboxOp> lacking, _) = await WhatTheServerLacksAsync(db, deviceId, rows, clock, now, cancellationToken);
+            lacking = [.. lacking.Where(o => o.Kind != OpKind.Delete || held.Contains((o.Entity, o.EntityId)))];
+            List<OutboxOp> pending = await PendingAsync(db, cancellationToken);
+
+            if (lacking.Count > 0 || pending.Count > 0)
+            {
+                state.ReplacedByEpoch     = serverEpoch;
+                state.ReplacedMissingRows = lacking.Concat(pending).Select(o => (o.Entity, o.EntityId)).Distinct().Count();
+
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return new SnapshotApplied(0, Held: true);
+            }
+
             await OpApplier.ForgetAllAsync(db, cancellationToken);
             state = await StateAsync(db, cancellationToken);
-
-            foreach (OutboxOp op in await PendingAsync(db, cancellationToken))
-            {
-                SyncedEntity? type = SyncedEntities.Find(op.Entity);
-                if (type is not null)
-                    await OpApplier.ApplyAsync(db, type, op.EntityId, op.Kind, Hlc.Parse(op.Hlc),
-                        OpFieldsJson.Read(op.FieldsJson), cancellationToken);
-            }
         }
-        else if (kind == SnapshotKind.HistoryLost)
+        else if (kind == SnapshotKind.HistoryLost || state.SendCopyOnNextSnapshot)
         {
-            (queued, clock) = await QueueWhatTheServerLostAsync(db, deviceId, rows, clock, now, cancellationToken);
+            (List<OutboxOp> lacking, clock) = await WhatTheServerLacksAsync(db, deviceId, rows, clock, now, cancellationToken);
+            db.Outbox.AddRange(lacking);
+            queued = lacking.Count;
         }
+
+        state.SendCopyOnNextSnapshot = false;
 
         foreach (SnapshotRow row in rows)
         {
@@ -235,26 +269,72 @@ public static class LocalOps
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return queued;
+        return new SnapshotApplied(queued, Held: false);
     }
 
     /// <summary>
-    /// Compares this browser's synced rows with a restored server's snapshot and queues an op for everything the
-    /// server is missing. Field values go back with the clock that set them, as an op from the device that made
+    /// The planner's answer to a server reinstalled without a backup (<see cref="SyncState.ReplacedByEpoch"/>).
+    /// Returns false, changing nothing, when the question is no longer open - another window answered it first, or
+    /// it was asked about a different database. Either way the caller runs a round.
+    /// </summary>
+    /// <remarks>
+    /// Both answers reset the cursor, so the next pull is a first load from the new database:
+    /// <list type="bullet">
+    /// <item><see cref="ServerReplacedChoice.SendMyCopy"/>: the outbox stays, and that first snapshot is compared
+    ///   with every row held here - everything it lacks is queued with its original clock, exactly as after a
+    ///   restore. Several browsers sending their copies therefore merge by the ordinary rules: the same edit from two
+    ///   of them is one op id, logged once; different edits to a field go to the later one; a delete wins.</item>
+    /// <item><see cref="ServerReplacedChoice.ClearMyCopy"/>: every synced row and every queued edit here is deleted.
+    ///   What no other device sent is gone.</item>
+    /// </list>
+    /// </remarks>
+    public static async Task<bool> DecideAsync(
+        LocalDbContext db, Guid replacedBy, ServerReplacedChoice choice, CancellationToken cancellationToken = default)
+    {
+        await using IDbContextTransaction transaction =
+            await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+
+        SyncState state = await StateAsync(db, cancellationToken);
+        if (state.ReplacedByEpoch != replacedBy)
+            return false;
+
+        if (choice == ServerReplacedChoice.ClearMyCopy)
+        {
+            await OpApplier.ForgetAllAsync(db, cancellationToken);
+            await db.Outbox.ExecuteDeleteAsync(cancellationToken);
+            state = await StateAsync(db, cancellationToken);
+        }
+
+        state.ServerEpoch            = null;
+        state.PulledThroughSeq       = 0;
+        state.PulledThroughChain     = "";
+        state.ReplacedByEpoch        = null;
+        state.ReplacedMissingRows    = 0;
+        state.SendCopyOnNextSnapshot = choice == ServerReplacedChoice.SendMyCopy;
+
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Compares this browser's synced rows with a server's snapshot and makes an op, not yet queued, for everything
+    /// the server is missing. Field values go back with the clock that set them, as an op from the device that made
     /// the edit, so they merge on the server exactly as the original ops did: newer than what the server has wins,
     /// older loses, equal changes nothing.
     /// </summary>
     /// <remarks>
     /// The op id is derived from the edit, not minted, so two browsers pushing back the same lost edit send one op
     /// id and the server logs it once. A lost delete has no clock to keep (a tombstone carries none, and needs
-    /// none - delete wins), so it goes back as a new delete from this device.
+    /// none - delete wins), so it goes back as a new delete from this device. An edit still in the outbox is left
+    /// out: it goes back by itself.
     /// </remarks>
-    private static async Task<(int Queued, Hlc? Clock)> QueueWhatTheServerLostAsync(
+    private static async Task<(List<OutboxOp> Lacking, Hlc? Clock)> WhatTheServerLacksAsync(
         LocalDbContext db, Guid deviceId, IReadOnlyList<SnapshotRow> server, Hlc? clock, DateTimeOffset now, CancellationToken ct)
     {
         Dictionary<(string, Guid), SnapshotRow> theirs = server.ToDictionary(r => (r.Entity, r.EntityId));
         HashSet<string> alreadyQueued = [.. await db.Outbox.Select(o => o.Hlc).ToListAsync(ct)];
-        int queued = 0;
+        List<OutboxOp> lacking = [];
 
         foreach (SnapshotRow mine in await OpApplier.SnapshotAsync(db, ct))
         {
@@ -267,12 +347,11 @@ public static class LocalOps
             {
                 Hlc next = Hlc.Next(clock, now.ToUnixTimeMilliseconds(), deviceId);
                 clock = next;
-                db.Outbox.Add(new OutboxOp
+                lacking.Add(new OutboxOp
                 {
                     OpId = Guid.CreateVersion7(now), Hlc = next.ToString(), Entity = mine.Entity, EntityId = mine.EntityId,
                     Kind = OpKind.Delete, FieldsJson = OpFieldsJson.Write([]), CreatedAt = now,
                 });
-                queued++;
                 continue;
             }
 
@@ -289,7 +368,7 @@ public static class LocalOps
                     continue;
 
                 List<OpField> fields = [.. edit.Select(f => f.Field).OrderBy(f => f.Name, StringComparer.Ordinal)];
-                db.Outbox.Add(new OutboxOp
+                lacking.Add(new OutboxOp
                 {
                     OpId       = RecoveredOpId(mine.Entity, mine.EntityId, edit.Key, fields),
                     DeviceId   = edit.Key.DeviceId == deviceId ? null : edit.Key.DeviceId,
@@ -300,11 +379,10 @@ public static class LocalOps
                     FieldsJson = OpFieldsJson.Write(fields),
                     CreatedAt  = now,
                 });
-                queued++;
             }
         }
 
-        return (queued, clock);
+        return (lacking, clock);
     }
 
     /// <summary>A version-8 GUID from the edit itself: the same lost edit gets the same op id in every browser.</summary>

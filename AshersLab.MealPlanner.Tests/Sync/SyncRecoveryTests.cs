@@ -114,41 +114,7 @@ public sealed class SyncRecoveryTests
         Assert.Equal(0, await a.PendingAsync());
     }
 
-    [Fact]
-    public async Task A_new_server_database_forgets_the_old_rows_and_keeps_queued_edits()
-    {
-        await using MealPlannerHost old = new();
-        await using TestBrowser a = await TestBrowser.OpenAsync(old.CreateGrpcWebClient<ISyncService>());
-        Guid gone = await a.CreateIngredientAsync("from the old server");
-        await a.SyncAsync();
-
-        // A wiped server: a new database, a new epoch. The edit is made while the round is between its push and
-        // its pull, so it is only in the outbox when the snapshot arrives; then the network goes.
-        await using MealPlannerHost fresh = new();
-        HookedServer wire = new(fresh.CreateGrpcWebClient<ISyncService>());
-        a.Server = wire;
-        a.Now = a.Now.AddMinutes(1);
-        Guid queued = Guid.Empty;
-        wire.BeforePull = async () =>
-        {
-            wire.BeforePull = null;
-            wire.PushesBeforeOffline = 0;
-            queued = await a.CreateIngredientAsync("made while away");
-        };
-
-        await Assert.ThrowsAsync<RpcException>(() => a.SyncAsync());
-
-        Assert.Equal(SnapshotReason.NewDatabase, Assert.Single(wire.PullAnswers).Snapshot?.Reason);
-        Assert.Equal(new Dictionary<Guid, string> { [queued] = "made while away" }, await a.IngredientsAsync());
-        Assert.Equal(1, await a.PendingAsync());
-
-        wire.PushesBeforeOffline = null;
-        await a.SyncAsync();
-
-        Assert.Equal(new Dictionary<Guid, string> { [queued] = "made while away" }, await ServerIngredientsAsync(fresh));
-        Assert.DoesNotContain(gone, (await a.IngredientsAsync()).Keys);
-        Assert.Equal(0, await a.PendingAsync());
-    }
+    // A new database (reinstalled without a backup) is ServerReplacedTests.
 
     private static async Task<Dictionary<Guid, string>> ServerIngredientsAsync(MealPlannerHost host)
     {

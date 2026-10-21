@@ -42,6 +42,7 @@
     private static string Label(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Refused                      => "Update needed",
+        SyncConnection.WaitingForChoice             => "Paused · needs you",
         SyncConnection.Failed when s.Pending > 0    => $"Sync problem · {s.Pending} waiting",
         SyncConnection.Failed                       => "Sync problem",
         SyncConnection.Offline when s.Pending > 0   => $"Offline · {s.Pending} waiting",
@@ -54,6 +55,7 @@
     private static string Tooltip(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Offline => "Can't reach the server. Changes are kept on this device and sent when it can.",
+        SyncConnection.WaitingForChoice => "The server started again from empty. Nothing syncs until you choose what to do with this device's copy.",
         _ when s.LastSyncedAt is { } at => $"Last synced {at:HH:mm:ss}. Tap to sync now.",
         _ => "Tap to sync now.",
     };
@@ -61,7 +63,7 @@
     private static Color ColorFor(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Refused or SyncConnection.Failed => Color.Error,
-        SyncConnection.Offline => Color.Warning,
+        SyncConnection.Offline or SyncConnection.WaitingForChoice => Color.Warning,
         _ when s.Note is not null => Color.Warning,
         _ => Color.Inherit,
     };
@@ -71,6 +73,7 @@
         SyncConnection.Refused => Icons.Material.Filled.SystemUpdate,
         SyncConnection.Failed  => Icons.Material.Filled.SyncProblem,
         SyncConnection.Offline => Icons.Material.Filled.CloudOff,
+        SyncConnection.WaitingForChoice => Icons.Material.Filled.PauseCircle,
         _ when s.Pending > 0   => Icons.Material.Filled.CloudUpload,
         _                      => Icons.Material.Filled.CloudDone,
     };
