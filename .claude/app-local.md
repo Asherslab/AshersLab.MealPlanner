@@ -117,7 +117,11 @@ with a "Delete" button; or, when something uses it, shows `store-in-use` instead
 `price-ingredient-name` and `price-ingredient-add` (+); per product `price-product-row` (`data-id`; tapping it opens
 the editor), `price-product-name`, `price-product-detail` ("Costco · 2 kg · #12345"). The product editor:
 `product-ingredient` / `product-store` (native selects), `product-edit-name`, `product-edit-pack`, `product-edit-code`
-(input ids), `product-save`, `product-cancel`, `product-delete`. `node .claude/tools/chrome-prices-check.mjs <scratch>/prices`
+(input ids), `product-edit-price` (new products only), `product-save`, `product-cancel`, `product-delete`. Tapping a
+product opens the price sheet: `price-sheet-price` / `price-sheet-per-kg` (input ids), `price-sheet-date` (a native
+date input - set `.value` and dispatch `change`), the form `price-sheet-form` (`requestSubmit()` is Enter),
+`price-sheet-save`, `price-sheet-edit-product` (to the editor), history rows `price-history-row` with
+`price-history-price` and `price-history-delete`. A row's latest price is `price-product-price`. `node .claude/tools/chrome-prices-check.mjs <scratch>/prices`
 (ports 19345/19346) drives all of it from two profiles.
 
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's

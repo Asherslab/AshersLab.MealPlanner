@@ -1,5 +1,6 @@
 @using AshersLab.MealPlanner.Shared.Domain
 @using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Prices
 @using AshersLab.MealPlanner.Shared.Domain.Products
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
 
@@ -54,6 +55,16 @@
                           HelperText="@PackHelper" Error="_packError is not null" ErrorText="@_packError"
                           InputId="product-edit-pack" data-testid="product-edit-pack"/>
 
+            @if (IsNew)
+            {
+                <MudTextField T="string" @bind-Value="_price" Label="Price for one pack (optional)" Variant="Variant.Outlined"
+                              Immediate="true" InputMode="@(InputMode.@decimal)" Class="mt-4"
+                              Adornment="Adornment.Start" AdornmentText="$"
+                              HelperText="Seen today. Earlier prices go in from the product's price list."
+                              Error="_priceError is not null" ErrorText="@_priceError"
+                              InputId="product-edit-price" data-testid="product-edit-price"/>
+            }
+
             <MudTextField T="string" @bind-Value="_storeCode" Label="Store code (optional)" Variant="Variant.Outlined"
                           Immediate="true" MaxLength="ProductRules.MaxStoreCodeLength" Class="mt-4"
                           HelperText="Woolworths stockcode or Costco item number - what a receipt matches on."
@@ -90,8 +101,10 @@
     private string? _name;
     private string? _pack;
     private string? _storeCode;
+    private string? _price;
 
     private string? _nameError;
+    private string? _priceError;
     private string? _storeError;
     private string? _packError;
 
@@ -130,12 +143,16 @@
         _nameError  = ProductRules.NameProblem(name);
         _storeError = Guid.TryParse(_storeId, out Guid store) ? null : "Choose the store that sells it.";
         decimal? pack = PackSize.Parse(_pack, Unit, out _packError);
-        if (_nameError is not null || _storeError is not null || pack is null)
+        long? price = null;
+        _priceError = null;
+        if (IsNew && !string.IsNullOrWhiteSpace(_price))
+            price = Money.ParseCents(_price, out _priceError);
+        if (_nameError is not null || _storeError is not null || pack is null || _priceError is not null)
             return;
 
         Dialog.Close(DialogResult.Ok(new ProductEditorResult(
             new ProductDraft(name, store, ProductRules.NormaliseStoreCode(_storeCode), pack.Value, Ingredient()),
-            Delete: false)));
+            Delete: false, FirstPriceCents: price)));
     }
 
     /// <summary>The picker's choice - except that "none" over an ingredient that is gone keeps the reference.</summary>

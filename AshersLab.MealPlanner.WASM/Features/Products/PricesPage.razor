@@ -6,6 +6,7 @@
 @using AshersLab.MealPlanner.Shared.Data.Sync
 @using AshersLab.MealPlanner.Shared.Domain
 @using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Prices
 @using AshersLab.MealPlanner.Shared.Domain.Products
 @using AshersLab.MealPlanner.Shared.Domain.Sync
 @using AshersLab.MealPlanner.WASM.Data
@@ -17,7 +18,8 @@
 
 @*
     Every ingredient with the products it is bought as - grouped by category in the household's order, which is
-    also the order of the planner's spreadsheet. Tap + on an ingredient to add a product under it; pick a store
+    also the order of the planner's spreadsheet - and each product's latest price. Tap a product to enter a price
+    (PriceSheet); tap + on an ingredient to add a product under it, with its first price; pick a store
     chip to see only that store's products and to add new ones there. Products with no ingredient (household
     items) are listed last. Reads and writes only this browser's database, like every page.
 *@
@@ -77,12 +79,28 @@
                     }
                     @foreach (Product product in products)
                     {
-                        <div class="price-product px-4 py-2" @key="product.Id" role="button" tabindex="0"
-                             @onclick="() => Edit(product)" data-testid="price-product-row" data-id="@product.Id">
-                            <MudText data-testid="price-product-name">@product.Name</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="price-product-detail">
-                                @Detail(product, ingredient)
-                            </MudText>
+                        PriceReading? latest = PriceReadings.Latest(_readings[product.Id]);
+                        <div class="price-product d-flex align-center gap-2 px-4 py-2" @key="product.Id" role="button" tabindex="0"
+                             @onclick="() => OpenSheet(product, ingredient)" data-testid="price-product-row" data-id="@product.Id">
+                            <div class="flex-grow-1">
+                                <MudText data-testid="price-product-name">@product.Name</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="price-product-detail">
+                                    @Detail(product, ingredient)
+                                </MudText>
+                            </div>
+                            <div class="text-right">
+                                @if (latest is not null)
+                                {
+                                    <MudText data-testid="price-product-price">@Money.Format(latest.PriceCents)</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary text-nowrap" data-testid="price-product-seen">
+                                        @latest.ObservedOn.ToString("d MMM")
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap" data-testid="price-product-price">no price</MudText>
+                                }
+                            </div>
                         </div>
                     }
                 </div>
@@ -96,6 +114,10 @@
     private List<Category>            _categories  = [];
     private Dictionary<Guid, string>  _stores      = [];
     private List<Product>             _products    = [];
+    private ILookup<Guid, PriceReading> _readings  = Array.Empty<PriceReading>().ToLookup(_ => Guid.Empty);
+
+    /// <summary>The day it is where the planner is: what "seen on" defaults to.</summary>
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
     private string? _search;
 
@@ -111,6 +133,8 @@
             .ToDictionary(s => s.Id, s => s.Name);
         _products    = [.. (await db.Products.AsNoTracking().Where(p => !p.Deleted).ToListAsync())
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)];
+        _readings    = (await db.PriceObservations.AsNoTracking().Where(o => !o.Deleted).ToListAsync())
+            .ToLookup(o => o.ProductId, o => o.Reading());
 
         if (_store is { } store && !_stores.ContainsKey(store))
             _store = null;
@@ -175,8 +199,42 @@
         Guid store = _store ?? ingredient?.UsualStoreId ?? Guid.Empty;
         ProductDraft draft = new(ingredient?.Name ?? Names.Normalise(_search), store, null, 0, ingredient?.Id);
         ProductEditorResult? result = await OpenEditor(draft, isNew: true);
-        if (result?.Saved is { } saved)
-            await WriteAsync(SyncedEntities.Product, Guid.CreateVersion7(), OpKind.Create, saved.FieldsChangedFrom(null));
+        if (result?.Saved is not { } saved)
+            return;
+
+        Guid id = Guid.CreateVersion7();
+        await WriteAsync(SyncedEntities.Product, id, OpKind.Create, saved.FieldsChangedFrom(null));
+        if (result.FirstPriceCents is { } cents)
+            await WriteAsync(SyncedEntities.PriceObservation, Guid.CreateVersion7(), OpKind.Create,
+                new PriceEntry(id, cents, Today, PriceSource.Manual, null).Fields());
+    }
+
+    /// <summary>Tapping a product: its price sheet. Saving adds an observation; it never changes one.</summary>
+    private async Task OpenSheet(Product product, Ingredient? ingredient)
+    {
+        bool phone = await Viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
+
+        DialogParameters<PriceSheet> parameters = new()
+        {
+            { s => s.ProductId, product.Id },
+            { s => s.Detail, Detail(product, ingredient) },
+            { s => s.PerKg, ingredient?.BaseUnit == BaseUnit.Gram },
+            { s => s.Today, Today },
+            { s => s.History, [.. PriceReadings.NewestFirst(_readings[product.Id])] },
+        };
+        // The sheet focuses its price box itself (PriceSheet.OnAfterRenderAsync).
+        DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
+
+        IDialogReference dialog = await Dialogs.ShowAsync<PriceSheet>(product.Name, parameters, options);
+        if (await dialog.Result is not { Canceled: false, Data: PriceSheetResult result })
+            return;
+
+        if (result.Entry is { } entry)
+            await WriteAsync(SyncedEntities.PriceObservation, Guid.CreateVersion7(), OpKind.Create, entry.Fields());
+        else if (result.DeleteId is { } id)
+            await WriteAsync(SyncedEntities.PriceObservation, id, OpKind.Delete, []);
+        else if (result.OpenEditor)
+            await Edit(product);
     }
 
     private async Task Edit(Product product)

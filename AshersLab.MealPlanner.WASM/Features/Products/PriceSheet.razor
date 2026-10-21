@@ -1,0 +1,142 @@
+@using AshersLab.MealPlanner.Shared.Domain.Prices
+
+@*
+    A product's price: one box for the price of a pack, focused and with the phone's number keypad, and Enter saves -
+    so entering a price is tap the product, type, Enter. The day defaults to today. Beneath, the product's price
+    history, newest first, where a mistaken price can be deleted (never edited: the history is the point).
+
+    For an ingredient counted in grams there is also a price per kg, for variable-weight meat, where the pack price
+    depends on the pack's weight and the per-kg price is what prices a gram.
+
+    Like the editors it only answers; the page writes the ops.
+*@
+
+<MudDialog data-testid="price-sheet">
+    <DialogContent>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-3" data-testid="price-sheet-detail">@Detail</MudText>
+
+        <form id="price-sheet-form" @onsubmit="Save" @onsubmit:preventDefault>
+            <MudTextField T="string" @ref="_priceField" @bind-Value="_price" Label="Price for one pack" Variant="Variant.Outlined"
+                          Immediate="true" InputMode="@(InputMode.@decimal)"
+                          Adornment="Adornment.Start" AdornmentText="$"
+                          Error="_priceError is not null" ErrorText="@_priceError"
+                          InputId="price-sheet-price" data-testid="price-sheet-price"/>
+
+            <div class="d-flex gap-3 mt-3">
+                <label class="native-select flex-grow-1">
+                    <span>Seen on</span>
+                    <input type="date" @bind="_observedOn" max="@Today.ToString("yyyy-MM-dd")" data-testid="price-sheet-date"/>
+                </label>
+                @if (PerKg)
+                {
+                    <MudTextField T="string" @bind-Value="_perKg" Label="Per kg (optional)" Variant="Variant.Outlined"
+                                  Immediate="true" InputMode="@(InputMode.@decimal)" Class="flex-grow-1"
+                                  Adornment="Adornment.Start" AdornmentText="$"
+                                  Error="_perKgError is not null" ErrorText="@_perKgError"
+                                  InputId="price-sheet-per-kg" data-testid="price-sheet-per-kg"/>
+                }
+            </div>
+            @* Enter in the price box submits; the button is for a tap. *@
+            <button type="submit" hidden></button>
+        </form>
+
+        <MudText Typo="Typo.overline" Class="d-block mt-4">History</MudText>
+        @if (History.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="price-history-empty">No price yet.</MudText>
+        }
+        @foreach (PriceReading reading in History)
+        {
+            <div class="d-flex align-center list-row" @key="reading.Id" data-testid="price-history-row" data-id="@reading.Id">
+                <MudText Class="flex-grow-1" Typo="Typo.body2">
+                    <span data-testid="price-history-price">@Money.Format(reading.PriceCents)</span>
+                    @if (reading.PerKgCents is { } perKg)
+                    {
+                        <span class="mud-text-secondary"> · @Money.Format(perKg)/kg</span>
+                    }
+                    <span class="mud-text-secondary"> · @reading.ObservedOn.ToString("d MMM yyyy") · @reading.Source.Label()</span>
+                </MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small"
+                               aria-label="@($"Delete the price of {Money.Format(reading.PriceCents)}")"
+                               OnClick="() => Delete(reading)" data-testid="price-history-delete"/>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="EditProduct" Class="mr-auto" data-testid="price-sheet-edit-product">Edit product</MudButton>
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="price-sheet-cancel">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="price-sheet-form" Color="Color.Primary"
+                   Variant="Variant.Filled" data-testid="price-sheet-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Inject] private IDialogService Dialogs { get; set; } = null!;
+
+    [Parameter] public Guid ProductId { get; set; }
+
+    /// <summary>"Costco · 2 kg · #12345", as the list shows it.</summary>
+    [Parameter] public string Detail { get; set; } = "";
+
+    /// <summary>Whether a per-kg price means anything: the product's ingredient is counted in grams.</summary>
+    [Parameter] public bool PerKg { get; set; }
+
+    /// <summary>The day the browser thinks it is - the default for "seen on".</summary>
+    [Parameter] public DateOnly Today { get; set; }
+
+    /// <summary>Its observations, newest first.</summary>
+    [Parameter] public IReadOnlyList<PriceReading> History { get; set; } = [];
+
+    private string?  _price;
+    private string?  _perKg;
+    private DateOnly _observedOn;
+
+    private string? _priceError;
+    private string? _perKgError;
+
+    private MudTextField<string> _priceField = null!;
+
+    protected override void OnInitialized() => _observedOn = Today;
+
+    /// <summary>
+    /// Focuses the price box, so the keypad is up the moment the sheet opens. Not AutoFocus: the dialog's focus trap
+    /// takes focus for its own root after the box's AutoFocus has run (seen in Chrome, whatever DefaultFocus says), so
+    /// the box is focused once the dialog has finished opening.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        await Task.Delay(100);
+        await _priceField.FocusAsync();
+    }
+
+    private void Save()
+    {
+        long? price = Money.ParseCents(_price, out _priceError);
+        long? perKg = null;
+        _perKgError = null;
+        if (PerKg && !string.IsNullOrWhiteSpace(_perKg))
+            perKg = Money.ParseCents(_perKg, out _perKgError);
+        if (price is null || _perKgError is not null)
+            return;
+
+        Dialog.Close(DialogResult.Ok(PriceSheetResult.Saved(new PriceEntry(ProductId, price.Value, _observedOn, PriceSource.Manual, perKg))));
+    }
+
+    private void EditProduct() => Dialog.Close(DialogResult.Ok(PriceSheetResult.EditProduct));
+
+    private async Task Delete(PriceReading reading)
+    {
+        bool? confirmed = await Dialogs.ShowMessageBoxAsync(
+            title: $"Delete {Money.Format(reading.PriceCents)}?",
+            message: $"The price seen on {reading.ObservedOn:d MMM yyyy} goes from every device.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+            Dialog.Close(DialogResult.Ok(PriceSheetResult.Deleted(reading.Id)));
+    }
+}

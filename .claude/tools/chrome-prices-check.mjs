@@ -55,6 +55,14 @@ function prices(p) {
       return (await editorClosed()) && this.has(o.name);
     },
     tap: name => p.evaluate(`${productRow(name)}?.click()`),
+    /** Tapping a product opens its price sheet; the editor is behind its "Edit product". */
+    async openEditor(name) {
+      await this.has(name, 30_000);
+      await this.tap(name);
+      if (!await until(p, `!!document.querySelector('[data-testid=price-sheet-edit-product]')`, 10_000)) return false;
+      await click(p, '[data-testid=price-sheet-edit-product]');
+      return editorOpen();
+    },
     editorOpen, editorClosed, fill,
     save: () => click(p, '[data-testid=product-save]'),
   };
@@ -77,8 +85,7 @@ const ingredient = `mince ${RUN}`, product = `Beef mince 8x250g ${RUN}`;
     === `${product}|00000000-5EED-7000-8000-000000000102|12345|2000.0|1`, 'the server holds the product: Costco, 2000 g, the code, an ingredient');
 
   // A pack typed in the wrong kind of unit is refused, never converted.
-  await pb.tap(product);
-  await pb.editorOpen();
+  await pb.openEditor(product);
   await pb.fill({ pack: '1.5L' });
   await pb.save(); await sleep(300);
   check(await b.evaluate(`!!document.getElementById('product-edit-pack') && document.body.textContent.includes('It is counted in g')`),
@@ -98,8 +105,9 @@ const ingredient = `mince ${RUN}`, product = `Beef mince 8x250g ${RUN}`;
   await clickDialogButton(a, 'OK'); await ingredients(a).cancel();
   await a.go('stores');
   check(await nameList(a, 'store').remove('Costco') === 'in-use'
-    && await a.evaluate(`document.querySelector('[data-testid=store-in-use]').textContent.includes(${JSON.stringify(product)})`),
-    'A cannot delete Costco: it sells the product (named)');
+    // Earlier runs' products pile up and only five are named, so check the count is there, not this run's name.
+    && await a.evaluate(`/\\d+ products?: /.test(document.querySelector('[data-testid=store-in-use]').textContent)`),
+    'A cannot delete Costco: it sells products (counted and named)');
 
   await settled(a); await settled(b);
   for (const p of [a, b]) {
@@ -112,12 +120,93 @@ const ingredient = `mince ${RUN}`, product = `Beef mince 8x250g ${RUN}`;
   await a.go('prices');
   await phone(b); await sleep(500);
   console.log(`  phone screenshot: ${await screenshot(b, 'prices')}`);
-  await pb.tap(product); await pb.editorOpen(); await sleep(400);
+  await pb.openEditor(product); await sleep(400);
   console.log(`  phone screenshot: ${await screenshot(b, 'product-editor')}`);
   await click(b, '[data-testid=product-cancel]'); await pb.editorClosed();
   await phone(b, false);
 
   globalThis.productId = id;
+}
+
+// --- Prices -----------------------------------------------------------------------------------------------------
+{
+  const pa = prices(a), pb = prices(b);
+  const id = globalThis.productId;
+  const price = name => a.evaluate(`[...document.querySelectorAll('[data-testid=price-product-row]')]
+    .find(r => r.querySelector('[data-testid=price-product-name]')?.textContent.trim() === ${JSON.stringify(name)})
+    ?.querySelector('[data-testid=price-product-price]')?.textContent.trim()`);
+  const priceOn = (p, name) => p.evaluate(`[...document.querySelectorAll('[data-testid=price-product-row]')]
+    .find(r => r.querySelector('[data-testid=price-product-name]')?.textContent.trim() === ${JSON.stringify(name)})
+    ?.querySelector('[data-testid=price-product-price]')?.textContent.trim()`);
+  const showsPrice = (p, name, text) => until(p, `[...document.querySelectorAll('[data-testid=price-product-row]')]
+    .find(r => r.querySelector('[data-testid=price-product-name]')?.textContent.trim() === ${JSON.stringify(name)})
+    ?.querySelector('[data-testid=price-product-price]')?.textContent.trim() === ${JSON.stringify(text)}`);
+  const sheetOpen = p => until(p, `!!document.getElementById('price-sheet-price')`, 10_000);
+  const sheetClosed = p => until(p, `!document.getElementById('price-sheet-price')`, 10_000);
+  /** Taps the product, types the price (and optionally the day and per-kg), and presses Enter (submits the form). */
+  async function enter(p, name, text, o = {}) {
+    await prices(p).has(name, 30_000);
+    await prices(p).tap(name);
+    if (!await sheetOpen(p)) return false;
+    // Focused on open: the planner types straight away.
+    const focused = await until(p, `document.activeElement?.id === 'price-sheet-price'`, 3000);
+    if (!focused) console.log(`  focus is on: ${await p.evaluate(`(e => e?.tagName + '#' + e?.id + '.' + e?.className + ' hasFocus=' + document.hasFocus())(document.activeElement)`)}`);
+    await p.evaluate(typeInto('price-sheet-price', text));
+    if (o.perKg) await p.evaluate(typeInto('price-sheet-per-kg', o.perKg));
+    if (o.date) await p.evaluate(`(() => { const i = document.querySelector('[data-testid=price-sheet-date]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(o.date)});
+      i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await sleep(150);
+    await p.evaluate(`document.getElementById('price-sheet-form').requestSubmit()`);
+    return { focused, closed: await sheetClosed(p) };
+  }
+
+  const r = await enter(a, product, '24.99');
+  check(r.focused && r.closed, 'A taps the product: the price box is focused, typing 24.99 and Enter saves');
+  check(await showsPrice(a, product, '$24.99'), 'A shows $24.99 on the row');
+  check(await showsPrice(b, product, '$24.99'), 'B shows $24.99');
+
+  check((await enter(b, product, '22.50', { date: '2026-10-01' })).closed, 'B back-fills $22.50 seen on 1 Oct');
+  await sleep(1500);
+  check(await priceOn(a, product) === '$24.99' && await priceOn(b, product) === '$24.99',
+    'the row still shows $24.99 on both: an older day does not replace a newer price');
+
+  check((await enter(a, product, '18.73', { perKg: '14.99' })).closed, 'A enters $18.73 at $14.99/kg (variable weight)');
+  check(await showsPrice(b, product, '$18.73'), 'B shows $18.73');
+
+  // A typo is refused, saying why, and nothing is written.
+  await pb.tap(product); await sheetOpen(b);
+  await b.evaluate(typeInto('price-sheet-price', '1,50')); await sleep(150);
+  await b.evaluate(`document.getElementById('price-sheet-form').requestSubmit()`); await sleep(400);
+  check(await b.evaluate(`!!document.getElementById('price-sheet-price') && document.body.textContent.includes('Type a price like 24.99')`),
+    'B: "1,50" is refused with "Type a price like 24.99."');
+  const history = await b.evaluate(`[...document.querySelectorAll('[data-testid=price-history-price]')].map(e => e.textContent.trim())`);
+  check(JSON.stringify(history) === JSON.stringify(['$18.73', '$24.99', '$22.50']), `B's history, newest day first: ${history.join(', ')}`);
+  await phone(b); await sleep(500);
+  console.log(`  phone screenshot: ${await screenshot(b, 'price-sheet')}`);
+  await phone(b, false);
+  await b.evaluate(`document.querySelector('[data-testid=price-history-delete]').click()`);
+  await until(b, `document.querySelectorAll('.mud-dialog').length > 1`, 5000);
+  await clickDialogButton(b, 'Delete'); await sheetClosed(b);
+  check(await showsPrice(a, product, '$24.99'), 'B deletes $18.73 from the history; A falls back to $24.99');
+
+  // A new product with its first price in the same dialog.
+  const small = `Mince 500g ${RUN}`;
+  check(await pa.addUnder(ingredient, { name: small, store: 'Woolworths', pack: '500g', price: '7.50' }), 'A adds a Woolworths product with its first price');
+  check(await showsPrice(b, small, '$7.50'), 'B shows it at $7.50');
+
+  await settled(a); await settled(b);
+  const rows = `select PriceCents || '|' || ObservedOn || '|' || Source || '|' || ifnull(PerKgCents, '-') || '|' || Deleted from PriceObservation
+    where ProductId = '${up(id)}' order by ObservedOn, PriceCents`;
+  const onServer = server(rows);
+  console.log(`  server PriceObservation for it:\n${onServer}`);
+  const today = new Date().toLocaleDateString('en-CA');
+  check(onServer === [`2250|2026-10-01|Manual|-|0`, `1873|${today}|Manual|1499|1`, `2499|${today}|Manual|-|0`].join('\n'),
+    'the server holds all three, the deleted one as a tombstone');
+  for (const p of [a, b]) {
+    const q = await dump(p);
+    check(q(rows) === onServer && q('select count(*) from Outbox') === '0', `${p.name} SQLite holds the same prices, outbox empty`);
+  }
 }
 
 finish();

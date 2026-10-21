@@ -1,9 +1,12 @@
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Domain;
 using AshersLab.MealPlanner.Shared.Domain.Products;
+using AshersLab.MealPlanner.Shared.Domain.Sync;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 
 namespace AshersLab.MealPlanner.Shared.Data.Sync;
@@ -34,7 +37,9 @@ public static class SyncedEntities
 
     public static readonly ProductEntity Product = new();
 
-    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product];
+    public static readonly PriceObservationEntity PriceObservation = new();
+
+    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product, PriceObservation];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -88,6 +93,22 @@ public static class SyncedEntities
             // A product's ingredient's products, and "is this store / ingredient still used?" Not foreign keys.
             product.HasIndex(p => p.IngredientId);
             product.HasIndex(p => p.StoreId);
+        });
+
+        modelBuilder.Entity<PriceObservation>(price =>
+        {
+            price.ToTable("PriceObservation");
+            price.HasKey(p => p.Id);
+            price.Property(p => p.Id).ValueGeneratedNever();
+            // By name, as the op carries it.
+            price.Property(p => p.Source).HasConversion<string>().HasMaxLength(20);
+            // Text in the op's own format, converted here rather than by the provider: the browser's SQLite reader
+            // (SqliteWasmBlazor) throws InvalidCastException on GetFieldValue<DateOnly>, though the server's reads it.
+            price.Property(p => p.ObservedOn)
+                .HasConversion(date => OpValues.FormatDate(date), text => DateOnly.ParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture))
+                .HasMaxLength(10);
+            // A product's history. Not a foreign key.
+            price.HasIndex(p => p.ProductId);
         });
     }
 }

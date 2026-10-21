@@ -56,6 +56,11 @@ adding a local table, a local migration, or anything that waits on the local dat
 - **`shared-database.js` is coupled to SqliteWasmBlazor's bridge ↔ worker messages** (`{type:'init'}`,
   `{id, data:{type:'execute', sql}}`, `{type:'ready'|'error'}`, `streamId`). Re-run
   `.claude/tools/chrome-multiwindow-check.mjs` after upgrading the package.
+- **SqliteWasmBlazor's reader cannot read a `DateOnly` column** - `InvalidCastException` from
+  `SqliteWasmDataReader.GetFieldValue<DateOnly>`, which kills the page and the sync round. The server's provider and
+  the tests' plain SQLite read it fine, so only the browser shows it. Give a date column an explicit string converter
+  in `SyncedEntities.BuildModel` (as `PriceObservation.ObservedOn` has). `decimal`, `long`, `bool`, enums by name and
+  `Guid` read fine. Seen in Chrome on 2026-10-21; any new column type needs a look in a real browser.
 - **A model change needs a migration.** The browser applies migrations, never `EnsureCreated`, and a model
   change without one builds and then fails in every browser that already has the database.
   `LocalDbContextTests.Every_model_change_has_a_migration` catches it.

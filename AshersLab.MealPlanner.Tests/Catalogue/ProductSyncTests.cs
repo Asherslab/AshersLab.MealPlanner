@@ -5,6 +5,7 @@ using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
 using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using AshersLab.MealPlanner.Shared.Domain.Ingredients;
+using AshersLab.MealPlanner.Shared.Domain.Prices;
 using AshersLab.MealPlanner.Shared.Domain.Products;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using AshersLab.MealPlanner.Tests.Grpc;
@@ -71,6 +72,47 @@ public sealed class ProductSyncTests : IAsyncLifetime
         using IServiceScope scope = _host.Services.CreateScope();
         Product onServer = await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Products.SingleAsync(p => p.Id == product, Ct);
         Assert.Equal(1500m, onServer.PackQuantity);
+    }
+
+    [Fact]
+    public async Task Prices_reach_another_browser_by_op_and_by_snapshot_and_a_deleted_one_goes_everywhere()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser byOps = await TestBrowser.OpenAsync(_server);
+        await byOps.SyncAsync();
+        Guid product = Guid.CreateVersion7();
+        await a.WriteAsync(SyncedEntities.Product, product, OpKind.Create,
+            new ProductDraft("Beef mince", CatalogueSeed.Costco, null, 2000m, null).FieldsChangedFrom(null));
+        Guid typed = Guid.CreateVersion7(), mistake = Guid.CreateVersion7(), meat = Guid.CreateVersion7();
+        await a.WriteAsync(SyncedEntities.PriceObservation, typed, OpKind.Create,
+            new PriceEntry(product, 2499, new DateOnly(2026, 10, 14), PriceSource.Manual, null).Fields());
+        await a.WriteAsync(SyncedEntities.PriceObservation, mistake, OpKind.Create,
+            new PriceEntry(product, 249900, new DateOnly(2026, 10, 21), PriceSource.Manual, null).Fields());
+        await a.WriteAsync(SyncedEntities.PriceObservation, meat, OpKind.Create,
+            new PriceEntry(product, 1873, new DateOnly(2026, 10, 20), PriceSource.Receipt, 1499).Fields());
+        await a.SyncAsync();
+        await byOps.SyncAsync();
+
+        await a.WriteAsync(SyncedEntities.PriceObservation, mistake, OpKind.Delete, []);
+        await a.SyncAsync();
+        await byOps.SyncAsync();
+        await using TestBrowser bySnapshot = await TestBrowser.OpenAsync(_server);
+        await bySnapshot.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { byOps, bySnapshot })
+        {
+            await using LocalDbContext db = browser.CreateDbContext();
+            List<PriceReading> readings = [.. (await db.PriceObservations.AsNoTracking().Where(o => !o.Deleted && o.ProductId == product).ToListAsync(Ct))
+                .Select(o => o.Reading())];
+            Assert.Equal(
+                [new PriceReading(meat, 1873, new DateOnly(2026, 10, 20), PriceSource.Receipt, 1499),
+                 new PriceReading(typed, 2499, new DateOnly(2026, 10, 14), PriceSource.Manual, null)],
+                PriceReadings.NewestFirst(readings));
+        }
+
+        using IServiceScope scope = _host.Services.CreateScope();
+        Assert.True(await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().PriceObservations
+            .Where(o => o.Id == mistake).Select(o => o.Deleted).SingleAsync(Ct));
     }
 
     [Fact]

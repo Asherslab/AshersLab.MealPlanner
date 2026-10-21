@@ -7,7 +7,11 @@ verified: 2026-10-21
 code:
   - AshersLab.MealPlanner.Shared.Domain/Products
   - AshersLab.MealPlanner.Shared.Domain/Sync/OpValues.cs
+  - AshersLab.MealPlanner.Shared.Domain/Prices
   - AshersLab.MealPlanner.Shared.Data/Products
+  - AshersLab.MealPlanner.Shared.Data/Prices
+  - AshersLab.MealPlanner.Tests/Domain/MoneyTests.cs
+  - AshersLab.MealPlanner.Tests/Domain/PriceRulesTests.cs
   - AshersLab.MealPlanner.WASM/Features/Products
   - AshersLab.MealPlanner.Tests/Domain/PackSizeTests.cs
   - AshersLab.MealPlanner.Tests/Domain/ProductRulesTests.cs
@@ -60,21 +64,56 @@ Delete says "mince is used by 1 product: ... Delete them on the Prices page firs
 (the stores page lists the products beside the ingredients) - the rule of
 [the catalogue](catalogue.md#deleting-something-referenced).
 
+## Prices
+
+`PriceObservation (Id, ProductId, PriceCents, ObservedOn, Source, PerKgCents, Deleted)`. Rules in
+`Shared.Domain/Prices/PriceRules.cs`; a new one is written as one create with every field (`PriceEntry.Fields`).
+
+| Field | On the wire | Notes |
+|---|---|---|
+| `ProductId` | GUID, never null | required |
+| `PriceCents` | whole cents as plain digits (`OpValues.FormatCents`), 1 to 10,000,000 | one pack; never dollars, never a decimal |
+| `ObservedOn` | `yyyy-MM-dd` | the day it was seen; no time, no zone |
+| `Source` | `Manual`, `Receipt` or `Live` - by name | the pages write `Manual`; receipts and live prices come later |
+| `PerKgCents` | whole cents or null | variable-weight meat: what a gram costs when the pack price depends on its weight |
+
+- **Append-only by use, not by rule.** The pages add a price and delete a mistaken one; nothing edits one, because the
+  history is the point. The op rules still accept an update: a browser giving back what a restored server lost
+  sends every field as an update ([offline sync](../sync/offline-sync.md)), and a create-only rule would reject those.
+- **The latest price is the newest day, then the last entered** (`PriceReadings.Latest`, tested): a price back-filled
+  for last month never replaces this week's. Two on one day: the later id (GUIDv7, so the later entry). The source does
+  not matter - a receipt and a typed price are equal.
+- Deleting a product leaves its prices as rows nothing shows: there is no cascade on sync.
+- **Money is typed as dollars and stored as cents** (`Money.ParseCents`, tested in `Tests/Domain/MoneyTests.cs`):
+  `24.99`, `$24.99`, `24`, `.99`. A third decimal place, a comma (`1,50`) and zero are refused - a typo read as a
+  price would be wrong silently.
+
 ## What the planner sees
 
 `/prices`, "Prices" in the menu. Every ingredient, under its category in the household's order (the order of the
-spreadsheet's price columns), each with its products beneath: the name, then "Costco · 2 kg · #12345". A search box
+spreadsheet's price columns), each with its products beneath: the name, then "Costco · 2 kg · #12345", and on the right
+its latest price and the day seen ("$24.99 / 21 Oct", or "no price"). A search box
 filters by ingredient or product name; store chips ("All stores", "Costco", "Woolworths") show only that store's
 products. Products with no ingredient are last, under "Not food".
 
+- **Entering a price: tap the product, type, Enter.** The price sheet opens with the price box already focused and
+  the phone's decimal keypad up (`inputmode=decimal`); Enter (or Save) adds the price, seen today. "Seen on" (a native
+  date picker) back-fills an older price; "Per kg" appears for an ingredient counted in grams. Beneath is the
+  history, newest first, each with its day and "typed in" / "receipt" / "online", and a bin for a mistake (one
+  confirmation).
 - **Adding a product under an ingredient**: tap its +. The editor opens with the ingredient chosen, the store set to
-  the picked chip, else the ingredient's usual store, and the name set to the ingredient's. Type the pack size, Save:
-  two or three taps and one box when the store is right.
+  the picked chip, else the ingredient's usual store, and the name set to the ingredient's. Type the pack size and,
+  optionally, today's price, Save: the product and its first price in one dialog.
 - "New" beside the search adds one with no ingredient chosen (the search text as its name).
-- Tapping a product opens the same editor, with Delete.
+- The product's editor - with Delete - is "Edit product" on its price sheet.
 
 The editor (full screen on a phone): Ingredient and Store as native selects (the phone's own picker), the name, the
-pack size labelled with its unit ("Pack size (g)"), and the optional store code.
+pack size labelled with its unit ("Pack size (g)"), the first price (new products only) and the optional store code.
+
+**The sheet focuses its price box itself** (`PriceSheet.OnAfterRenderAsync`, after 100 ms), not with `AutoFocus`: the
+MudDialog's focus trap takes focus for its own root after the box's `AutoFocus` has run, whatever
+`DialogOptions.DefaultFocus` says (`FirstChild` focuses the trap's sentinel). Seen in headless Chrome; without it every
+price costs a tap on the box first.
 
 ## As seen
 
@@ -83,3 +122,9 @@ A adds an ingredient in grams and a product under it typed `8x250g`; both profil
 the server row holds 2000; B is refused `1.5L`, saves `1.5kg`, A shows 1.5 kg; A cannot delete the ingredient or
 Costco and is told the product's name; both profiles' SQLite hold 1500 with empty outboxes. Phone-sized screenshots
 of the page and the editor.
+
+Prices, same script: A taps the product, the price box has focus, `24.99` and Enter saves; both rows show $24.99; B
+back-fills $22.50 for 1 Oct and both rows still show $24.99; A enters $18.73 at $14.99/kg and B shows it; B is refused
+`1,50` ("Type a price like 24.99."); B's history reads $18.73, $24.99, $22.50; B deletes $18.73 and A falls back to
+$24.99; a new Woolworths product saved with its first price shows $7.50 on B. The server holds all three prices, the
+deleted one as a tombstone, and both profiles' SQLite the same, outboxes empty.
