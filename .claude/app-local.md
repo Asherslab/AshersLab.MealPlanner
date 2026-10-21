@@ -43,6 +43,12 @@ that compiled nothing. Call `get_file_problems` on each edited file first (it ma
 and when it matters check that `AshersLab.MealPlanner.Tests/bin/Debug/net10.0/<Project>.dll` is newer than the
 source (`[ dll -nt source ]`). A test run on a stale build reports the old code's result.
 
+**The WASM bundle can keep a referenced project's old code.** Seen 2026-10-21: after a `Shared.Domain` change, an
+incremental build updated `Shared.Domain/bin` and the tests, but not the WASM's
+`wwwroot/_framework/AshersLab.MealPlanner.Shared.Domain.*.wasm` (webcil) - the browser ran the old code for half an
+hour of checks. After changing a project the WASM references, compare that file's time with the source's, and when it
+is older, stop the app and `build_solution` with `rebuild: true`.
+
 ## Ports
 
 Both GSBC stacks run at the same time as this one. Every fixed port here differs from theirs —
@@ -143,6 +149,18 @@ navigating**: `go()` is a full reload, and a write still in flight when the dial
 (port 19351, after a prices check has left a product in grams) saves a line and a pack of 1234.5 g, reopens each and
 saves untouched: no op, still 1234.5, on the server and in the profile's SQLite. **Wait on the server's rows, not the
 chip**, after a save: the chip reads "online, 0 waiting" before a write made a moment ago is even queued.
+
+**Import** (`/import`, `nav-import`): the file box `import-file` (an `<input type=file>` - set it with the DevTools
+protocol's `DOM.setFileInputFiles`; the Chrome extension's `file_upload` only takes files shared with the session, and
+the real sheet is in `private/`), then `import-summary` (or `import-error`), `import-run`, `import-done` /
+`import-nothing`; questions `import-ingredient-question` / `import-serves-question` / `import-group-question` /
+`import-category-question` (`data-key`), `import-household-store` (a label around a native select), per price
+`import-price` (`data-id`) with `import-price-store`, `import-price-pack`, `import-price-state`; new ingredients
+`import-new-ingredient` with `import-unit-Gram|Millilitre|Each`; `import-left-out`. On Ingredients, a guessed unit is
+`ingredient-unit-guessed` (chip) and `ingredient-unit-guessed-note` (in the editor).
+`node .claude/tools/chrome-import-check.mjs <scratch>/import "$PWD/private/Grocery budget.xlsx"` (ports 19352/19353)
+drives it from two profiles and prints counts only. Start from a fresh server database (stop the app, delete
+`mealplanner.db*`, start it) - against one already holding the import it can only say "nothing new".
 
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).

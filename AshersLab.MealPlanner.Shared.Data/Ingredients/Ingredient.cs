@@ -31,5 +31,8 @@ public class Ingredient : ISyncedRow
     /// <summary>Used in small amounts (oil, soy sauce): costed like anything else, left off the shopping list.</summary>
     public bool IsStaple { get; set; }
 
+    /// <summary>The unit is the spreadsheet import's guess, not yet confirmed: the page asks the planner to check it.</summary>
+    public bool UnitGuessed { get; set; }
+
     public bool Deleted { get; set; }
 }

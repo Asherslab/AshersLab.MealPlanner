@@ -26,6 +26,12 @@ public static class IngredientRules
     /// <summary>"true" or "false". Staples are used in small amounts and left off the shopping list.</summary>
     public const string IsStapleField = "IsStaple";
 
+    /// <summary>
+    /// "true" when the unit is the spreadsheet import's guess and nobody has confirmed it; saving the ingredient's
+    /// editor sends "false". Every quantity of it is counted in the unit, so a wrong guess is wrong everywhere.
+    /// </summary>
+    public const string UnitGuessedField = "UnitGuessed";
+
     public const int MaxNameLength = Names.MaxLength;
 
     private const string Noun = "An ingredient";
@@ -33,7 +39,7 @@ public static class IngredientRules
     /// <summary>Every field an ingredient op may carry. Anything else is refused.</summary>
     public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal)
     {
-        NameField, BaseUnitField, CategoryField, UsualStoreField, IsStapleField,
+        NameField, BaseUnitField, CategoryField, UsualStoreField, IsStapleField, UnitGuessedField,
     };
 
     /// <summary>
@@ -61,6 +67,7 @@ public static class IngredientRules
             CategoryField   => OpValues.TryParseId(field.Value, out _) ? null : "The category is not an id.",
             UsualStoreField => OpValues.TryParseId(field.Value, out _) ? null : "The store is not an id.",
             IsStapleField   => OpValues.TryParseBool(field.Value, out _) ? null : "Staple is not true or false.",
+            UnitGuessedField => OpValues.TryParseBool(field.Value, out _) ? null : "Unit guessed is not true or false.",
             _               => null,
         });
 }

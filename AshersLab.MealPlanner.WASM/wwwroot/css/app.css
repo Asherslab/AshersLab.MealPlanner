@@ -43,6 +43,31 @@
     cursor: pointer;
 }
 
+/* The import review's small boxes - serves, a price's pack - as tall as the native selects beside them. */
+.import-small-input {
+    width: 5.5rem;
+    min-height: 48px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 1rem;
+    color: var(--mud-palette-text-primary);
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: var(--mud-default-borderradius);
+}
+
+.import-pack {
+    flex: 0 0 auto;
+}
+
+.import-unit-row + .import-unit-row {
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+.import-file input {
+    max-width: 100%;
+}
+
 /* A meal in the list is a link to its page (MealsPage), dressed as a row. */
 .meal-row {
     color: inherit;

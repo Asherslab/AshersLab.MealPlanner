@@ -28,6 +28,12 @@
                     </MudToggleItem>
                 }
             </MudToggleGroup>
+            @if (Draft.UnitGuessed)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Warning" Class="d-block" data-testid="ingredient-unit-guessed-note">
+                    The spreadsheet import guessed this. Check it - saving marks it as checked.
+                </MudText>
+            }
             @if (_unitError is not null && _unit is null)
             {
                 <MudText Typo="Typo.caption" Color="Color.Error" data-testid="ingredient-unit-error">@_unitError</MudText>
@@ -141,7 +147,7 @@
 
         Dialog.Close(DialogResult.Ok(new IngredientEditorResult(
             new IngredientDraft(name, _unit, Pick(_categoryId, Draft.CategoryId, Categories),
-                Pick(_storeId, Draft.UsualStoreId, Stores), _isStaple),
+                Pick(_storeId, Draft.UsualStoreId, Stores), _isStaple, UnitGuessed: false),
             Delete: false)));
     }
 

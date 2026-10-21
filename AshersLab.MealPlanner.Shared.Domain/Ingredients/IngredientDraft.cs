@@ -2,8 +2,11 @@ using AshersLab.MealPlanner.Shared.Domain.Sync;
 
 namespace AshersLab.MealPlanner.Shared.Domain.Ingredients;
 
-/// <summary>An ingredient as an editor holds it. <see cref="Unit"/> is null until chosen: there is no default.</summary>
-public sealed record IngredientDraft(string Name, BaseUnit? Unit, Guid? CategoryId, Guid? UsualStoreId, bool IsStaple)
+/// <summary>
+/// An ingredient as an editor holds it. <see cref="Unit"/> is null until chosen: there is no default.
+/// <see cref="UnitGuessed"/> is true only for one the spreadsheet import made and nobody has saved since.
+/// </summary>
+public sealed record IngredientDraft(string Name, BaseUnit? Unit, Guid? CategoryId, Guid? UsualStoreId, bool IsStaple, bool UnitGuessed = false)
 {
     /// <summary>
     /// The fields to send: everything set, for a new ingredient (null <paramref name="before"/>); otherwise only what
@@ -23,6 +26,8 @@ public sealed record IngredientDraft(string Name, BaseUnit? Unit, Guid? Category
             fields.Add(new(IngredientRules.UsualStoreField, OpValues.FormatId(UsualStoreId)));
         if (before is null ? IsStaple : before.IsStaple != IsStaple)
             fields.Add(new(IngredientRules.IsStapleField, OpValues.FormatBool(IsStaple)));
+        if (before is null ? UnitGuessed : before.UnitGuessed != UnitGuessed)
+            fields.Add(new(IngredientRules.UnitGuessedField, OpValues.FormatBool(UnitGuessed)));
         return fields;
     }
 }

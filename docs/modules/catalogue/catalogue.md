@@ -118,6 +118,7 @@ ingredients and the shopping list are grouped in this order."; a "New category" 
 | `BaseUnit` | `Gram`, `Millilitre` or `Each` - the enum member's **name** | required on create; never rename a member. Shown as g / ml / each. |
 | `CategoryId`, `UsualStoreId` | lower-case hyphenated GUID, or null for none | not checked against existing rows - see the traps |
 | `IsStaple` | `true` or `false` | staples are costed by quantity like anything else and left off the shopping list |
+| `UnitGuessed` | `true` or `false` | `true` only from the [spreadsheet import](../import/spreadsheet-import.md); saving the editor sends `false` |
 
 - **A create needs a unit, and the editor has no default.** Every quantity of the ingredient - in a recipe, in a
   pack - is counted in it, so a silent "grams" on a cucumber would make every later number wrong without anyone
@@ -132,8 +133,9 @@ ingredients and the shopping list are grouped in this order."; a "New category" 
 
 **What the planner sees** (`/ingredients`): one box, "New ingredient, or search". Typing filters the list as she
 types; Add (or Enter) opens the editor with the name filled in. The list is grouped under category headings in the
-categories' order, "No category" last; each row is the name, a "Staple" chip when it is one, and "counted in each ·
-Costco" beneath. Tapping a row opens the same editor. The editor (full screen on a phone): Name; "Counted in" -
+categories' order, "No category" last; each row is the name, a "Staple" chip when it is one, an orange "Check unit"
+chip while its unit is the import's guess, and "counted in each · Costco" beneath. Saving the editor of a guessed
+one - even unchanged - sends only `UnitGuessed = false`, which takes the chip off everywhere. Tapping a row opens the same editor. The editor (full screen on a phone): Name; "Counted in" -
 Grams (g) / Millilitres (ml) / Each, none chosen for a new one, and Save says "Choose what it is counted in." until
 one is; Category and Usual store as the phone's own pickers (native `<select>`s, not MudSelect - bigger and
 one-handed); a Staple switch with what it means. Delete is in the editor, with a confirmation. Adding a fully

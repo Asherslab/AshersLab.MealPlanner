@@ -123,6 +123,9 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("UnitGuessed")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("UsualStoreId")
                         .HasColumnType("TEXT");
 

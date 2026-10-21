@@ -99,4 +99,16 @@ public class IngredientRulesTests
             [new OpField("Name", "telegraph cucumber"), new OpField("UsualStoreId", null)],
             (before with { Name = "telegraph cucumber", UsualStoreId = null }).FieldsChangedFrom(before));
     }
+
+    [Fact]
+    public void A_guessed_unit_is_sent_on_create_and_saving_it_unchanged_sends_only_that_it_was_checked()
+    {
+        IngredientDraft imported = new("cucumber", BaseUnit.Each, null, null, false, UnitGuessed: true);
+        Assert.Contains(new OpField("UnitGuessed", "true"), imported.FieldsChangedFrom(null));
+        Assert.DoesNotContain(new IngredientDraft("cucumber", BaseUnit.Each, null, null, false).FieldsChangedFrom(null), f => f.Name == "UnitGuessed");
+
+        Assert.Equal([new OpField("UnitGuessed", "false")], (imported with { UnitGuessed = false }).FieldsChangedFrom(imported));
+        Assert.Null(IngredientRules.OpProblem(OpKind.Update, [new("UnitGuessed", "false")]));
+        Assert.NotNull(IngredientRules.OpProblem(OpKind.Update, [new("UnitGuessed", "maybe")]));
+    }
 }

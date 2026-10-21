@@ -197,6 +197,11 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   create got all three back from the first browser to reconnect; the second found nothing missing.
 - **A server that came back empty is the planner's call, never the browser's** - see "The server came back empty"
   below. Until they answer, that browser pushes and pulls nothing.
+- **Several edits as one** (`LocalOps.WriteAllAsync`, which `WriteAsync` is the one-edit case of): every edit is
+  checked with the server's rules before anything is written, then all are applied and queued in one transaction,
+  each with its own clock tick in the order given - all of them or none. For something written as a whole, where
+  half would be worse than nothing: the [spreadsheet import](../import/spreadsheet-import.md), a couple of hundred ops.
+  They push in batches like any other queued ops.
 - **When a round runs** (`WASM/Sync/SyncLoop.cs`, its decisions in `LocalData/Sync/SyncSchedule.cs` and tested in
   `Tests/Sync/SyncScheduleTests.cs`): on start; after every edit; when the change stream reports a seq other than
   the cursor's (a restored server reports one *below* it), or reconnects after a drop; on the browser's `online`

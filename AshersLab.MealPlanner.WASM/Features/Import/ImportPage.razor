@@ -1,0 +1,373 @@
+@page "/import"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.LocalData.Import
+@using AshersLab.MealPlanner.Shared.Data.Import
+@using AshersLab.MealPlanner.Shared.Domain.Import
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Prices
+@using AshersLab.MealPlanner.WASM.Data
+@inherits LocalDataPage
+
+@*
+    The one-off move from the planner's spreadsheet. The file is read here, in the browser, and never leaves it: what
+    is imported is drafts written as ops like any other edit (docs/modules/import/spreadsheet-import.md). The page
+    shows what it would add and asks only what the sheet cannot tell - which ingredient "cheese" is, how many serves,
+    where a price was seen - then writes everything in one transaction. Running it again adds only what is new.
+*@
+
+<PageTitle>Import the spreadsheet - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Import the spreadsheet</MudText>
+
+<LocalDataGate Start="Start">
+    <MudText Class="mt-2 mud-text-secondary">
+        Pick the meal-plan spreadsheet as an .xlsx (in Google Sheets: File, Download, Microsoft Excel). It is read on
+        this device only. Everything it adds is a draft to check - and importing it again later adds only what is new,
+        such as prices filled in since.
+    </MudText>
+
+    <label class="import-file mt-4 d-block">
+        <InputFile OnChange="Picked" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                   data-testid="import-file"/>
+    </label>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="import-error">@_error</MudAlert>
+    }
+
+    @if (_done is { } done)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-4" data-testid="import-done">
+            Imported @Summary(done). Check the units on the Ingredients page (marked "check unit") and the quantities on
+            each meal's page.
+        </MudAlert>
+        <div class="d-flex gap-2 mt-2">
+            <MudButton Href="ingredients" Variant="Variant.Outlined">Ingredients</MudButton>
+            <MudButton Href="meals" Variant="Variant.Outlined">Meals</MudButton>
+            <MudButton Href="prices" Variant="Variant.Outlined">Prices</MudButton>
+        </div>
+    }
+
+    @if (_import is not null && _review is not null && _plan is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="import-summary">
+            @if (_plan.NothingToDo)
+            {
+                <MudText data-testid="import-nothing">
+                    Nothing new to import: everything in this sheet is already here (@_plan.AlreadyHere things).
+                </MudText>
+            }
+            else
+            {
+                <MudText>This adds @Summary(_plan).</MudText>
+                @if (_plan.AlreadyHere > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@_plan.AlreadyHere already here, left as they are.</MudText>
+                }
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="_plan.NothingToDo || _running"
+                       OnClick="Run" data-testid="import-run">
+                @(_running ? "Importing…" : "Import")
+            </MudButton>
+        </MudPaper>
+
+        @if (_review.Ingredients.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Which ingredient is it?</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">A meal names something that is not exactly an ingredient in the list.</MudText>
+            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+                @foreach (IngredientQuestion q in _review.Ingredients)
+                {
+                    <label class="native-select" data-testid="import-ingredient-question" data-key="@q.Key">
+                        <span>"@q.Name" in @string.Join(", ", q.Meals)</span>
+                        <select value="@(Chosen(q) ?? "")" @onchange="e => Set(_choices.Ingredients, q.Key, Empty(e))">
+                            <option value="">A new ingredient, "@q.Name"</option>
+                            @foreach ((string key, string name) in q.Options)
+                            {
+                                <option value="@key">@name</option>
+                            }
+                        </select>
+                    </label>
+                }
+            </MudPaper>
+        }
+
+        @if (_review.Serves.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">How many serves?</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Leave it empty for a single-serve meal.</MudText>
+            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-2">
+                @foreach (ServesQuestion q in _review.Serves)
+                {
+                    <div class="d-flex align-center gap-3" data-testid="import-serves-question" data-key="@q.Key">
+                        <div class="flex-grow-1">
+                            <MudText>@q.Meal</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@q.Why</MudText>
+                        </div>
+                        <input class="import-small-input" type="number" inputmode="numeric" min="1" max="99"
+                               value="@(Serves(q)?.ToString() ?? "")" @onchange="e => SetServes(q, e)"/>
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        @if (_review.MealGroups.Count > 0 || _review.Categories.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Headings</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">The sheet's column headings that are not exactly a group or category here.</MudText>
+            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+                @foreach (HeadingQuestion q in _review.MealGroups)
+                {
+                    <label class="native-select" data-testid="import-group-question">
+                        <span>Meals under "@q.Heading" go in the group</span>
+                        <select value="@(Heading(_choices.MealGroups, q)?.ToString() ?? "")" @onchange="e => Set(_choices.MealGroups, q.Heading, Id(e))">
+                            <option value="">A new group, "@q.Heading"</option>
+                            @foreach (KnownOrdered option in q.Options)
+                            {
+                                <option value="@option.Id">@option.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
+                @foreach (HeadingQuestion q in _review.Categories)
+                {
+                    <label class="native-select" data-testid="import-category-question">
+                        <span>Ingredients under "@q.Heading" go in the category</span>
+                        <select value="@(Heading(_choices.Categories, q)?.ToString() ?? "")" @onchange="e => Set(_choices.Categories, q.Heading, Id(e))">
+                            <option value="">A new category, "@q.Heading"</option>
+                            @foreach (KnownOrdered option in q.Options)
+                            {
+                                <option value="@option.Id">@option.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
+            </MudPaper>
+        }
+
+        @if (_review.Prices.Count > 0 || _review.HouseholdItems.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Prices</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+                Each is saved as typed in, seen today. A price needs the store and what it is for - "2kg", "24".
+            </MudText>
+            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+                @if (_review.HouseholdItems.Count > 0)
+                {
+                    <label class="native-select" data-testid="import-household-store">
+                        <span>Household items (@string.Join(", ", _review.HouseholdItems.Take(4))@(_review.HouseholdItems.Count > 4 ? "…" : "")) are bought at</span>
+                        <select value="@(_choices.HouseholdStore?.ToString() ?? "")" @onchange="e => { _choices.HouseholdStore = Id(e); Replan(); }">
+                            <option value="">Leave them out for now</option>
+                            @foreach (KnownNamed store in Stores)
+                            {
+                                <option value="@store.Id">@store.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
+                @foreach (PriceQuestion q in _review.Prices)
+                {
+                    string? why = _plan.LeftOut.FirstOrDefault(l => l.Contains($"({q.Place})"));
+                    <div data-testid="import-price" data-id="@q.Id">
+                        <MudText><b>@q.Item</b> @Money.Format(q.Cents) <span class="mud-text-secondary">· @q.Place</span></MudText>
+                        <div class="d-flex gap-2 mt-1">
+                            <label class="native-select flex-grow-1">
+                                <span>Store</span>
+                                <select value="@(PriceStore(q)?.ToString() ?? "")" @onchange="e => Set(_choices.PriceStores, q.Id, Id(e))"
+                                        data-testid="import-price-store">
+                                    <option value="">Leave it out</option>
+                                    @foreach (KnownNamed store in Stores)
+                                    {
+                                        <option value="@store.Id">@store.Name</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="native-select import-pack">
+                                <span>For</span>
+                                <input class="import-small-input" placeholder="2kg" value="@(PricePack(q) ?? "")"
+                                       @onchange="e => Set(_choices.PricePacks, q.Id, Empty(e))" data-testid="import-price-pack"/>
+                            </label>
+                        </div>
+                        <MudText Typo="Typo.caption" Color="@(why is null ? Color.Success : Color.Warning)" data-testid="import-price-state">
+                            @(why is null ? "Will be imported." : "Left out: " + why[(why.IndexOf("):", StringComparison.Ordinal) + 3)..])
+                        </MudText>
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        @if (_plan.NewIngredients.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">New ingredients - what each is counted in</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+                The sheet never says, so these are guesses. Fix any that are wrong here, or later: each is marked "check unit"
+                until it is saved on the Ingredients page.
+            </MudText>
+            <MudPaper Outlined="true">
+                @foreach (NewIngredientLine line in _plan.NewIngredients)
+                {
+                    <div class="d-flex align-center gap-2 px-4 py-1 import-unit-row" data-testid="import-new-ingredient" data-key="@line.Key">
+                        <div class="flex-grow-1">
+                            <MudText>@line.Name</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@(line.Category ?? "no category")@(line.Guessed ? " · guessed" : "")</MudText>
+                        </div>
+                        @foreach (BaseUnit unit in Enum.GetValues<BaseUnit>())
+                        {
+                            <MudButton Size="Size.Small" Variant="@(line.Unit == unit ? Variant.Filled : Variant.Text)"
+                                       Color="Color.Primary" OnClick="() => SetUnit(line.Key, unit)"
+                                       data-testid="@($"import-unit-{unit}")">@unit.Symbol()</MudButton>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        @if (_plan.LeftOut.Count > 0 || _review.Unread.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Not imported</MudText>
+            <MudPaper Outlined="true" Class="pa-4" data-testid="import-left-out">
+                @foreach (string line in _plan.LeftOut)
+                {
+                    <MudText Typo="Typo.body2">@line</MudText>
+                }
+                @foreach (UnreadCell cell in _review.Unread)
+                {
+                    <MudText Typo="Typo.body2">@cell.Place "@cell.Text": @cell.Why</MudText>
+                }
+            </MudPaper>
+        }
+
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-6">
+            The 4-week plan in the sheet (@_import.PlanWeeks weeks) is read but not imported yet: plan templates come next.
+        </MudText>
+    }
+</LocalDataGate>
+
+@code {
+    /// <summary>The planner's sheet is tens of kilobytes; anything near this is not it.</summary>
+    private const long MaxFileBytes = 5 * 1024 * 1024;
+
+    private sealed record Loaded(ParsedSheet Sheet, int PlanWeeks);
+
+    private Loaded?        _import;
+    private ImportKnown?   _known;
+    private ImportReview?  _review;
+    private ImportPlan?    _plan;
+    private ImportChoices  _choices = new();
+    private ImportPlan?    _done;
+    private string?        _error;
+    private bool           _running;
+    private byte[]?        _file;
+
+    private IEnumerable<KnownNamed> Stores => (_known?.Stores ?? []).Where(s => !s.Deleted).OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase);
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _known = await ImportKnownReader.ReadAsync(db);
+        // Another device's edits, or this page's own import, change what is already here: compare again.
+        if (_file is not null)
+            Parse();
+    }
+
+    private async Task Picked(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _done  = null;
+        try
+        {
+            await using Stream stream = e.File.OpenReadStream(MaxFileBytes);
+            using MemoryStream copy = new();
+            await stream.CopyToAsync(copy);
+            _file    = copy.ToArray();
+            _choices = new ImportChoices();
+            Parse();
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
+        {
+            _file   = null;
+            _import = null;
+            _error  = ex is InvalidDataException ? ex.Message : "That file is too big to be the spreadsheet.";
+        }
+    }
+
+    private void Parse()
+    {
+        ParsedSheet sheet = SpreadsheetLayout.Parse(XlsxReader.Read(_file!), _known!.StoreWords);
+        if (sheet.IsEmpty)
+        {
+            _error  = "Nothing in that file looks like the meal-plan sheet: no WEEK, MEAL IDEAS or COSTS headings, and no list.";
+            _import = null;
+            return;
+        }
+        _import = new Loaded(sheet, sheet.Plan.Count);
+        Replan();
+    }
+
+    /// <summary>The review and what it would write, from the sheet, what is here now and the answers so far.</summary>
+    private void Replan()
+    {
+        SheetImport import = new(_import!.Sheet, _known!);
+        _review = import.Review();
+        _plan   = import.Plan(_choices, DateOnly.FromDateTime(DateTime.Now), Guid.NewGuid);
+    }
+
+    private async Task Run()
+    {
+        _running = true;
+        try
+        {
+            await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
+                _done = await SheetImportWriter.WriteAsync(db, Start!.Device!.Id, DateTimeOffset.UtcNow,
+                    DateOnly.FromDateTime(DateTime.Now), _import!.Sheet, _choices);
+            Sync.Kick();
+            await Reload();
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private static string Summary(ImportPlan plan) =>
+        string.Join(", ", new[]
+        {
+            Count(plan.NewIngredients.Count, "ingredient"),
+            Count(plan.NewMeals, "meal"),
+            Count(plan.NewMealIngredients, "meal ingredient"),
+            Count(plan.NewMealGroups, "meal group"),
+            Count(plan.NewCategories, "category", "categories"),
+            Count(plan.NewProducts, "product"),
+            Count(plan.NewPrices, "price"),
+        }.OfType<string>()) is { Length: > 0 } text ? text : "nothing";
+
+    private static string? Count(int n, string noun, string? plural = null) =>
+        n == 0 ? null : $"{n} {(n == 1 ? noun : plural ?? noun + "s")}";
+
+    private string? Chosen(IngredientQuestion q) => _choices.Ingredients.TryGetValue(q.Key, out string? key) ? key : q.Suggested;
+
+    private int? Serves(ServesQuestion q) => _choices.Serves.TryGetValue(q.Key, out int? serves) ? serves : q.Suggested;
+
+    private static Guid? Heading(Dictionary<string, Guid?> answers, HeadingQuestion q) =>
+        answers.TryGetValue(q.Heading, out Guid? id) ? id : q.Suggested;
+
+    private Guid? PriceStore(PriceQuestion q) =>
+        _choices.PriceStores.TryGetValue(q.Id, out Guid? store) ? store : q.Store ?? (q.Household ? _choices.HouseholdStore : null);
+
+    private string? PricePack(PriceQuestion q) => _choices.PricePacks.TryGetValue(q.Id, out string? pack) ? pack : q.Pack;
+
+    private void Set<T>(Dictionary<string, T> answers, string key, T value)
+    {
+        answers[key] = value;
+        Replan();
+    }
+
+    private void SetServes(ServesQuestion q, ChangeEventArgs e) =>
+        Set(_choices.Serves, q.Key, int.TryParse(e.Value?.ToString(), out int n) && n >= 1 ? Math.Min(n, 99) : null);
+
+    private void SetUnit(string key, BaseUnit unit) => Set(_choices.Units, key, unit);
+
+    private static string? Empty(ChangeEventArgs e) => e.Value?.ToString() is { Length: > 0 } text ? text.Trim() : null;
+
+    private static Guid? Id(ChangeEventArgs e) => Guid.TryParse(e.Value?.ToString(), out Guid id) ? id : null;
+}

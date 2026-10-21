@@ -11,6 +11,9 @@ namespace AshersLab.MealPlanner.LocalData.Sync;
 /// <summary>An op as pulled from the server, already off the wire.</summary>
 public sealed record PulledOp(Guid OpId, Hlc Clock, string Entity, Guid EntityId, OpKind Kind, IReadOnlyList<OpField> Fields, long Seq, string Chain);
 
+/// <summary>One edit for <see cref="LocalOps.WriteAllAsync"/>: what <see cref="LocalOps.WriteAsync"/> takes, as a value.</summary>
+public sealed record LocalEdit(SyncedEntity Type, Guid EntityId, OpKind Kind, IReadOnlyList<OpField> Fields);
+
 /// <summary>The server's answer for one pushed op: rejected, or logged at <paramref name="Seq"/>.</summary>
 public sealed record PushAnswer(Guid OpId, bool Rejected, long Seq);
 
@@ -67,34 +70,58 @@ public static class LocalOps
         CancellationToken      cancellationToken = default
     )
     {
-        if (type.Problem(kind, entityId, fields) is { } problem)
-            throw new ArgumentException(problem, nameof(fields));
+        IReadOnlyList<OutboxOp> ops = await WriteAllAsync(db, deviceId, now, [new LocalEdit(type, entityId, kind, fields)], cancellationToken);
+        return ops[0];
+    }
+
+    /// <summary>
+    /// Several edits, each exactly as <see cref="WriteAsync"/> makes one, in one transaction: all of them are applied
+    /// and queued, or none is. Every edit is checked before anything is written. Each gets its own clock tick, in the
+    /// order given, so a later edit to the same row wins over an earlier one as it would typed one at a time.
+    /// </summary>
+    /// <remarks>For something written as a whole - the spreadsheet import - where half of it would be worse than none.</remarks>
+    public static async Task<IReadOnlyList<OutboxOp>> WriteAllAsync(
+        LocalDbContext           db,
+        Guid                     deviceId,
+        DateTimeOffset           now,
+        IReadOnlyList<LocalEdit> edits,
+        CancellationToken        cancellationToken = default
+    )
+    {
+        foreach (LocalEdit edit in edits)
+            if (edit.Type.Problem(edit.Kind, edit.EntityId, edit.Fields) is { } problem)
+                throw new ArgumentException(problem, nameof(edits));
 
         await using IDbContextTransaction transaction =
             await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
-        SyncState state = await StateAsync(db, cancellationToken);
-        Hlc       clock = Hlc.Next(state.Clock is null ? null : Hlc.Parse(state.Clock), now.ToUnixTimeMilliseconds(), deviceId);
-        state.Clock = clock.ToString();
-
-        await OpApplier.ApplyAsync(db, type, entityId, kind, clock, fields, cancellationToken);
-
-        OutboxOp op = new()
+        SyncState      state = await StateAsync(db, cancellationToken);
+        List<OutboxOp> ops   = [];
+        foreach (LocalEdit edit in edits)
         {
-            OpId       = Guid.CreateVersion7(now),
-            Hlc        = clock.ToString(),
-            Entity     = type.Entity,
-            EntityId   = entityId,
-            Kind       = kind,
-            FieldsJson = OpFieldsJson.Write(fields),
-            CreatedAt  = now,
-        };
-        db.Outbox.Add(op);
+            Hlc clock = Hlc.Next(state.Clock is null ? null : Hlc.Parse(state.Clock), now.ToUnixTimeMilliseconds(), deviceId);
+            state.Clock = clock.ToString();
+
+            await OpApplier.ApplyAsync(db, edit.Type, edit.EntityId, edit.Kind, clock, edit.Fields, cancellationToken);
+
+            OutboxOp op = new()
+            {
+                OpId       = Guid.CreateVersion7(now),
+                Hlc        = clock.ToString(),
+                Entity     = edit.Type.Entity,
+                EntityId   = edit.EntityId,
+                Kind       = edit.Kind,
+                FieldsJson = OpFieldsJson.Write(edit.Fields),
+                CreatedAt  = now,
+            };
+            db.Outbox.Add(op);
+            ops.Add(op);
+        }
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return op;
+        return ops;
     }
 
     /// <summary>Every queued op, in the order the edits were made.</summary>

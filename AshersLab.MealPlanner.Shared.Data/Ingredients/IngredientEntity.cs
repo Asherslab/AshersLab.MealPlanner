@@ -30,6 +30,9 @@ public sealed class IngredientEntity : SyncedEntity<Ingredient>
             case IngredientRules.IsStapleField:
                 row.IsStaple = OpValues.TryParseBool(field.Value, out bool staple) ? staple : throw Unreadable(field);
                 break;
+            case IngredientRules.UnitGuessedField:
+                row.UnitGuessed = OpValues.TryParseBool(field.Value, out bool guessed) ? guessed : throw Unreadable(field);
+                break;
             default:
                 throw new ArgumentException($"An ingredient has no field '{field.Name}'.", nameof(field));
         }
@@ -42,6 +45,7 @@ public sealed class IngredientEntity : SyncedEntity<Ingredient>
         new(IngredientRules.CategoryField, OpValues.FormatId(row.CategoryId)),
         new(IngredientRules.UsualStoreField, OpValues.FormatId(row.UsualStoreId)),
         new(IngredientRules.IsStapleField, OpValues.FormatBool(row.IsStaple)),
+        new(IngredientRules.UnitGuessedField, OpValues.FormatBool(row.UnitGuessed)),
     ];
 
     private static ArgumentException Unreadable(OpField field) =>

@@ -54,6 +54,10 @@
                      @onclick="() => Edit(ingredient)" data-testid="ingredient-row" data-id="@ingredient.Id">
                     <div class="d-flex align-center gap-2">
                         <MudText Class="flex-grow-1" data-testid="ingredient-name">@ingredient.Name</MudText>
+                        @if (ingredient.UnitGuessed)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" data-testid="ingredient-unit-guessed">Check unit</MudChip>
+                        }
                         @if (ingredient.IsStaple)
                         {
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" data-testid="ingredient-staple-chip">Staple</MudChip>
@@ -141,7 +145,8 @@
 
     private async Task Edit(Ingredient ingredient)
     {
-        IngredientDraft before = new(ingredient.Name, ingredient.BaseUnit, ingredient.CategoryId, ingredient.UsualStoreId, ingredient.IsStaple);
+        IngredientDraft before = new(ingredient.Name, ingredient.BaseUnit, ingredient.CategoryId, ingredient.UsualStoreId, ingredient.IsStaple,
+            ingredient.UnitGuessed);
         IngredientEditorResult? result = await OpenEditor(before, isNew: false, editing: ingredient.Id);
 
         if (result is { Delete: true })
