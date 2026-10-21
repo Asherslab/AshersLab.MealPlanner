@@ -289,3 +289,21 @@
     text-decoration: line-through;
     color: var(--mud-palette-text-secondary);
 }
+
+/* The home page's four buttons: one column on a phone, two side by side on anything wider (Home). */
+.home-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 600px) {
+    .home-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* A commit hash or a long user name wraps rather than scrolling the card sideways on a phone. */
+.home-server td {
+    overflow-wrap: anywhere;
+}

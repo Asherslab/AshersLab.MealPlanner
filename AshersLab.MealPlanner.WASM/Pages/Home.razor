@@ -1,20 +1,54 @@
 @page "/"
+@using AshersLab.MealPlanner.LocalData
 @using AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Server
 @using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server
+@using AshersLab.MealPlanner.Shared.Data.Planning
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.WASM.Data
+@using AshersLab.MealPlanner.WASM.Features.Planning
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
 @inject IServerInfoService ServerInfoService
 
 @*
-    The scaffold's proof of wiring: one gRPC-Web call from the browser to the host, which answers from its
-    SQLite database, and the browser's own SQLite below it. Replaced by the real landing page once there is
-    something to plan.
+    Where the app opens: today's meals, and one tap to each of the four things the planner comes to do - plan the
+    week, shop, add a meal, import a receipt. Below them, the server and this device, for when something is wrong.
 *@
 
 <PageTitle>Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Meal Planner</MudText>
-<MudText Class="mt-1 mb-4" Color="Color.Secondary">Nothing to plan yet - this page only checks the server.</MudText>
+<MudText Typo="Typo.h5" Component="h1">@CalendarText.LongDay(Today)</MudText>
 
-<MudCard Outlined="true">
+<LocalDataGate Start="Start">
+    <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="home-today">
+        @if (_today.Count == 0)
+        {
+            <MudText Class="mud-text-secondary" data-testid="home-today-empty">Nothing planned today.</MudText>
+        }
+        @foreach ((string slot, string meal, bool skipped) in _today)
+        {
+            <div class="d-flex gap-2 py-1" data-testid="home-today-entry">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="min-width: 5.5rem">@slot</MudText>
+                <MudText Typo="Typo.body2" Style="@(skipped ? "text-decoration: line-through" : null)">@meal</MudText>
+            </div>
+        }
+    </MudPaper>
+</LocalDataGate>
+
+<div class="home-actions mt-4">
+    <MudButton Href="calendar" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.CalendarMonth" data-testid="home-calendar">This week's plan</MudButton>
+    <MudButton Href="shopping" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.ShoppingCart" data-testid="home-shopping">Shopping list</MudButton>
+    <MudButton Href="meals" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.RestaurantMenu" data-testid="home-meals">Meals</MudButton>
+    <MudButton Href="receipts" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Receipt" data-testid="home-receipts">Import a receipt</MudButton>
+</div>
+
+<MudText Typo="Typo.subtitle2" Class="mt-8 mb-2 mud-text-secondary">About this app</MudText>
+
+<MudCard Outlined="true" Class="home-server">
     <MudCardHeader>
         <CardHeaderContent>
             <MudText Typo="Typo.h6">Server</MudText>
@@ -77,7 +111,24 @@
     private string?     _error;
     private bool        _loading;
 
+    private List<(string Slot, string Meal, bool Skipped)> _today = [];
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+
     protected override Task OnInitializedAsync() => Load();
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        CalendarBook calendar = await CalendarBook.LoadAsync(db, Today, Today);
+        List<Slot> slots = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
+        Dictionary<Guid, string> meals = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, m => m.Name);
+
+        _today = [.. calendar.On(Today)
+            .OrderBy(e => slots.FindIndex(s => s.Id == e.SlotId) is var i and >= 0 ? i : int.MaxValue)
+            .Select(e => (slots.FirstOrDefault(s => s.Id == e.SlotId)?.Name ?? "",
+                          e.MealId is { } id ? meals.GetValueOrDefault(id) ?? "meal removed" : "nothing chosen",
+                          e.Skipped))];
+    }
 
     private async Task Load()
     {
