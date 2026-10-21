@@ -10,6 +10,7 @@
 @using AshersLab.MealPlanner.Shared.Domain.Sync
 @using AshersLab.MealPlanner.WASM.Data
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using AshersLab.MealPlanner.WASM.Features.Planning
 @using AshersLab.MealPlanner.WASM.Features.Products
 @using Microsoft.EntityFrameworkCore
 @inherits LocalDataPage
@@ -128,6 +129,7 @@
     private List<string>    _otherNames = [];
     private MealCostBook    _costs      = null!;
     private PlanBook        _plans      = null!;
+    private List<CalendarEntry> _coming = [];
 
     // The same page instance shows another meal when only the id in the address changes.
     protected override async Task OnParametersSetAsync()
@@ -143,7 +145,15 @@
         _otherNames = await db.Meals.AsNoTracking().Where(m => !m.Deleted && m.Id != Id).Select(m => m.Name).ToListAsync();
         _costs      = await MealCostBook.LoadAsync(db);
         _plans      = await PlanBook.LoadAsync(db);
+        _coming     = await CalendarBook.ComingAsync(db, DateOnly.FromDateTime(DateTime.Now));
     }
+
+    /// <summary>The plans that use the meal, and the calendar when a coming entry names it.</summary>
+    private List<string> UsedBy() =>
+    [
+        .. _plans.PlansWithMeal(Id),
+        .. CalendarText.Use(_coming, DateOnly.FromDateTime(DateTime.Now), e => e.MealId == Id) is { } calendar ? [calendar] : Array.Empty<string>(),
+    ];
 
     /// <summary>"Beef · makes 4 serves".</summary>
     private string Summary() =>
@@ -196,7 +206,7 @@
     {
         MealDraft before = _meal!.Draft();
         MealEditorResult? result = await MealDialogs.EditAsync(Dialogs, Viewport, before, isNew: false,
-            [.. _groups.Select(g => new PickerOption(g.Id, g.Name))], _otherNames, _plans.PlansWithMeal(Id));
+            [.. _groups.Select(g => new PickerOption(g.Id, g.Name))], _otherNames, UsedBy());
 
         if (result is { Delete: true })
         {

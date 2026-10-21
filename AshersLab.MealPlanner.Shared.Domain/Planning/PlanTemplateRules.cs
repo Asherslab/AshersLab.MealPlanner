@@ -16,11 +16,17 @@ public static class PlanTemplateRules
     /// <summary>Weeks before it repeats (<see cref="OpValues.FormatInt"/>), 1 to <see cref="MaxWeeks"/>.</summary>
     public const string WeekCountField = "WeekCount";
 
+    /// <summary>
+    /// The Monday its week 1 began on the calendar (<see cref="OpValues.FormatDate"/>), or null before it was first applied.
+    /// One decision for the household, so the later edit wins; see <see cref="Rotation"/>.
+    /// </summary>
+    public const string StartsOnField = "StartsOn";
+
     public const int MaxWeeks = 12;
 
     public const string Noun = "A plan";
 
-    public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal) { NameField, WeekCountField };
+    public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal) { NameField, WeekCountField, StartsOnField };
 
     private static readonly string[] RequiredOnCreate = [NameField, WeekCountField];
 
@@ -38,6 +44,8 @@ public static class PlanTemplateRules
         {
             NameField      => Names.FieldProblem(field.Value, Noun),
             WeekCountField => OpValues.TryParseInt(field.Value, out int weeks) ? WeekCountProblem(weeks) : "The weeks are not a whole number.",
+            StartsOnField  => field.Value is null || (OpValues.TryParseDate(field.Value, out DateOnly starts) && starts.DayOfWeek == DayOfWeek.Monday)
+                ? null : "A plan's week 1 starts on a Monday.",
             _              => null,
         });
 }

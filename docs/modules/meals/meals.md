@@ -3,7 +3,7 @@ title: Meals
 kind: reference
 status: current
 module: meals
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.Shared.Domain/Meals
   - AshersLab.MealPlanner.Shared.Data/Meals
@@ -84,7 +84,8 @@ fields that kind needs, then Notes; Delete is in it, with a confirmation, and go
 opens its page. Adding a batch meal: type the name, Add, pick the group, type the serves, Save - two taps and two
 fields. A page left open on a meal deleted elsewhere says "This meal is not here". **A meal a plan uses cannot be
 deleted**: Delete in the editor says "... is planned in Spreadsheet plan. Take it out of the plan first."
-([plan templates](../planning/plan-templates.md#deleting-something-a-plan-uses)).
+([plan templates](../planning/plan-templates.md#deleting-something-a-plan-uses)). Nor can one a coming calendar entry
+names itself: "... is planned in the calendar on Tue 27 Oct" ([the calendar](../planning/calendar.md)).
 
 ## A meal's ingredients
 

@@ -45,6 +45,8 @@ public partial class MealPlannerDbContext
 
     public DbSet<TemplateChoice> TemplateChoices => Set<TemplateChoice>();
 
+    public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
+
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 
     private static void BuildSyncModel(ModelBuilder modelBuilder)

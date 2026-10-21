@@ -21,6 +21,9 @@ public sealed class PlanTemplateEntity : SyncedEntity<PlanTemplate>
             case PlanTemplateRules.WeekCountField:
                 row.WeekCount = OpValues.TryParseInt(field.Value, out int weeks) ? weeks : throw Unreadable(field);
                 break;
+            case PlanTemplateRules.StartsOnField:
+                row.StartsOn = field.Value is null ? null : OpValues.TryParseDate(field.Value, out DateOnly starts) ? starts : throw Unreadable(field);
+                break;
             default:
                 throw new ArgumentException($"A plan has no field '{field.Name}'.", nameof(field));
         }
@@ -30,6 +33,7 @@ public sealed class PlanTemplateEntity : SyncedEntity<PlanTemplate>
     [
         new(PlanTemplateRules.NameField, row.Name),
         new(PlanTemplateRules.WeekCountField, OpValues.FormatInt(row.WeekCount)),
+        new(PlanTemplateRules.StartsOnField, row.StartsOn is { } starts ? OpValues.FormatDate(starts) : null),
     ];
 
     private static ArgumentException Unreadable(OpField field) =>

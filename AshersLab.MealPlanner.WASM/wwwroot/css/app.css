@@ -166,6 +166,44 @@
     padding-right: 8px !important;
 }
 
+/* The calendar (CalendarPage) reuses the plan's grid. A skipped entry stays where it was, struck through. */
+.cal-skipped {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.cal-past {
+    background: var(--mud-palette-background-gray);
+}
+
+.cal-today {
+    color: var(--mud-palette-primary);
+}
+
+.cal-cost {
+    font-size: 0.75rem;
+}
+
+/* "Tue" over "27" on a phone's day buttons. */
+.cal-day-label {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.native-select > input[type=date] {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 1rem;
+    color: var(--mud-palette-text-primary);
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: var(--mud-default-borderradius);
+    box-sizing: border-box;
+}
+
 .person-dot {
     display: inline-block;
     width: 12px;

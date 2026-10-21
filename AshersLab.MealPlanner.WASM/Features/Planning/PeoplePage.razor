@@ -83,6 +83,7 @@
 @code {
     private List<Person> _people = [];
     private PlanBook     _plans  = null!;
+    private List<CalendarEntry> _coming = [];
 
     private string? _newName;
     private string? _addError;
@@ -97,6 +98,7 @@
     {
         _people = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _plans  = await PlanBook.LoadAsync(db);
+        _coming = await CalendarBook.ComingAsync(db, DateOnly.FromDateTime(DateTime.Now));
     }
 
     private string? Problem(string name, Guid? id) =>
@@ -147,7 +149,13 @@
 
     private async Task Delete(Person person)
     {
-        _inUse = [.. _plans.PlansWithPerson(person.Id)];
+        _inUse =
+        [
+            .. _plans.PlansWithPerson(person.Id),
+            .. CalendarText.Use(_coming, DateOnly.FromDateTime(DateTime.Now),
+                e => CalendarPeople.TryParse(e.People, out IReadOnlyList<Guid>? ids) && ids?.Contains(person.Id) == true) is { } calendar
+                ? [calendar] : Array.Empty<string>(),
+        ];
         if (_inUse.Count > 0)
             return;
 

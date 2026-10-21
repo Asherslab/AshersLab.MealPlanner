@@ -1,0 +1,90 @@
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+
+@*
+    Fill the calendar from a plan: which plan, which of its weeks the week on screen is, and for how many weeks. The plan
+    remembers the answer, so next time it is already right. Applying again never changes an entry already there - it only
+    adds what is missing.
+*@
+
+<MudDialog data-testid="apply-dialog">
+    <DialogContent>
+        @if (Plans.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" data-testid="apply-no-plans">There are no plans yet - make one on the Plans page.</MudAlert>
+        }
+        else
+        {
+            <label class="native-select">
+                <span>Plan</span>
+                <select value="@_plan" @onchange="PlanChanged" data-testid="apply-plan">
+                    @foreach (ApplyPlanOption plan in Plans)
+                    {
+                        <option value="@plan.Id">@plan.Name</option>
+                    }
+                </select>
+            </label>
+            @if (Chosen.Weeks > 1)
+            {
+                <label class="native-select mt-4">
+                    <span>The week of @CalendarText.Day(Monday) is</span>
+                    <select @bind="_week" data-testid="apply-week">
+                        @for (int w = 1; w <= Chosen.Weeks; w++)
+                        {
+                            <option value="@w">Week @w</option>
+                        }
+                    </select>
+                </label>
+            }
+            <label class="native-select mt-4">
+                <span>Fill</span>
+                <select @bind="_count" data-testid="apply-count">
+                    @foreach (int n in new[] { 1, 2, 3, 4, 6, 8, 12 })
+                    {
+                        <option value="@n">@(n == 1 ? "this week" : $"{n} weeks from this one")</option>
+                    }
+                </select>
+            </label>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
+                Anything already on the calendar stays as it is - only what is missing is added.
+            </MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="apply-cancel">Cancel</MudButton>
+        <MudButton OnClick="Apply" Disabled="Plans.Count == 0" Color="Color.Primary" Variant="Variant.Filled" data-testid="apply-run">Fill</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public IReadOnlyList<ApplyPlanOption> Plans { get; set; } = [];
+
+    /// <summary>The Monday of the week on screen.</summary>
+    [Parameter] public DateOnly Monday { get; set; }
+
+    private Guid _plan;
+    private int  _week = 1;
+    private int  _count = 1;
+
+    private ApplyPlanOption Chosen => Plans.First(p => p.Id == _plan);
+
+    protected override void OnInitialized()
+    {
+        if (Plans.Count == 0)
+            return;
+        _plan = Plans[0].Id;
+        _week = Plans[0].WeekOnScreen;
+    }
+
+    private void PlanChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out Guid id) && Plans.Any(p => p.Id == id))
+        {
+            _plan = id;
+            _week = Chosen.WeekOnScreen;
+        }
+    }
+
+    private void Apply() => Dialog.Close(DialogResult.Ok(new ApplyPlanResult(_plan, Math.Clamp(_week, 1, Chosen.Weeks), _count)));
+}

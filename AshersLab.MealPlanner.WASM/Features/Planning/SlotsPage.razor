@@ -34,7 +34,13 @@
     {
         _slots = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         PlanBook plans = await PlanBook.LoadAsync(db);
-        _items = [.. _slots.Select(s => new NameListItem(s.Id, s.Name, plans.PlansWithSlot(s.Id)))];
+        DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+        List<CalendarEntry> coming = await CalendarBook.ComingAsync(db, today);
+        _items = [.. _slots.Select(s => new NameListItem(s.Id, s.Name,
+        [
+            .. plans.PlansWithSlot(s.Id),
+            .. CalendarText.Use(coming, today, e => (e.MovedSlotId ?? e.SlotId) == s.Id) is { } calendar ? [calendar] : Array.Empty<string>(),
+        ]))];
     }
 
     private Task Add(string name) =>

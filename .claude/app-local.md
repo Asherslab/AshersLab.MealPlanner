@@ -186,6 +186,18 @@ holding `plan-entry` (`data-id`) with `plan-entry-meals` / `plan-entry-people`, 
 `Emulation.setDeviceMetricsOverride` to see the grid. `node .claude/tools/chrome-plans-check.mjs <scratch>/plans`
 (ports 19354/19355, about a minute) drives all of it, A desktop-sized and B phone-sized.
 
+**Calendar** (`/calendar?week=yyyy-mm-dd`, `nav-calendar`): `cal-week` (the title), `cal-prev`, `cal-next`, `cal-this-week`,
+`cal-plan-weeks`, `cal-apply` (opens the fill dialog: native selects `apply-plan` (value = plan id), `apply-week`,
+`apply-count`, then `apply-run`), `cal-applied` (the result). Desktop-wide: `cal-grid`; phone: `cal-day` (`data-date`) and
+`cal-day-view`. Either way `cal-cell` (`data-date`, `data-slot`) holding `cal-entry` (`data-id`, `data-skipped`) with
+`cal-entry-meal` / `cal-entry-cost`, and `cal-cell-add`; `cal-replan` with `cal-replan-entry`. The sheet: `cal-sheet-where`,
+`cal-sheet-source`, `cal-sheet-skipped`, `cal-choice` (`data-id` = meal), `cal-sheet-meal`, `cal-search` (input id),
+`cal-meal-option`, `cal-everyone`, `cal-person`, `cal-move-date` (native date - set `.value`, dispatch `change`),
+`cal-move-slot`, `cal-remove`, `cal-skip` / `cal-unskip`, `cal-cancel`, `cal-save`, `cal-error`.
+`node .claude/tools/chrome-calendar-check.mjs <scratch>/cal` (ports 19356/19357, about 2 minutes) drives all of it, A
+desktop-sized and B phone-sized, including both filling the same week offline. Earlier runs' entries share the dates, so
+it looks only at entries whose meal carries its run id.
+
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
 

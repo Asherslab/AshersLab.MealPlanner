@@ -14,5 +14,8 @@ public class PlanTemplate : ISyncedRow
 
     public int WeekCount { get; set; } = 1;
 
+    /// <summary>The Monday its week 1 began on the calendar; null until it is first applied (<c>Rotation</c>).</summary>
+    public DateOnly? StartsOn { get; set; }
+
     public bool Deleted { get; set; }
 }

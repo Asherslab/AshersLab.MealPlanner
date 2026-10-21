@@ -105,7 +105,9 @@ Browser (each window)                                    Server (Grpc)
 `Update` or `Delete` (`Shared.Domain/Sync/OpKind.cs`, on the wire as its number - never renumber). `Fields` is
 only the fields that changed, each a name and invariant-culture text; each entity's rules parse their own.
 
-- **Ids are GUIDv7, minted by the device**, entity ids and op ids alike. Nothing waits on the server for an id,
+- **Ids are GUIDv7, minted by the device**, entity ids and op ids alike - with one exception: a calendar entry a plan
+  makes has an id derived from its template entry and date, so two devices applying the same plan make the same row
+  ([the calendar](../planning/calendar.md)). Nothing waits on the server for an id,
   so something created offline can be referred to offline.
 - **The clock is a hybrid logical clock** (`Hlc.cs`): wall milliseconds, a counter, and the device id as the tie
   break. `Hlc.Observe` moves a device's clock past every op it pulls, so an edit made *after seeing* another

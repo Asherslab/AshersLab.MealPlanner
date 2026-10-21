@@ -256,6 +256,55 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.ToTable("MealIngredient", (string)null);
                 });
 
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.CalendarEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Date")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("MealId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MovedDate")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("MovedSlotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("People")
+                        .HasMaxLength(740)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SlotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TemplateEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("MovedDate");
+
+                    b.HasIndex("TemplateEntryId");
+
+                    b.ToTable("CalendarEntry", (string)null);
+                });
+
             modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.Person", b =>
                 {
                     b.Property<Guid>("Id")
@@ -290,6 +339,10 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StartsOn")
+                        .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("WeekCount")

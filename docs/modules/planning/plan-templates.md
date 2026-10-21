@@ -22,7 +22,7 @@ Who eats, the slots of the day, and the rotation of weeks the calendar will be f
 plan, its entries, or anything that refers to a person, a slot or a meal from a plan. Every edit is an op, as
 [offline sync](../sync/offline-sync.md) describes; the meals a plan names are [meals](../meals/meals.md)'.
 
-The calendar - a template applied to real dates, overrides, skipping - is not here; it builds on this.
+The calendar - a template applied to real dates, overrides, skipping - is [the calendar](calendar.md); it builds on this.
 
 ## Traps first
 
@@ -52,7 +52,7 @@ The calendar - a template applied to real dates, overrides, skipping - is not he
 |---|---|---|
 | `Person` | `Name`, `Colour` | `Colour` is `#rrggbb`, lower case, from `PersonRules.Palette`; a new person gets the first nobody has |
 | `Slot` | `Name`, `Position` | a hand-set position like a meal group (`ListPosition`); seeded |
-| `PlanTemplate` | `Name`, `WeekCount` | 1 to 12 weeks |
+| `PlanTemplate` | `Name`, `WeekCount`, `StartsOn` | 1 to 12 weeks; `StartsOn` is the Monday week 1 began on the calendar, set by applying it ([the calendar](calendar.md)) |
 | `TemplateEntry` | `TemplateId`, `Week`, `Day`, `SlotId`, `People` | `Day` by name ("Monday"); `People` above |
 | `TemplateChoice` | `EntryId`, `MealId` | one per meal the entry may be |
 
@@ -69,7 +69,8 @@ templates, their live entries, each entry's live choices in order, in one read p
 ## Deleting something a plan uses
 
 The catalogue's rule ([deleting something referenced](../catalogue/catalogue.md#deleting-something-referenced)):
-refused while in use, naming what uses it; never cascaded.
+refused while in use, naming what uses it; never cascaded. A coming calendar entry that names a meal, person or slot
+itself counts too, and is named as "the calendar on Tue 27 Oct" ([the calendar](calendar.md)).
 
 | Deleting | Refused while | The planner sees |
 |---|---|---|

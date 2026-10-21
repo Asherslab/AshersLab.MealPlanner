@@ -1,0 +1,210 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+
+@*
+    One calendar entry: which meal (the plan's choices as chips, or any meal by search), who eats it, Skip, where it is
+    (a date and a slot - moving a skipped entry is replanning it), and Remove. Full screen on a phone. Skip answers at once:
+    "we didn't have it" is two taps - the entry, Skip. Like the other sheets it only answers; the page writes the ops.
+*@
+
+<MudDialog data-testid="cal-sheet">
+    <DialogContent>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="cal-sheet-where">@Where</MudText>
+        @if (Source is not null)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="cal-sheet-source">@Source</MudText>
+        }
+        @if (Draft.Skipped)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2" data-testid="cal-sheet-skipped">
+                Skipped - pick another day below to replan it.
+            </MudAlert>
+        }
+
+        <MudText Typo="Typo.overline" Class="d-block mt-2">Meal</MudText>
+        @if (Choices.Count > 1)
+        {
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (PickerOption choice in Choices)
+                {
+                    bool chosen = choice.Id == _meal;
+                    <MudChip T="string" Color="@(chosen ? Color.Primary : Color.Default)" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                             OnClick="() => Pick(choice.Id)" data-testid="cal-choice" data-id="@choice.Id">@choice.Name</MudChip>
+                }
+            </div>
+        }
+        <MudText Class="mt-1" data-testid="cal-sheet-meal">@(_meal is { } m ? MealName(m) : "Nothing chosen")</MudText>
+
+        <MudTextField T="string" @ref="_searchField" @bind-Value="_search" Class="mt-2"
+                      Label="@(_meal is null ? "Find a meal" : "Or another meal")" Variant="Variant.Outlined"
+                      Immediate="true" MaxLength="Names.MaxLength" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      InputId="cal-search" data-testid="cal-search"/>
+        @if (!string.IsNullOrWhiteSpace(_search) || (_meal is null && IsNew))
+        {
+            <div class="mt-1">
+                @foreach (PickerOption option in Matches().Take(8))
+                {
+                    <div class="list-row px-2 py-3" @key="option.Id" role="button" tabindex="0"
+                         @onclick="() => Pick(option.Id)" data-testid="cal-meal-option" data-id="@option.Id">
+                        <MudText>@option.Name</MudText>
+                    </div>
+                }
+            </div>
+        }
+
+        <MudText Typo="Typo.overline" Class="d-block mt-4">Who eats it</MudText>
+        <div class="d-flex flex-wrap gap-2">
+            <MudChip T="string" Color="@(_people is null ? Color.Primary : Color.Default)" Variant="@(_people is null ? Variant.Filled : Variant.Outlined)"
+                     OnClick="() => _people = null" data-testid="cal-everyone">Everyone</MudChip>
+            @foreach (PersonOption person in People)
+            {
+                bool chosen = _people?.Contains(person.Id) == true;
+                <MudChip T="string" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                         Style="@(chosen ? $"background:{person.Colour};color:#fff" : $"border-color:{person.Colour}")"
+                         OnClick="() => Toggle(person.Id)" data-testid="cal-person" data-id="@person.Id">@person.Name</MudChip>
+            }
+        </div>
+
+        <MudText Typo="Typo.overline" Class="d-block mt-4">@(Draft.Skipped ? "Replan it on" : IsNew ? "When" : "Move to")</MudText>
+        <div class="d-flex gap-2 align-end">
+            <label class="native-select flex-grow-1">
+                <span>Day</span>
+                <input type="date" class="native-date" @bind="_day" data-testid="cal-move-date"/>
+            </label>
+            <label class="native-select flex-grow-1">
+                <span>Slot</span>
+                <select @bind="_slot" data-testid="cal-move-slot">
+                    @foreach (PickerOption slot in Slots)
+                    {
+                        <option value="@slot.Id">@slot.Name</option>
+                    }
+                </select>
+            </label>
+        </div>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3" data-testid="cal-error">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!IsNew)
+        {
+            <MudButton Color="Color.Error" OnClick="Remove" data-testid="cal-remove">Remove</MudButton>
+            @if (Draft.Skipped)
+            {
+                <MudButton OnClick="() => Close(skipped: false, home: true)" data-testid="cal-unskip">Not skipped</MudButton>
+            }
+            else
+            {
+                <MudButton Color="Color.Warning" OnClick="() => Close(skipped: true, home: true)" data-testid="cal-skip">Skip</MudButton>
+            }
+        }
+        <MudSpacer/>
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="cal-cancel">Cancel</MudButton>
+        <MudButton OnClick="Save" Color="Color.Primary" Variant="Variant.Filled" data-testid="cal-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public CalendarEntryDraft Draft { get; set; } = null!;
+
+    [Parameter] public bool IsNew { get; set; }
+
+    /// <summary>"Tuesday 27 October · Dinner".</summary>
+    [Parameter] public string Where { get; set; } = "";
+
+    /// <summary>"From Rotation · week 2", or null for an entry added by hand.</summary>
+    [Parameter] public string? Source { get; set; }
+
+    /// <summary>The plan entry's choices, the usual one first; empty for an entry added by hand.</summary>
+    [Parameter] public IReadOnlyList<PickerOption> Choices { get; set; } = [];
+
+    /// <summary>Every live meal, by name.</summary>
+    [Parameter] public IReadOnlyList<PickerOption> Meals { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<PersonOption> People { get; set; } = [];
+
+    /// <summary>The live slots of the day, in order.</summary>
+    [Parameter] public IReadOnlyList<PickerOption> Slots { get; set; } = [];
+
+    private Guid?          _meal;
+    private HashSet<Guid>? _people;
+    private DateOnly       _day;
+    private Guid           _slot;
+    private string?        _search;
+    private string?        _error;
+
+    private MudTextField<string>? _searchField;
+
+    protected override void OnInitialized()
+    {
+        _meal   = Draft.Meal;
+        // Someone deleted since is dropped from the choice; nobody left is everyone.
+        _people = Draft.People is { } people && people.Any(p => People.Any(o => o.Id == p))
+            ? [.. people.Where(p => People.Any(o => o.Id == p))]
+            : null;
+        _day    = Draft.Day;
+        _slot   = Draft.Slot;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && IsNew)
+        {
+            await Task.Delay(100);
+            await (_searchField?.FocusAsync() ?? ValueTask.CompletedTask);
+        }
+    }
+
+    private string MealName(Guid id) =>
+        Meals.FirstOrDefault(m => m.Id == id)?.Name ?? Choices.FirstOrDefault(m => m.Id == id)?.Name ?? "meal removed";
+
+    private IEnumerable<PickerOption> Matches()
+    {
+        string filter = Names.Normalise(_search);
+        return Meals.Where(m => m.Id != _meal && (filter.Length == 0 || m.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase)))
+            .OrderBy(m => !m.Name.StartsWith(filter, StringComparison.CurrentCultureIgnoreCase))
+            .ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase);
+    }
+
+    private void Pick(Guid meal)
+    {
+        _meal   = meal;
+        _search = null;
+        _error  = null;
+    }
+
+    private void Toggle(Guid person)
+    {
+        _people ??= [];
+        if (!_people.Remove(person))
+            _people.Add(person);
+        if (_people.Count == 0)
+            _people = null;
+    }
+
+    /// <summary>Save: a skipped entry put somewhere else is replanned - moved and no longer skipped.</summary>
+    private void Save()
+    {
+        bool moved = _day != Draft.Day || _slot != Draft.Slot;
+        Close(skipped: Draft.Skipped && !moved, home: false);
+    }
+
+    /// <param name="home">Skip and "not skipped" keep it where it is, whatever the move boxes say.</param>
+    private void Close(bool skipped, bool home)
+    {
+        if (_meal is null)
+        {
+            _error = IsNew ? "Pick a meal." : "Pick a meal, or Remove the entry.";
+            return;
+        }
+        CalendarEntryDraft saved = new(_meal, _people?.ToList(), skipped, home ? Draft.Day : _day, home ? Draft.Slot : _slot);
+        Dialog.Close(DialogResult.Ok(new CalendarEntrySheetResult(saved, Remove: false)));
+    }
+
+    private void Remove() => Dialog.Close(DialogResult.Ok(new CalendarEntrySheetResult(null, Remove: true)));
+}

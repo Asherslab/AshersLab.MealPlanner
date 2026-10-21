@@ -54,6 +54,8 @@ public class LocalDbContext(
 
     public DbSet<TemplateChoice> TemplateChoices => Set<TemplateChoice>();
 
+    public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
+
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 
     /// <summary>This browser's edits the server has not confirmed. See <see cref="OutboxOp"/>.</summary>

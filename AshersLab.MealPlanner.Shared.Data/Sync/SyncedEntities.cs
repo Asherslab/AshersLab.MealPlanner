@@ -12,6 +12,7 @@ using AshersLab.MealPlanner.Shared.Domain.Products;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AshersLab.MealPlanner.Shared.Data.Sync;
 
@@ -59,11 +60,17 @@ public static class SyncedEntities
 
     public static readonly TemplateChoiceEntity TemplateChoice = new();
 
+    public static readonly CalendarEntryEntity CalendarEntry = new();
+
     public static readonly IReadOnlyList<SyncedEntity> All =
     [
         Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal, MealIngredient,
-        Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice,
+        Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice, CalendarEntry,
     ];
+
+    // Text in the op's own format, converted here rather than by the provider: see PriceObservation.ObservedOn.
+    private static readonly ValueConverter<DateOnly, string> DateText =
+        new(date => OpValues.FormatDate(date), text => DateOnly.ParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture));
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -190,6 +197,7 @@ public static class SyncedEntities
             template.HasKey(t => t.Id);
             template.Property(t => t.Id).ValueGeneratedNever();
             template.Property(t => t.Name).HasMaxLength(Names.MaxLength);
+            template.Property(t => t.StartsOn).HasConversion(DateText).HasMaxLength(10);
         });
 
         modelBuilder.Entity<TemplateEntry>(entry =>
@@ -214,6 +222,23 @@ public static class SyncedEntities
             // An entry's choices, and "is this meal still planned?" Not foreign keys.
             choice.HasIndex(c => c.EntryId);
             choice.HasIndex(c => c.MealId);
+        });
+
+        modelBuilder.Entity<CalendarEntry>(entry =>
+        {
+            entry.ToTable("CalendarEntry");
+            entry.HasKey(e => e.Id);
+            // Minted by the device - or, for an entry a plan made, derived from its template entry and date (Rotation.EntryId).
+            entry.Property(e => e.Id).ValueGeneratedNever();
+            entry.Property(e => e.Date).HasConversion(DateText).HasMaxLength(10);
+            entry.Property(e => e.MovedDate).HasConversion(DateText).HasMaxLength(10);
+            // By name, as the op carries it.
+            entry.Property(e => e.Status).HasConversion<string>().HasMaxLength(10);
+            entry.Property(e => e.People).HasMaxLength(PlanPeople.Max * 37);
+            // The days a page shows, and what applying a plan over them already holds. Not foreign keys.
+            entry.HasIndex(e => e.Date);
+            entry.HasIndex(e => e.MovedDate);
+            entry.HasIndex(e => e.TemplateEntryId);
         });
     }
 }
