@@ -62,17 +62,55 @@ public static partial class SpreadsheetLayout
 
     private enum Region { Week, MealIdeas, Costs }
 
+    // "Costs", plural, only: a column headed "Cost" is a price column (PriceHeadings), not a region.
     private static (Region Region, int Week)? Heading(string text)
     {
         string normal = Names.Normalise(text);
         if (WeekHeading().Match(normal) is { Success: true } week)
             return (Region.Week, int.Parse(week.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture));
-        return ImportNames.Key(normal) switch
+        return normal.ToLowerInvariant() switch
         {
             "meal idea" or "meal ideas" => (Region.MealIdeas, 0),
-            "cost" or "costs"           => (Region.Costs, 0),
+            "costs"                     => (Region.Costs, 0),
             _                           => null,
         };
+    }
+
+    /// <summary>A region: its heading, and the last row and column it runs to.</summary>
+    private sealed record Span(SheetCell At, Region Region, int Week, int LastRow, int LastColumn);
+
+    /// <summary>
+    /// The regions of one sheet. A heading word in another region's heading row is one of its columns ("COSTS | Meat |
+    /// Costs"), unless an empty column separates them - regions side by side ("MEAL IDEAS | Beef | | COSTS | Meat"). A
+    /// region runs right to the next region's heading on its row, and down to the next heading within its columns.
+    /// </summary>
+    private static List<Span> Regions(SheetGrid sheet)
+    {
+        List<(SheetCell Cell, Region Region, int Week)> found =
+        [
+            .. sheet.Cells
+                .Select(c => (Cell: c, Found: c.IsNumber ? null : Heading(c.Text)))
+                .Where(h => h.Found is not null)
+                .Select(h => (h.Cell, h.Found!.Value.Region, h.Found.Value.Week)),
+        ];
+
+        bool Separated(SheetCell left, SheetCell right) =>
+            Enumerable.Range(left.Column + 1, right.Column - left.Column - 1).Any(c => sheet.At(left.Row, c) is null);
+        List<(SheetCell Cell, Region Region, int Week)> headings =
+        [
+            .. found.Where(h => !found.Any(o => o.Cell.Row == h.Cell.Row && o.Cell.Column < h.Cell.Column && !Separated(o.Cell, h.Cell))),
+        ];
+
+        List<Span> spans = [];
+        foreach ((SheetCell at, Region region, int week) in headings)
+        {
+            int lastColumn = headings.Where(h => h.Cell.Row == at.Row && h.Cell.Column > at.Column)
+                .Select(h => h.Cell.Column - 1).DefaultIfEmpty(int.MaxValue).Min();
+            int lastRow = headings.Where(h => h.Cell.Row > at.Row && h.Cell.Column >= at.Column && h.Cell.Column <= lastColumn)
+                .Select(h => h.Cell.Row - 1).DefaultIfEmpty(sheet.LastRow).Min();
+            spans.Add(new Span(at, region, week, lastRow, lastColumn));
+        }
+        return spans;
     }
 
     private static readonly HashSet<string> PriceHeadings = new(StringComparer.Ordinal) { "price", "cost", "", "each", "pack price" };
@@ -93,34 +131,25 @@ public static partial class SpreadsheetLayout
 
         foreach (SheetGrid sheet in sheets)
         {
-            List<(SheetCell Cell, Region Region, int Week)> headings =
-            [
-                .. sheet.Cells
-                    .Select(c => (Cell: c, Found: c.IsNumber ? null : Heading(c.Text)))
-                    .Where(h => h.Found is not null)
-                    .Select(h => (h.Cell, h.Found!.Value.Region, h.Found.Value.Week)),
-            ];
-
-            if (headings.Count == 0)
+            List<Span> regions = Regions(sheet);
+            if (regions.Count == 0)
             {
                 ReadFlat(sheet, storeWords, flat, unread);
                 continue;
             }
 
-            for (int i = 0; i < headings.Count; i++)
+            foreach (Span span in regions)
             {
-                (SheetCell at, Region region, int week) = headings[i];
-                int last = i + 1 < headings.Count ? headings[i + 1].Cell.Row - 1 : sheet.LastRow;
-                switch (region)
+                switch (span.Region)
                 {
                     case Region.Week:
-                        plan.Add(ReadWeek(sheet, at, week, last));
+                        plan.Add(ReadWeek(sheet, span));
                         break;
                     case Region.MealIdeas:
-                        ReadMealIdeas(sheet, at, last, mealHeaders, ideas, unread);
+                        ReadMealIdeas(sheet, span, mealHeaders, ideas, unread);
                         break;
                     case Region.Costs:
-                        ReadCosts(sheet, at, last, storeWords, costHeaders, costs, unread);
+                        ReadCosts(sheet, span, storeWords, costHeaders, costs, unread);
                         break;
                 }
             }
@@ -131,10 +160,11 @@ public static partial class SpreadsheetLayout
 
     private static SheetPlace Place(SheetGrid sheet, SheetCell cell) => new(sheet.Name, cell.Address);
 
-    private static PlanWeek ReadWeek(SheetGrid sheet, SheetCell heading, int number, int last)
+    private static PlanWeek ReadWeek(SheetGrid sheet, Span span)
     {
-        // Only the weekday columns: the sheet keeps its own sums beside them ("Weekly cost", "Total").
-        List<SheetCell> days = [.. sheet.Row(heading.Row).Where(c => c.Column > heading.Column && IsWeekday(c.Text))];
+        (SheetCell heading, int number, int last) = (span.At, span.Week, span.LastRow);
+        // Only the weekday columns: a sheet can keep its own sums and notes beside them.
+        List<SheetCell> days = [.. sheet.Row(heading.Row).Where(c => c.Column > heading.Column && c.Column <= span.LastColumn && IsWeekday(c.Text))];
         List<PlanRow>   rows = [];
         for (int row = heading.Row + 1; row <= last; row++)
         {
@@ -155,14 +185,15 @@ public static partial class SpreadsheetLayout
         return word.Length >= 3 && Enum.GetNames<DayOfWeek>().Any(d => d.ToLowerInvariant().StartsWith(word, StringComparison.Ordinal));
     }
 
-    private static void ReadMealIdeas(SheetGrid sheet, SheetCell heading, int last, List<string> headers, List<MealIdeaCell> ideas, List<UnreadCell> unread)
+    private static void ReadMealIdeas(SheetGrid sheet, Span span, List<string> headers, List<MealIdeaCell> ideas, List<UnreadCell> unread)
     {
+        (SheetCell heading, int last) = (span.At, span.LastRow);
         Dictionary<int, string> columns = sheet.Row(heading.Row)
-            .Where(c => c.Column > heading.Column)
+            .Where(c => c.Column > heading.Column && c.Column <= span.LastColumn)
             .ToDictionary(c => c.Column, c => Names.Normalise(c.Text));
         headers.AddRange(columns.Values.Where(h => !headers.Any(known => Names.Same(known, h))));
 
-        foreach (SheetCell cell in sheet.Cells.Where(c => c.Row > heading.Row && c.Row <= last && c.Column >= heading.Column))
+        foreach (SheetCell cell in sheet.Cells.Where(c => c.Row > heading.Row && c.Row <= last && c.Column >= heading.Column && c.Column <= span.LastColumn))
         {
             if (!columns.TryGetValue(cell.Column, out string? header))
             {
@@ -192,11 +223,13 @@ public static partial class SpreadsheetLayout
             .FirstOrDefault(w => (" " + ImportNames.Key(header) + " ").Contains(" " + ImportNames.Key(w) + " ", StringComparison.Ordinal));
 
     private static void ReadCosts(
-        SheetGrid sheet, SheetCell heading, int last, IReadOnlyCollection<string> storeWords,
+        SheetGrid sheet, Span span, IReadOnlyCollection<string> storeWords,
         List<(string, bool)> headers, List<CostItemCell> costs, List<UnreadCell> unread)
     {
+        (SheetCell heading, int last) = (span.At, span.LastRow);
         // Each column right of the heading is a category, or a price column belonging to the category on its left.
-        int lastColumn = sheet.Cells.Where(c => c.Row >= heading.Row && c.Row <= last).Select(c => c.Column).DefaultIfEmpty(0).Max();
+        int lastColumn = sheet.Cells.Where(c => c.Row >= heading.Row && c.Row <= last && c.Column <= span.LastColumn)
+            .Select(c => c.Column).DefaultIfEmpty(0).Max();
         Dictionary<int, (string Header, bool Household)> categories = [];
         Dictionary<int, (int Owner, string? Store)>      priceColumns = [];
         int owner = 0;
@@ -219,7 +252,7 @@ public static partial class SpreadsheetLayout
 
         for (int row = heading.Row + 1; row <= last; row++)
         {
-            foreach (SheetCell cell in sheet.Row(row).Where(c => c.Column > heading.Column))
+            foreach (SheetCell cell in sheet.Row(row).Where(c => c.Column > heading.Column && c.Column <= span.LastColumn))
             {
                 if (priceColumns.TryGetValue(cell.Column, out (int Owner, string? Store) priceColumn))
                 {
@@ -282,6 +315,13 @@ public static partial class SpreadsheetLayout
 
             (string name, SheetPrice? inline, _, string? notPrice) = SheetText.CostItem(first.Text, storeWords);
             SheetPlace      place  = Place(sheet, first);
+            if (name.Length == 0)
+            {
+                // "?" alone, say: no name to hang anything on - the row and its prices are reported, not dropped.
+                foreach (SheetCell cell in row)
+                    unread.Add(new UnreadCell(Place(sheet, cell), cell.Text, "It has no name, or is beside a cell with none."));
+                continue;
+            }
             List<PriceCell> prices = inline is null ? [] : [new PriceCell($"{place} 0", place, inline)];
             if (notPrice is not null)
                 unread.Add(new UnreadCell(place, notPrice, $"Not a price this can read, for {name} - it is added with no price."));
@@ -294,8 +334,7 @@ public static partial class SpreadsheetLayout
                     unread.Add(new UnreadCell(at, cell.Text, $"Not a price this can read, for {name}."));
             }
 
-            if (name.Length > 0)
-                flat.Add(new FlatItemCell(place, name, prices));
+            flat.Add(new FlatItemCell(place, name, prices));
         }
     }
 }

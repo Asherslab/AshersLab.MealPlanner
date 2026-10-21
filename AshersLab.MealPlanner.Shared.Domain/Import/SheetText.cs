@@ -20,11 +20,11 @@ public sealed record SheetPrice(long Cents, string? Pack, string? Store, string?
 /// </summary>
 public sealed record CostText(string Name, SheetPrice? Price, string? UsualStore, string? Unread);
 
-/// <summary>An ingredient a meal idea names, with the alternatives the sheet gave for it ("grated cheese/lime juice").</summary>
-public sealed record IngredientRef(string Name, IReadOnlyList<string> Alternatives);
+/// <summary>An ingredient a meal idea names, with the alternatives the sheet gave for it ("cheese/ham").</summary>
+public sealed record IngredientRef(string Name, IReadOnlyList<string> Alternatives, string? Note = null);
 
 /// <summary>
-/// One meal-ideas cell: <c>4x Spaghetti bolognese (spaghetti, beef, bolognese)</c>. <paramref name="Serves"/> is the
+/// One meal-ideas cell: <c>4x Shepherd pie (lamb mince, potato, peas)</c>. <paramref name="Serves"/> is the
 /// "4x", null when there is none; <paramref name="ServesUnsure"/> for the sheet's "8?x".
 /// <paramref name="Ingredients"/> is null when the cell has no parentheses at all - a simple meal or a side - and empty
 /// for "()". <paramref name="Unsure"/> when the cell carries a "?" anywhere: the planner was not sure of something.
@@ -40,7 +40,7 @@ public sealed record MealIdea(
     string Original);
 
 /// <summary>
-/// One plan cell: "Leftovers/mi goreng/pizza" is three choices; "Bagels, scrambled eggs + toast" is one choice of three
+/// One plan cell: "Leftovers/noodles/soup" is three choices; "Toast, jam + fruit" is one choice of three
 /// items. Read here, applied by the plan-template slice.
 /// </summary>
 public sealed record PlanCell(string Original, IReadOnlyList<IReadOnlyList<string>> Choices);
@@ -70,6 +70,11 @@ public static partial class SheetText
     [GeneratedRegex(@"\(([^()]*)\)", RegexOptions.CultureInvariant)]
     private static partial Regex Parenthesised();
 
+    // A multi-buy: "2 for $5", "3 for 10.00" - the count first, the price after "for". Read the other way round it
+    // would be $2 for five of something.
+    [GeneratedRegex(@"^(?<count>\d+)\s+for\s+(?<dollar>\$)?\s*(?<amount>\d+(?:\.\d+)?)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex MultiBuy();
+
     // "… OR …", "…, ~18 slices a loaf", "…; …": only what comes first is the price.
     [GeneratedRegex(@"\s+or\s+|\s*[,;]\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ClauseBreak();
@@ -91,9 +96,10 @@ public static partial class SheetText
     [GeneratedRegex(@"^(?<name>.*\S)\s+(?<pack>(?:\d+\s*[x×*]\s*)?\d+(?:\.\d+)?\s*(?:g|kg|ml|l|pk|ct))$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TrailingPack();
 
-    [GeneratedRegex(@"^\s*(?:(?<serves>\d+)\s*(?<q1>\?)?\s*[x×]\s*(?<q2>\?)?\s+)?(?<name>[^(]*?)\s*(?:\((?<inside>[^)]*)(?<close>\))?(?<rest>.*))?$",
+    // The "4x" / "8?x" before a meal's name; the rest is read by hand, because parentheses nest ("rice (basmati)").
+    [GeneratedRegex(@"^\s*(?:(?<serves>\d+)\s*(?<q1>\?)?\s*[x×]\s*(?<q2>\?)?\s+)?(?<rest>.*)$",
         RegexOptions.Singleline | RegexOptions.CultureInvariant)]
-    private static partial Regex MealShape();
+    private static partial Regex ServesPrefix();
 
     /// <summary>
     /// A price on its own: the whole text is one. <paramref name="alone"/> when nothing else can be in the cell - a
@@ -101,7 +107,7 @@ public static partial class SheetText
     /// one: a "$", two decimal places, or what it is for ("12/kg"); "Eggs 12" is not a price.
     /// </summary>
     /// <remarks>
-    /// Notes in parentheses are dropped, except a pack size among them ("$22 for 16 servings (8x250g)"); only the first
+    /// Notes in parentheses are dropped, except a pack size among them ("$17 for 12 servings (6x250g)"); only the first
     /// of "… OR …", and nothing after a comma, is read. What the price is for: an amount ("500g", "1Litre", "kg"), a count
     /// ("for 4", "30pk", "12 slices"), one of something ("ea", "per cucumber") - or not an amount at all ("for 10
     /// servings", "for ~3 months"), which leaves the pack to the review with the sheet's words as the note.
@@ -112,12 +118,24 @@ public static partial class SheetText
         string? packAside = null;
         rest = Parenthesised().Replace(rest, m =>
         {
-            // A weight or volume aside ("(8x250g)") is the pack; a count aside ("(3 cubes)") is only a note.
+            // A weight or volume aside ("(6x250g)") is the pack; a count aside ("(3 cubes)") is only a note.
             if (packAside is null && ForWhat(m.Groups[1].Value) is ({ } pack, _) && !pack.EndsWith(" each", StringComparison.Ordinal))
                 packAside = pack;
             return " ";
         });
         rest = ClauseBreak().Split(Names.Normalise(rest).Trim(' ', '-', ':', '@', ',', '(', ')'))[0];
+
+        if (MultiBuy().Match(rest) is { Success: true } deal)
+        {
+            string dealAmount = deal.Groups["amount"].Value;
+            bool   money      = deal.Groups["dollar"].Success || (dealAmount.Contains('.') && dealAmount.Length - dealAmount.IndexOf('.') == 3);
+            if (money && decimal.TryParse(dealAmount, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal total)
+                      && decimal.Round(total * 100) == total * 100 && total * 100 <= Money.MaxCents && Money.CentsProblem((long)(total * 100)) is null)
+                return new SheetPrice((long)(total * 100), $"{deal.Groups["count"].Value} each", store);
+            // "2 for 5": which is the price? Not guessed.
+            return null;
+        }
+
         Match match = PriceShape().Match(rest);
         if (!match.Success)
             return null;
@@ -236,13 +254,14 @@ public static partial class SheetText
 
     /// <summary>
     /// A meal-ideas cell. The "Nx" is optional and is sometimes "8?x"; the parentheses are sometimes not closed, and
-    /// then everything after the "(" is the ingredients. Ingredients are split on commas; a '/' or " or " inside one is
-    /// alternatives - the first is the ingredient, the rest are noted.
+    /// then everything after the "(" is the ingredients. Ingredients are split on commas outside any inner parentheses;
+    /// an inner parenthesis is a note on its ingredient ("rice (basmati)" is rice, noted basmati); a '/' or " or " inside
+    /// one is alternatives - the first is the ingredient, the rest are noted.
     /// </summary>
     public static MealIdea MealIdea(string text)
     {
         string cell  = Names.Normalise(text);
-        Match  match = MealShape().Match(cell);
+        Match  match = ServesPrefix().Match(cell);
 
         int? serves = match.Groups["serves"].Success
                       && int.TryParse(match.Groups["serves"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
@@ -250,26 +269,55 @@ public static partial class SheetText
             : null;
         bool unsureServes = match.Groups["q1"].Success || match.Groups["q2"].Success;
 
-        List<IngredientRef>? ingredients = null;
-        if (match.Groups["inside"].Success)
+        string rest = match.Groups["rest"].Value;
+        int    open = rest.IndexOf('(');
+        if (open < 0)
+            return new MealIdea(ImportNames.Tidy(rest), serves, unsureServes, null, false, null, cell.Contains('?'), cell);
+
+        // The ingredient list: up to the ")" that closes the first "(", commas at the top level only.
+        List<string> parts = [];
+        System.Text.StringBuilder part = new();
+        int depth = 1, at = open + 1;
+        for (; at < rest.Length && depth > 0; at++)
         {
-            ingredients = [];
-            foreach (string part in match.Groups["inside"].Value.Split(','))
+            char c = rest[at];
+            if (c == '(')
+                depth++;
+            else if (c == ')' && --depth == 0)
+                break;
+            if (c == ',' && depth == 1)
             {
-                string[] alternatives = [.. AlternativeSplit().Split(part).Select(Names.Normalise).Where(a => a.Trim('?').Length > 0)];
-                if (alternatives.Length > 0)
-                    ingredients.Add(new IngredientRef(alternatives[0], alternatives[1..]));
+                parts.Add(part.ToString());
+                part.Clear();
             }
+            else
+                part.Append(c);
+        }
+        parts.Add(part.ToString());
+        bool closed = depth == 0;
+
+        List<IngredientRef> ingredients = [];
+        foreach (string item in parts)
+        {
+            List<string> notes = [];
+            string bare = Parenthesised().Replace(item, m =>
+            {
+                notes.Add(Names.Normalise(m.Groups[1].Value));
+                return " ";
+            }).Replace("(", " ").Replace(")", " ");
+            string[] alternatives = [.. AlternativeSplit().Split(bare).Select(Names.Normalise).Where(a => a.Trim('?').Length > 0)];
+            if (alternatives.Length > 0)
+                ingredients.Add(new IngredientRef(alternatives[0], alternatives[1..], notes.Count > 0 ? string.Join("; ", notes) : null));
         }
 
-        string rest = Names.Normalise(match.Groups["rest"].Value).Trim(' ', ',', ')');
+        string trailing = closed ? Names.Normalise(rest[(at + 1)..]).Trim(' ', ',', ')') : "";
         return new MealIdea(
-            ImportNames.Tidy(match.Groups["name"].Value),
+            ImportNames.Tidy(rest[..open]),
             serves,
             unsureServes,
             ingredients,
-            Unclosed: match.Groups["inside"].Success && !match.Groups["close"].Success,
-            Trailing: rest.Length > 0 ? rest : null,
+            Unclosed: !closed,
+            Trailing: trailing.Length > 0 ? trailing : null,
             Unsure: cell.Contains('?'),
             Original: cell);
     }
@@ -281,8 +329,8 @@ public static partial class SheetText
     private static partial Regex ItemSplit();
 
     /// <summary>
-    /// A plan cell: '/' separates choices, ',' and '+' the items of one choice. "and" does not split - "Fish and
-    /// chips" and "peas and corn" are one thing each.
+    /// A plan cell: '/' separates choices, ',' and '+' the items of one choice. "and" does not split - "Bangers
+    /// and mash" and "beans and rice" are one thing each.
     /// </summary>
     public static PlanCell PlanCell(string text)
     {

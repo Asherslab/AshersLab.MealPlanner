@@ -30,5 +30,5 @@ public static class ImportKnownReader
             await db.Set<Product>().AsNoTracking()
                 .Select(p => new KnownProduct(p.Id, p.Name, p.StoreId, p.IngredientId, p.PackQuantity, p.Deleted)).ToListAsync(cancellationToken),
             await db.Set<PriceObservation>().AsNoTracking()
-                .Select(p => new KnownPrice(p.Id, p.ProductId, p.PriceCents, p.ObservedOn, p.Deleted)).ToListAsync(cancellationToken));
+                .Select(p => new KnownPrice(p.Id, p.ProductId, p.PriceCents, p.ObservedOn, p.Deleted, p.Source)).ToListAsync(cancellationToken));
 }

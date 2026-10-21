@@ -14,6 +14,12 @@ public enum PriceSource
 
     /// <summary>Woolworths' own price, fetched by the server (version 2).</summary>
     Live,
+
+    /// <summary>
+    /// The planner's spreadsheet, by the import. Its own source so a later import compares only with what the sheet
+    /// said before - never with a newer receipt or typed price, which an unchanged sheet must not overwrite.
+    /// </summary>
+    Sheet,
 }
 
 public static class PriceSources
@@ -36,12 +42,13 @@ public static class PriceSources
         return false;
     }
 
-    /// <summary>What the planner sees in a price's history: "typed in", "receipt", "online".</summary>
+    /// <summary>What the planner sees in a price's history: "typed in", "receipt", "online", "spreadsheet".</summary>
     public static string Label(this PriceSource source) => source switch
     {
         PriceSource.Manual  => "typed in",
         PriceSource.Receipt => "receipt",
         PriceSource.Live    => "online",
+        PriceSource.Sheet   => "spreadsheet",
         _                   => throw new ArgumentOutOfRangeException(nameof(source), source, null),
     };
 }

@@ -129,7 +129,7 @@ public sealed class ImportSyncTests : IAsyncLifetime
 
         Dictionary<Guid, string> ingredients = await a.IngredientsAsync();
         Guid gravy = ingredients.Single(i => i.Value == "Gravy").Key;
-        Guid chips = ingredients.Single(i => i.Value == "Chips").Key;
+        Guid chips = ingredients.Single(i => i.Value == "Popcorn").Key;
         a.Now = a.Now.AddSeconds(1);
         await a.WriteAsync(SyncedEntities.Ingredient, gravy, OpKind.Update,
             new IngredientDraft("Gravy granules", BaseUnit.Gram, null, null, false).FieldsChangedFrom(new("Gravy", BaseUnit.Gram, null, null, false, true)));
@@ -137,9 +137,9 @@ public sealed class ImportSyncTests : IAsyncLifetime
 
         ImportPlan again = await ImportAsync(a, new ImportChoices());
 
-        // "Gravy" is new again - the planner renamed theirs - and Chips stays deleted.
+        // "Gravy" is new again - the planner renamed theirs - and Popcorn stays deleted.
         Assert.Equal(["Gravy"], again.NewIngredients.Select(i => i.Name));
-        Assert.Contains("Chips: deleted here before, so not added again.", again.LeftOut);
+        Assert.Contains("Popcorn: deleted here before, so not added again.", again.LeftOut);
         Assert.False((await a.IngredientRowsAsync())[gravy].UnitGuessed);
     }
 

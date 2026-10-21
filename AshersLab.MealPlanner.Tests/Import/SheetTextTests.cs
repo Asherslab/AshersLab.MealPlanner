@@ -55,6 +55,36 @@ public class SheetTextTests
     }
 
     [Fact]
+    public void Parentheses_inside_the_ingredient_list_are_a_note_on_their_ingredient_not_its_end()
+    {
+        MealIdea idea = SheetText.MealIdea("4x Curry (chicken, rice (basmati), naan/roti) extra hot");
+
+        Assert.Equal(["chicken", "rice", "naan"], idea.Ingredients!.Select(i => i.Name));
+        Assert.Equal("basmati", idea.Ingredients![1].Note);
+        Assert.Equal(["roti"], idea.Ingredients![2].Alternatives);
+        Assert.False(idea.Unclosed);
+        Assert.Equal("extra hot", idea.Trailing);
+
+        MealIdea open = SheetText.MealIdea("Soup (leek (big), potato");
+        Assert.True(open.Unclosed);
+        Assert.Equal(["leek", "potato"], open.Ingredients!.Select(i => i.Name));
+    }
+
+    [Theory]
+    [InlineData("Cola 2 for $5", "Cola", 500, "2 each")]
+    [InlineData("Cola 3 for 10.00", "Cola", 1000, "3 each")]
+    public void A_multi_buy_is_the_count_for_the_price(string cell, string name, long cents, string pack)
+    {
+        Assert.Equal(new CostText(name, new SheetPrice(cents, pack, null), null, null), SheetText.CostItem(cell, Stores));
+    }
+
+    [Fact]
+    public void A_multi_buy_with_no_money_in_it_is_not_guessed()
+    {
+        Assert.Null(SheetText.CostItem("Cola 2 for 5", Stores).Price);
+    }
+
+    [Fact]
     public void A_slash_or_or_inside_an_ingredient_is_alternatives()
     {
         MealIdea idea = SheetText.MealIdea("2x Omelette (egg, cheese/ham, chives or spring onion)");
@@ -77,11 +107,11 @@ public class SheetTextTests
     [Fact]
     public void A_question_mark_is_dropped_from_the_name_and_remembered()
     {
-        MealIdea idea = SheetText.MealIdea("Chips?");
+        MealIdea idea = SheetText.MealIdea("Popcorn?");
 
-        Assert.Equal("Chips", idea.Name);
+        Assert.Equal("Popcorn", idea.Name);
         Assert.True(idea.Unsure);
-        Assert.Equal("Chips?", idea.Original);
+        Assert.Equal("Popcorn?", idea.Original);
     }
 
     [Fact]
@@ -153,7 +183,7 @@ public class SheetTextTests
 
     [Theory]
     [InlineData("Relish ~ $4", "Relish", 400)]
-    [InlineData("Tea $4 (try to buy on sale)", "Tea", 400)]
+    [InlineData("Tea $4 (on special)", "Tea", 400)]
     [InlineData("Hot sauce $2.95", "Hot sauce", 295)]
     public void A_price_with_nothing_said_of_what_it_is_for_has_no_pack(string cell, string name, long cents)
     {
@@ -171,7 +201,7 @@ public class SheetTextTests
     [Theory]
     [InlineData("Eggs 12")]          // a count, not a price
     [InlineData("3 bean mix")]
-    [InlineData("Peas & corn")]
+    [InlineData("Beans & rice")]
     [InlineData("Wipes ")]
     [InlineData("Lamb mince 12.505")] // three decimals is a typo
     public void A_name_without_a_price_is_only_a_name(string cell)
@@ -225,7 +255,7 @@ public class SheetTextTests
         Assert.Equal([["Leftovers"], ["noodles"], ["pizza"]], cell.Choices);
 
         Assert.Equal([["Toast", "jam", "fruit"]], SheetText.PlanCell("Toast, jam + fruit").Choices);
-        Assert.Equal([["Fish and chips"]], SheetText.PlanCell("Fish and chips").Choices);
+        Assert.Equal([["Bangers and mash"]], SheetText.PlanCell("Bangers and mash").Choices);
         Assert.Equal([["Schnitzel", "peas and corn"]], SheetText.PlanCell("Schnitzel, peas and corn").Choices);
     }
 
@@ -244,21 +274,21 @@ public class ImportNamesTests
     [Theory]
     [InlineData("bananas", "Bananas")]
     [InlineData("egg", "Eggs")]
-    [InlineData("chicken schnitzel ", "Chicken schnitzel")]
-    [InlineData("Chips?", "chips")]
+    [InlineData("beef strips ", "Beef strips")]
+    [InlineData("Popcorn?", "popcorn")]
     [InlineData("tortilla", "Tortillas")]
-    [InlineData("Yoghurt pouch", "yoghurt pouches")]
+    [InlineData("Lunch pouch", "lunch pouches")]
     [InlineData("potato", "Potatoes")]
     [InlineData("Berry", "berries")]
-    [InlineData("Chicken & egg", "chicken/egg")]
+    [InlineData("Chicken & egg", "chicken+egg")]
     public void The_same_name_written_differently_has_one_key(string a, string b)
     {
         Assert.Equal(ImportNames.Key(a), ImportNames.Key(b));
     }
 
     [Theory]
-    [InlineData("peas", "Peas & corn")]
-    [InlineData("cheese", "Grated cheese")]
+    [InlineData("beans", "Beans & rice")]
+    [InlineData("cheese", "Shredded cheese")]
     [InlineData("glass", "glas")]
     public void Different_names_have_different_keys(string a, string b)
     {
@@ -273,7 +303,7 @@ public class ImportNamesTests
         Assert.Equal(3, ImportNames.Distance("kitten", "sitting"));
     }
 
-    private static readonly string[] Known = ["Lamb korma", "Grated cheese", "Sliced cheese", "Cheese cubes", "Roast potatoes", "Rice"];
+    private static readonly string[] Known = ["Lamb korma", "Shredded cheese", "Smoked cheese", "Cheese sticks", "Roast potatoes", "Rice"];
 
     [Fact]
     public void A_letter_transposition_is_likely_the_same()
@@ -289,7 +319,7 @@ public class ImportNamesTests
     {
         List<NameCandidate<string>> found = ImportNames.Candidates("cheese", Known, k => k);
 
-        Assert.Equal(["Cheese cubes", "Grated cheese", "Sliced cheese"], found.Select(c => c.Item).Order());
+        Assert.Equal(["Cheese sticks", "Shredded cheese", "Smoked cheese"], found.Select(c => c.Item).Order());
         Assert.All(found, c => Assert.Equal(MatchStrength.Possible, c.Strength));
     }
 
@@ -337,24 +367,24 @@ public class UnitGuessTests
     [InlineData("Avocado", BaseUnit.Each)]
     [InlineData("bananas", BaseUnit.Each)]
     [InlineData("Lamb mince", BaseUnit.Gram)]
-    [InlineData("Cheddar cheese", BaseUnit.Gram)]
+    [InlineData("Swiss cheese", BaseUnit.Gram)]
     [InlineData("Rice", BaseUnit.Gram)]
     [InlineData("Pasta", BaseUnit.Gram)]
-    [InlineData("Soy sauce", BaseUnit.Millilitre)]
+    [InlineData("Fish sauce", BaseUnit.Millilitre)]
     [InlineData("Milk", BaseUnit.Millilitre)]
-    [InlineData("Olive oil", BaseUnit.Millilitre)]
+    [InlineData("Canola oil", BaseUnit.Millilitre)]
     // The more specific words win.
-    [InlineData("Lime juice", BaseUnit.Millilitre)]
+    [InlineData("Juice of a lime", BaseUnit.Millilitre)]
     [InlineData("Lime", BaseUnit.Each)]
-    [InlineData("Tinned tomato", BaseUnit.Gram)]
+    [InlineData("Tinned tomato puree", BaseUnit.Gram)]
     [InlineData("Tomato", BaseUnit.Each)]
-    [InlineData("Diced onions", BaseUnit.Gram)]
-    [InlineData("Red onion", BaseUnit.Each)]
-    [InlineData("Garlic bread", BaseUnit.Each)]
-    [InlineData("Minced garlic", BaseUnit.Gram)]
-    [InlineData("Frozen pizza", BaseUnit.Each)]
+    [InlineData("Diced onion, frozen", BaseUnit.Gram)]
+    [InlineData("Brown onion", BaseUnit.Each)]
+    [InlineData("Garlic bread rolls", BaseUnit.Each)]
+    [InlineData("Crushed garlic", BaseUnit.Gram)]
+    [InlineData("Frozen pizza bases", BaseUnit.Each)]
     [InlineData("Frozen peas", BaseUnit.Gram)]
-    [InlineData("Yoghurt pouches", BaseUnit.Each)]
+    [InlineData("Yoghurt pouch, kids", BaseUnit.Each)]
     [InlineData("Yoghurt", BaseUnit.Gram)]
     public void Guesses_by_the_words_of_the_name(string name, BaseUnit unit)
     {

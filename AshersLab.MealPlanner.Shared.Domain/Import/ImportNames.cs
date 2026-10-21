@@ -7,7 +7,7 @@ public enum MatchStrength
 {
     None,
 
-    /// <summary>Close enough to suggest, not enough to take without asking: "cheese" for "Grated cheese".</summary>
+    /// <summary>Close enough to suggest, not enough to take without asking: "cheese" for "Shredded cheese".</summary>
     Possible,
 
     /// <summary>Probably the same, spelt differently: "Lmab korma" for "Lamb korma". Still asked, with it chosen.</summary>
@@ -21,8 +21,8 @@ public enum MatchStrength
 public sealed record NameCandidate<T>(T Item, string Name, MatchStrength Strength, decimal Score, bool Inside = false);
 
 /// <summary>
-/// The sheet's names, compared the way the planner reads them. The sheet has "bananas" and "Bananas", "egg" and
-/// "Eggs", "chicken schnitzel " twice and "Chips?" - one ingredient each.
+/// The sheet's names, compared the way the planner reads them. A sheet can have "pears" and "Pears", "egg" and
+/// "Eggs", "beef strips " twice and "Popcorn?" - one ingredient each.
 /// </summary>
 public static class ImportNames
 {
@@ -64,7 +64,7 @@ public static class ImportNames
     /// <summary>
     /// The known names <paramref name="name"/> could be, best first. <see cref="MatchStrength.Same"/> only for equal
     /// keys; <see cref="MatchStrength.Likely"/> for one or two letters wrong or swapped in a long enough name;
-    /// <see cref="MatchStrength.Possible"/> when every word of one is in the other ("cheese", "Sliced cheese"), or they
+    /// <see cref="MatchStrength.Possible"/> when every word of one is in the other ("cheese", "Smoked cheese"), or they
     /// share a word of four letters or more ("roast pumpkin", "Roast potatoes"). Among the possible, a name wholly inside
     /// the other comes first: "Beans & rice" before "Frozen kale" for "Frozen beans & rice", however close the spelling.
     /// </summary>

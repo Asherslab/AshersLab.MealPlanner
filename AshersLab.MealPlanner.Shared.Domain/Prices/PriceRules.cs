@@ -48,7 +48,7 @@ public static class PriceRules
             ProductField    => OpValues.TryParseId(field.Value, out Guid? product) && product is not null ? null : "A price needs a product.",
             PriceCentsField => OpValues.TryParseCents(field.Value, out long cents) ? Money.CentsProblem(cents) : "The price is not whole cents.",
             ObservedOnField => OpValues.TryParseDate(field.Value, out _) ? null : "The date is not a date.",
-            SourceField     => PriceSources.TryParse(field.Value, out _) ? null : "The source is not manual, receipt or live.",
+            SourceField     => PriceSources.TryParse(field.Value, out _) ? null : "The source is not manual, receipt, live or sheet.",
             PerKgCentsField => field.Value is null ? null
                 : OpValues.TryParseCents(field.Value, out long perKg) ? Money.CentsProblem(perKg)
                 : "The price per kg is not whole cents.",

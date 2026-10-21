@@ -82,7 +82,7 @@ Delete says "mince is used by 1 product: ... Delete them on the Prices page firs
 | `ProductId` | GUID, never null | required |
 | `PriceCents` | whole cents as plain digits (`OpValues.FormatCents`), 1 to 10,000,000 | one pack; never dollars, never a decimal |
 | `ObservedOn` | `yyyy-MM-dd` | the day it was seen; no time, no zone |
-| `Source` | `Manual`, `Receipt` or `Live` - by name | the pages write `Manual`; receipts and live prices come later |
+| `Source` | `Manual`, `Receipt`, `Live` or `Sheet` - by name | the pages write `Manual`; the [spreadsheet import](../import/spreadsheet-import.md) `Sheet`, so a later import compares only with what the sheet said; receipts and live prices come later |
 | `PerKgCents` | whole cents or null | variable-weight meat: what a gram costs when the pack price depends on its weight |
 
 - **Append-only by use, not by rule.** The pages add a price and delete a mistaken one; nothing edits one, because the
@@ -134,7 +134,7 @@ products. Products with no ingredient are last, under "Not food".
 - **Entering a price: tap the product, type, Enter.** The price sheet opens with the price box already focused and
   the phone's decimal keypad up (`inputmode=decimal`); Enter (or Save) adds the price, seen today. "Seen on" (a native
   date picker) back-fills an older price; "Per kg" appears for an ingredient counted in grams. Beneath is the
-  history, newest first, each with its day and "typed in" / "receipt" / "online", and a bin for a mistake (one
+  history, newest first, each with its day and "typed in" / "receipt" / "online" / "spreadsheet", and a bin for a mistake (one
   confirmation).
 - **Adding a product under an ingredient**: tap its +. The editor opens with the ingredient chosen, the store set to
   the picked chip, else the ingredient's usual store, and the name set to the ingredient's. Type the pack size and,

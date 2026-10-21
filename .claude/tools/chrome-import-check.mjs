@@ -38,7 +38,7 @@ const count = (p, testid) => p.evaluate(`document.querySelectorAll('[data-testid
 const TABLES = ['Ingredient', 'Category', 'MealGroup', 'Meal', 'MealIngredient', 'Product', 'PriceObservation'];
 const counts = q => TABLES.map(t => `${t} ${q(`select count(*) from ${t} where not Deleted`)}`).join(', ')
   + `, guessed ${q('select count(*) from Ingredient where UnitGuessed and not Deleted')}`
-  + `, manual prices ${q(`select count(*) from PriceObservation where Source = 'Manual' and not Deleted`)}`;
+  + `, spreadsheet prices ${q(`select count(*) from PriceObservation where Source = 'Sheet' and not Deleted`)}`;
 
 // --- A reviews and imports ----------------------------------------------------------------------------------------
 check(await pick(a), 'A picks the sheet and the review appears');

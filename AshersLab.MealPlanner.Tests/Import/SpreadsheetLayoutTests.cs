@@ -16,7 +16,7 @@ public class SpreadsheetLayoutTests
 
         Assert.Equal([1, 2], sheet.Plan.Select(w => w.Number));
         PlanWeek one = sheet.Plan[0];
-        // The sheet's own sums beside the days ("Weekly cost", "Total") are not days.
+        // The sheet's own sums and notes beside the days are not days.
         Assert.Equal(["Monday", "Tuesday"], one.Days);
         Assert.All(one.Rows, r => Assert.Equal(2, r.Days.Count));
         Assert.Equal(["Breakfast", "Lunch", "Dinner"], one.Rows.Select(r => r.Slot));
@@ -31,11 +31,11 @@ public class SpreadsheetLayoutTests
     {
         ParsedSheet sheet = Parsed();
 
-        Assert.Equal(["Beef", "Chicken/egg", "Sides", "Fruit"], sheet.MealHeaders);
+        Assert.Equal(["Beef", "Chicken+egg", "Sides", "Fruit"], sheet.MealHeaders);
         Assert.Equal(
-            ["Shepherd pie", "Lamb korma", "Garlic naan", "Pears", "Cottage pie", "Omelette", "Chips", "Shepherd pie"],
+            ["Shepherd pie", "Lamb korma", "Garlic naan", "Pears", "Cottage pie", "Omelette", "Popcorn", "Shepherd pie"],
             sheet.MealIdeas.Select(m => m.Idea.Name));
-        Assert.Equal("Chicken/egg", sheet.MealIdeas[1].Header);
+        Assert.Equal("Chicken+egg", sheet.MealIdeas[1].Header);
         Assert.Equal(new SheetPlace("Plan", "C11"), sheet.MealIdeas[1].Place);
     }
 
@@ -44,7 +44,7 @@ public class SpreadsheetLayoutTests
     {
         ParsedSheet sheet = Parsed();
 
-        Assert.Equal([("Meat", false), ("Dairy", false), ("Fruit", false), ("Pantry", false), ("Non-food etc", true)], sheet.CostHeaders);
+        Assert.Equal([("Meat", false), ("Dairy", false), ("Fruit", false), ("Pantry", false), ("Household bits", true)], sheet.CostHeaders);
         CostItemCell lamb = sheet.Costs.Single(c => c.Name == "Lamb mince");
         Assert.Equal("Meat", lamb.Header);
         Assert.Equal(new SheetPrice(2499, "2kg", "Costco"), lamb.Prices.Single().Price);
@@ -60,7 +60,7 @@ public class SpreadsheetLayoutTests
     {
         ParsedSheet sheet = Parsed();
 
-        Assert.Equal(new SheetPrice(950, "1kg", null), sheet.Costs.Single(c => c.Name == "Cheddar cheese").Prices.Single().Price);
+        Assert.Equal(new SheetPrice(950, "1kg", null), sheet.Costs.Single(c => c.Name == "Swiss cheese").Prices.Single().Price);
         Assert.Equal(new SheetPrice(420, "500g", "Woolies"), sheet.Costs.Single(c => c.Name == "Korma paste").Prices.Single().Price);
         Assert.Equal("Woolies", sheet.Costs.Single(c => c.Name == "Pears").UsualStore);
         Assert.Equal("Eggs", sheet.Costs.Single(c => c.Header == "Dairy" && c.Name.StartsWith('E')).Name);
@@ -80,7 +80,7 @@ public class SpreadsheetLayoutTests
     {
         ParsedSheet sheet = Parsed();
 
-        Assert.Equal(["Eggs", "Peas", "Peas", "Potatoes", "Chives", "Chips", "Rice"], sheet.Flat.Select(f => f.Name));
+        Assert.Equal(["Eggs", "Peas", "Peas", "Potatoes", "Chives", "Popcorn", "Rice"], sheet.Flat.Select(f => f.Name));
         Assert.Equal(new SheetPrice(350, "1kg", null), sheet.Flat.Single(f => f.Name == "Rice").Prices.Single().Price);
     }
 
@@ -100,6 +100,54 @@ public class SpreadsheetLayoutTests
              ("C5", "A price with no name beside it.")],
             sheet.Unread.Select(u => (u.Place.Address, u.Why)));
         Assert.Single(sheet.Costs);
+    }
+
+    [Theory]
+    [InlineData("Cost")]
+    [InlineData("Costs")]
+    public void A_price_column_headed_cost_is_a_price_column_not_a_new_region(string heading)
+    {
+        ParsedSheet sheet = SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
+            $"COSTS|Meat|{heading}",
+            "|Lamb mince|12.50/kg",
+            "|Beef mince|20.00/kg")], Stores);
+
+        Assert.Equal(["Lamb mince", "Beef mince"], sheet.Costs.Select(c => c.Name));
+        Assert.Equal([1250, 2000], sheet.Costs.Select(c => c.Prices.Single().Price.Cents));
+    }
+
+    [Fact]
+    public void A_cost_column_after_an_empty_one_is_still_a_price_column()
+    {
+        // The empty column would let a heading start a region beside this one; "Cost", singular, is not a heading.
+        ParsedSheet sheet = SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
+            "COSTS|Meat||Cost",
+            "|Lamb mince||12.50/kg")], Stores);
+
+        Assert.Equal(1250, sheet.Costs.Single().Prices.Single().Price.Cents);
+    }
+
+    [Fact]
+    public void Regions_side_by_side_are_each_read_within_their_own_columns()
+    {
+        ParsedSheet sheet = SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
+            "MEAL IDEAS|Beef||COSTS|Meat",
+            "|Stew (beef mince)|||Beef mince 9.00/kg Costco")], Stores);
+
+        Assert.Equal("Stew", sheet.MealIdeas.Single().Idea.Name);
+        Assert.Equal(["Beef"], sheet.MealHeaders);
+        Assert.Equal([("Meat", false)], sheet.CostHeaders);
+        Assert.Equal(new SheetPrice(900, "1kg", "Costco"), sheet.Costs.Single(c => c.Name == "Beef mince").Prices.Single().Price);
+        Assert.Empty(sheet.Unread);
+    }
+
+    [Fact]
+    public void A_flat_list_row_with_no_name_is_reported_with_its_prices()
+    {
+        ParsedSheet sheet = SpreadsheetLayout.Parse([SheetGrid.FromRows("List", "Oats", "?|3.50/1kg")], Stores);
+
+        Assert.Equal(["Oats"], sheet.Flat.Select(f => f.Name));
+        Assert.Equal(["A2", "B2"], sheet.Unread.Select(u => u.Place.Address));
     }
 
     [Fact]

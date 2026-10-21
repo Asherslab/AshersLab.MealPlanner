@@ -52,8 +52,8 @@ public class SheetImportTests
         ImportPlan plan = Plan(Seeds());
 
         Assert.Equal(
-            ["Beef mince", "Cheddar cheese", "Cheese", "Chicken thighs", "Chips", "Chives", "Eggs", "Grated cheese", "Gravy", "Ham",
-             "Korma paste", "Lamb mince", "Pears", "Peas", "Potatoes", "Rice", "Yoghurt"],
+            ["Beef mince", "Cheese", "Chicken thighs", "Chives", "Eggs", "Gravy", "Ham", "Korma paste", "Lamb mince", "Pears",
+             "Peas", "Popcorn", "Potatoes", "Rice", "Shredded cheese", "Swiss cheese", "Yoghurt"],
             plan.NewIngredients.Select(i => i.Name).Order());
         Assert.All(Of(plan, IngredientRules.Entity), e => Assert.Equal(OpKind.Create, e.Kind));
     }
@@ -131,7 +131,7 @@ public class SheetImportTests
         ImportEdit korma = Named(plan, MealRules.Entity, "Lamb korma");
         Assert.Equal("6", Field(korma, MealRules.ServesPerBatchField));
         Assert.StartsWith("From the spreadsheet: 6?x Lamb korma (chicken thighs", Field(korma, MealRules.NotesField));
-        Assert.Equal("From the spreadsheet: Chips?", Field(Named(plan, MealRules.Entity, "Chips"), MealRules.NotesField));
+        Assert.Equal("From the spreadsheet: Popcorn?", Field(Named(plan, MealRules.Entity, "Popcorn"), MealRules.NotesField));
         Assert.DoesNotContain(Named(plan, MealRules.Entity, "Shepherd pie").Fields, f => f.Name == MealRules.NotesField);
     }
 
@@ -160,7 +160,7 @@ public class SheetImportTests
         IngredientQuestion cheese = review.Ingredients.Single();
         Assert.Equal("cheese", cheese.Key);
         Assert.Equal(["Omelette"], cheese.Meals);
-        Assert.Equal(["Cheddar cheese", "Grated cheese"], cheese.Options.Select(o => o.Name).Order());
+        Assert.Equal(["Shredded cheese", "Swiss cheese"], cheese.Options.Select(o => o.Name).Order());
         Assert.Null(cheese.Suggested);
 
         Assert.Equal([("Lamb korma", 6), ("Cottage pie", (int?)null)], review.Serves.Select(s => (s.Meal, s.Suggested)));
@@ -186,7 +186,7 @@ public class SheetImportTests
     public void A_heading_that_only_resembles_a_seed_is_asked_with_it_suggested()
     {
         SheetImport import = new(SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
-            "MEAL IDEAS|Snacks/desserts",
+            "MEAL IDEAS|Snacks/sweets",
             "|Fruit salad (pears)")], ["Costco"]), Seeds());
 
         HeadingQuestion question = import.Review().MealGroups.Single();
@@ -199,14 +199,14 @@ public class SheetImportTests
     public void The_planners_answers_win_over_the_suggestions()
     {
         ImportChoices choices = new();
-        choices.Ingredients["cheese"] = "grated cheese";
+        choices.Ingredients["cheese"] = "shredded cheese";
         choices.Serves["cottage pie"]  = 4;
         choices.Serves["lamb korma"]   = null;
         choices.MealGroups["Fruit"]    = Seed(307);
         ImportPlan plan = Plan(Seeds(), choices);
 
         Assert.DoesNotContain(plan.NewIngredients, i => i.Name == "Cheese");
-        ImportEdit grated = Named(plan, IngredientRules.Entity, "Grated cheese");
+        ImportEdit grated = Named(plan, IngredientRules.Entity, "Shredded cheese");
         Assert.Contains(Of(plan, MealIngredientRules.Entity), l => Field(l, MealIngredientRules.IngredientField) == OpValues.FormatId(grated.Id));
         Assert.Equal("Cooked", Field(Named(plan, MealRules.Entity, "Cottage pie"), MealRules.KindField));
         Assert.Equal("Simple", Field(Named(plan, MealRules.Entity, "Lamb korma"), MealRules.KindField));
@@ -224,13 +224,13 @@ public class SheetImportTests
         Assert.Equal("2000", Field(lamb, ProductRules.PackQuantityField));
         ImportEdit price = Of(plan, PriceRules.Entity).Single(p => Field(p, PriceRules.ProductField) == OpValues.FormatId(lamb.Id));
         Assert.Equal("2499", Field(price, PriceRules.PriceCentsField));
-        Assert.Equal("Manual", Field(price, PriceRules.SourceField));
+        Assert.Equal("Sheet", Field(price, PriceRules.SourceField));
         Assert.Equal("2026-10-21", Field(price, PriceRules.ObservedOnField));
 
         ImportEdit korma = Of(plan, ProductRules.Entity).Single(p => Field(p, ProductRules.NameField) == "Korma paste");
         Assert.Equal(OpValues.FormatId(Woolworths), Field(korma, ProductRules.StoreField));
 
-        Assert.Contains("Cheddar cheese $9.50 (Plan D16): no store chosen.", plan.LeftOut);
+        Assert.Contains("Swiss cheese $9.50 (Plan D16): no store chosen.", plan.LeftOut);
         Assert.Contains("Chicken thighs $17.00 (Plan C18): how much is in the pack was not given.", plan.LeftOut);
         Assert.Contains("Toilet rolls $14.50 (Plan G16): no store chosen.", plan.LeftOut);
         Assert.Contains("Paper towel: a household item - choose where household items are bought to add it.", plan.LeftOut);
@@ -251,7 +251,7 @@ public class SheetImportTests
         Assert.DoesNotContain(rolls.Fields, f => f.Name == ProductRules.IngredientField);
         ImportEdit towel = Of(plan, ProductRules.Entity).Single(p => Field(p, ProductRules.NameField) == "Paper towel");
         Assert.Equal("1", Field(towel, ProductRules.PackQuantityField));
-        Assert.DoesNotContain(plan.LeftOut, l => l.Contains("Toilet rolls") || l.Contains("Cheddar") || l.Contains("Chicken thighs"));
+        Assert.DoesNotContain(plan.LeftOut, l => l.Contains("Toilet rolls") || l.Contains("Swiss") || l.Contains("Chicken thighs"));
     }
 
     [Fact]
@@ -284,27 +284,105 @@ public class SheetImportTests
     }
 
     [Fact]
-    public void A_price_equal_to_the_products_latest_is_not_written_again_and_a_new_one_is()
+    public void A_price_the_sheet_said_last_time_is_not_written_again_whatever_came_since()
     {
         Guid lamb = Guid.CreateVersion7(), product = Guid.CreateVersion7();
         KnownProduct costcoLamb = new(product, "Lamb mince", Costco, lamb, 2000, false);
+        // The sheet said $24.99 on 1 Oct; a receipt said $22.99 since. The unchanged sheet must not undo the receipt.
         ImportKnown same = Seeds(
             ingredients: [new KnownIngredient(lamb, "Lamb mince", BaseUnit.Gram, false)],
             products: [costcoLamb],
-            prices: [new KnownPrice(Guid.CreateVersion7(), product, 2299, new DateOnly(2026, 9, 1), false),
-                     new KnownPrice(Guid.CreateVersion7(), product, 2499, new DateOnly(2026, 10, 1), false)]);
+            prices: [new KnownPrice(Guid.CreateVersion7(), product, 2499, new DateOnly(2026, 10, 1), false, PriceSource.Sheet),
+                     new KnownPrice(Guid.CreateVersion7(), product, 2299, new DateOnly(2026, 10, 15), false, PriceSource.Receipt)]);
         Assert.DoesNotContain(Plan(same).Edits, e => e.Entity is ProductRules.Entity && Field(e, ProductRules.NameField) == "Lamb mince");
         Assert.DoesNotContain(Plan(same).Edits, e => e.Entity is PriceRules.Entity && Field(e, PriceRules.ProductField) == OpValues.FormatId(product));
         // The review says which, so it does not show "will be imported" for it.
         Assert.Equal(["Plan C16 0"], Plan(same).PricesAlreadyHere);
 
-        // The latest is $22.99 (newer day): the sheet's $24.99 is news.
-        ImportKnown older = same with
+        // A typed or receipt price equal to the sheet's is not what the sheet said: the sheet's own is written.
+        ImportKnown typed = same with
         {
-            Prices = [new KnownPrice(Guid.CreateVersion7(), product, 2499, new DateOnly(2026, 9, 1), false),
-                      new KnownPrice(Guid.CreateVersion7(), product, 2299, new DateOnly(2026, 10, 1), false)],
+            Prices = [new KnownPrice(Guid.CreateVersion7(), product, 2499, new DateOnly(2026, 10, 1), false, PriceSource.Manual)],
         };
-        Assert.Single(Plan(older).Edits, e => e.Entity is PriceRules.Entity && Field(e, PriceRules.ProductField) == OpValues.FormatId(product));
+        ImportEdit written = Plan(typed).Edits.Single(e => e.Entity is PriceRules.Entity && Field(e, PriceRules.ProductField) == OpValues.FormatId(product));
+        Assert.Equal("Sheet", Field(written, PriceRules.SourceField));
+
+        // The sheet said $22.99 last time and says $24.99 now: news.
+        ImportKnown changed = same with
+        {
+            Prices = [new KnownPrice(Guid.CreateVersion7(), product, 2499, new DateOnly(2026, 9, 1), false, PriceSource.Sheet),
+                      new KnownPrice(Guid.CreateVersion7(), product, 2299, new DateOnly(2026, 10, 1), false, PriceSource.Sheet)],
+        };
+        Assert.Single(Plan(changed).Edits, e => e.Entity is PriceRules.Entity && Field(e, PriceRules.ProductField) == OpValues.FormatId(product));
+    }
+
+    [Fact]
+    public void Two_prices_for_one_product_are_both_written_once_and_never_again()
+    {
+        SheetImport Two(ImportKnown known) => new(SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
+            "COSTS|Pantry",
+            "|Oats 3.50/1kg Costco",
+            "|oats 4.00/1kg Costco")], known.StoreWords), known);
+
+        ImportPlan first = Two(Seeds()).Plan(new ImportChoices(), Today, Guid.CreateVersion7);
+        ImportEdit product = Of(first, ProductRules.Entity).Single();
+        Assert.Equal(["350", "400"], Of(first, PriceRules.Entity).Select(p => Field(p, PriceRules.PriceCentsField)).Order());
+
+        ImportKnown after = Seeds(
+            ingredients: [new KnownIngredient(Of(first, IngredientRules.Entity).Single().Id, "Oats", BaseUnit.Gram, false)],
+            products: [new KnownProduct(product.Id, "Oats", Costco, Of(first, IngredientRules.Entity).Single().Id, 1000, false)],
+            prices: [.. Of(first, PriceRules.Entity).Select(p => new KnownPrice(p.Id, product.Id,
+                long.Parse(Field(p, PriceRules.PriceCentsField)!), Today, false, PriceSource.Sheet))]);
+        Assert.True(Two(after).Plan(new ImportChoices(), Today.AddDays(7), Guid.CreateVersion7).NothingToDo);
+    }
+
+    [Fact]
+    public void A_product_or_price_the_planner_deleted_is_not_brought_back()
+    {
+        Guid lamb = Guid.CreateVersion7(), product = Guid.CreateVersion7();
+        ImportKnown deletedProduct = Seeds(
+            ingredients: [new KnownIngredient(lamb, "Lamb mince", BaseUnit.Gram, false)],
+            products: [new KnownProduct(product, "Lamb mince", Costco, lamb, 2000, true)]);
+        ImportPlan plan = Plan(deletedProduct);
+        Assert.DoesNotContain(plan.Edits, e => e.Entity is ProductRules.Entity && Field(e, ProductRules.IngredientField) == OpValues.FormatId(lamb));
+        Assert.Contains("Lamb mince $24.99 (Plan C16): its product was deleted here, so not added again.", plan.LeftOut);
+
+        ImportKnown deletedPrice = deletedProduct with
+        {
+            Products = [new KnownProduct(product, "Lamb mince", Costco, lamb, 2000, false)],
+            Prices   = [new KnownPrice(Guid.CreateVersion7(), product, 2499, new DateOnly(2026, 10, 1), true, PriceSource.Sheet)],
+        };
+        Assert.DoesNotContain(Plan(deletedPrice).Edits, e => e.Entity is PriceRules.Entity && Field(e, PriceRules.ProductField) == OpValues.FormatId(product));
+        Assert.Contains("Plan C16 0", Plan(deletedPrice).PricesAlreadyHere);
+
+        // A household item with no price, its product deleted: not made again either.
+        ImportKnown deletedTowel = Seeds(products: [new KnownProduct(Guid.CreateVersion7(), "Paper towel", Costco, null, 1, true)]);
+        ImportPlan towel = Plan(deletedTowel, new ImportChoices { HouseholdStore = Costco });
+        Assert.DoesNotContain(towel.Edits, e => e.Entity is ProductRules.Entity && Field(e, ProductRules.NameField) == "Paper towel");
+        Assert.Contains("Paper towel: deleted here before, so not added again.", towel.LeftOut);
+    }
+
+    [Fact]
+    public void A_meal_ingredient_spelt_a_letter_off_is_asked_with_the_likely_one_chosen_and_taken_unanswered()
+    {
+        SheetImport import = new(SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
+            "MEAL IDEAS|Beef",
+            "|4x Ragu (pappardele, beef mince)",
+            "COSTS|Pantry|Meat",
+            "|Pappardelle|Beef mince")], ["Costco"]), Seeds());
+
+        IngredientQuestion question = import.Review().Ingredients.Single();
+        Assert.Equal(("pappardele", "pappardelle"), (question.Key, question.Suggested));
+
+        ImportPlan plan = import.Plan(new ImportChoices(), Today, Guid.CreateVersion7);
+        Assert.DoesNotContain(plan.NewIngredients, i => i.Name == "Pappardele");
+        ImportEdit pasta = Named(plan, IngredientRules.Entity, "Pappardelle");
+        Assert.Contains(Of(plan, MealIngredientRules.Entity), l => Field(l, MealIngredientRules.IngredientField) == OpValues.FormatId(pasta.Id));
+
+        // Answered "a new one": it is.
+        ImportChoices no = new();
+        no.Ingredients["pappardele"] = null;
+        Assert.Contains(import.Plan(no, Today, Guid.CreateVersion7).NewIngredients, i => i.Name == "Pappardele");
     }
 
     // A later download of the sheet: prices written in words after each name, no store named anywhere. Made up.
@@ -321,8 +399,8 @@ public class SheetImportTests
     ]);
 
     private static SheetImport Later(ImportKnown known) => new(SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
-        "COSTS|Meat|Pantry|Dairy|Non-food etc",
-        "|Lamb mince $26.49 for 2kg|Sweet chili sauce $3.50 for 250ml|Natural yoghurt $4 for 1kg|Soap $4.50 for 100g",
+        "COSTS|Meat|Pantry|Dairy|Household bits",
+        "|Lamb mince $26.49 for 2kg|Sweet chili sauce $3.50 for 250ml|Natural yoghurt $4.20 for 1kg|Soap $4.50 for 100g",
         "|Muffins $2ea|Stock $9 for 12 servings|Greek yoghurt $5ea|Razors <$12 (on sale)",
         "||Rice $13 for 5kg||")], known.StoreWords), known);
 
@@ -374,7 +452,7 @@ public class SheetImportTests
         ImportKnown after = AfterFirstImport() with
         {
             Products = [new KnownProduct(product.Id, "Natural yoghurt", Woolworths, Greek, 1000, false)],
-            Prices   = [new KnownPrice(Guid.CreateVersion7(), product.Id, 400, Today, false)],
+            Prices   = [new KnownPrice(Guid.CreateVersion7(), product.Id, 420, Today, false, PriceSource.Sheet)],
         };
         SheetImport again = Later(after);
         Assert.DoesNotContain(again.Review().Ingredients, q => q.Name == "Natural yoghurt");

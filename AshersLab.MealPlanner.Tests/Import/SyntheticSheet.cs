@@ -7,30 +7,32 @@ namespace AshersLab.MealPlanner.Tests.Import;
 
 /// <summary>
 /// A made-up sheet laid out like the planner's: a plan, meal ideas and costs on the first sheet, a flat list on the
-/// second. Written by hand to match the real layout's shapes and traps - never copied from it.
+/// second. Written by hand to the real layout's shapes and traps; its cells are invented. The region headings the
+/// parser looks for ("WEEK 1", "MEAL IDEAS", "COSTS"), the seeded category names and single grocery words ("Eggs",
+/// "Rice") are the only text it shares with any real sheet - checked against the planner's on 2026-10-21.
 /// </summary>
 public static class SyntheticSheet
 {
     public static SheetGrid Main() => SheetGrid.FromRows("Plan",
         "OUR GROCERIES",
-        "WEEK 1|Monday|Tuesday|Weekly cost|Total",
+        "WEEK 1|Monday|Tuesday|Week sum|Notes",
         "Breakfast|Toast, jam + fruit|Porridge|12.5|",
         "Lunch (at work)|Lamb korma/soup|Leftovers|200g lamb, 1 jar korma paste, |",
-        "Dinner|Family dinner|Shepherd pie",
+        "Dinner|Eating out|Shepherd pie",
         "",
         "WEEK 2|Monday|Tuesday",
         "Dinner|Lmab korma|",
         "",
-        "MEAL IDEAS|Beef|Chicken/egg|Sides|Fruit",
+        "MEAL IDEAS|Beef|Chicken+egg|Sides|Fruit",
         "|4x Shepherd pie (lamb mince, potatoes, peas, gravy)|6?x Lamb korma (chicken thighs, korma paste, rice, yoghurt|Garlic naan|Pears",
-        "|Cottage pie (beef mince, potato)|2x Omelette (egg, cheese/ham, chives)|Chips?|",
+        "|Cottage pie (beef mince, potato)|2x Omelette (egg, cheese/ham, chives)|Popcorn?|",
         "|4x Shepherd pie (lamb mince)|||",
         "",
-        "COSTS|Meat|Costco|Dairy|Fruit|Pantry|Non-food etc",
-        "|Lamb mince|24.99/2kg|Cheddar cheese $9.50/1kg|Pears (Woolies)|Korma paste 4.20/500g Woolies|Toilet rolls 14.50/24",
+        "COSTS|Meat|Costco|Dairy|Fruit|Pantry|Household bits",
+        "|Lamb mince|24.99/2kg|Swiss cheese $9.50/1kg|Pears (Woolies)|Korma paste 4.20/500g Woolies|Toilet rolls 14.50/24",
         "|Beef mince||Yoghurt||Rice|Paper towel",
         "|Chicken thighs|17|eggs 7.20/12||Gravy|",
-        "|Ham||Grated cheese||Chips|");
+        "|Ham||Shredded cheese||Popcorn|");
 
     public static SheetGrid List() => SheetGrid.FromRows("List",
         "Eggs",
@@ -38,7 +40,7 @@ public static class SyntheticSheet
         "Peas",
         "potatoes",
         "chives",
-        "Chips?",
+        "Popcorn?",
         "Rice|3.50/1kg");
 
     public static IReadOnlyList<SheetGrid> Both() => [Main(), List()];

@@ -28,7 +28,7 @@ product and price names).
   (`Tests/Import/SyntheticSheet.cs`, written into an `.xlsx` in memory); `chrome-import-check.mjs` takes the real one
   as a path and prints counts only.
 - **Matching is by name, and only by name.** An ingredient is the same when `ImportNames.Key` is equal (case, spacing,
-  punctuation and plurals ignored: "egg" is "Eggs", "chicken schnitzel " is "Chicken schnitzel"); a meal, a household
+  punctuation and plurals ignored: "egg" is "Eggs", "beef strips " is "Beef strips"); a meal, a household
   product or a heading when `Names.Same` is. A shopping-list name answered in the review as an ingredient already here
   is remembered by **the product its price made, which keeps the sheet's name** under that ingredient - so the next
   download maps it without asking (`SheetImport.KnownByProduct`). A name renamed in the app since, with no such product,
@@ -36,8 +36,15 @@ product and price names).
   (`ImportSyncTests.What_the_planner_changed_or_deleted_*`).
 - **What matches is never updated** - the planner may have fixed it since; the sheet is not the master after the first
   run. The one exception is the planner's own answer: a unit still marked as the import's guess, which a price
-  contradicts, is changed when the review is answered so (below). **Something deleted here is not brought back** - the
-  matching reads tombstones too, and says so ("Chives: deleted here before, so not added again.").
+  contradicts, is changed when the review is answered so (below). **Something deleted here is not brought back** -
+  ingredient, meal, product or price: the matching reads tombstones too, and says so ("Chives: deleted here before, so
+  not added again.", "Lamb mince $24.99 (Plan C16): its product was deleted here, so not added again.").
+- **A sheet price is compared with what the sheet said last time, never with the latest price.** Prices are written as
+  `PriceSource.Sheet` ("spreadsheet" in a price's history). A product's sheet prices are written only when the sheet now
+  says something it did not say on the last day it gave that product any (`SheetImport.SheetSaidLast`, deleted ones
+  included) - and then all of them, so a product with two prices in the sheet stays at two. A receipt or typed price
+  since does not make an unchanged sheet's price "new": comparing with the latest price would have the old sheet
+  overwrite every newer receipt price, dated today.
 - **A count is written "N each", never a bare number.** "$3ea" read as pack "1" would be 1 g for an ingredient counted
   in grams, a price silently a thousand times too high per kilo; "1 each" is refused for it, and the review asks.
 - **Two devices importing offline at the same time both add everything** - each matched against its own database. The
@@ -46,27 +53,31 @@ product and price names).
 
 ## What the sheet holds, and what each part becomes
 
-`SpreadsheetLayout.Parse` finds the regions by their headings, in any column and any case, on any sheet; a region runs
-from its heading to the next. A sheet with none of the headings is a flat list.
+`SpreadsheetLayout.Parse` finds the regions by their headings ("WEEK n", "MEAL IDEAS", "COSTS" - plural: a "Cost" column
+is a price column), in any column and any case, on any sheet. A heading word in another region's heading row is one of
+its columns, unless an empty column separates them - then the regions sit side by side, each read within its own
+columns. A region runs right to the next heading on its row and down to the next heading within its columns. A sheet
+with none of the headings is a flat list; a row of it with no name is reported with its prices, not dropped.
 
 | Region | Becomes |
 |---|---|
-| "WEEK 1".."WEEK n", one row per slot, columns per day | Read into `PlanWeek`s (slot = the label's leading word, cells split into choices on `/` and items on `,` and `+`; only weekday columns - the sheet's own "Weekly cost" and "Total" beside them are not days) - **not imported yet**: plan templates are slice 8, which consumes `ParsedSheet.Plan` |
+| "WEEK 1".."WEEK n", one row per slot, columns per day | Read into `PlanWeek`s (slot = the label's leading word, cells split into choices on `/` and items on `,` and `+`; only weekday columns - sums or notes the sheet keeps beside them are not days) - **not imported yet**: plan templates are slice 8, which consumes `ParsedSheet.Plan` |
 | "MEAL IDEAS", one column per meal group | `Meal`s in that group, with their ingredients as lines with no quantity |
 | "COSTS", one column per shopping category | `Ingredient`s in that category; the non-food column ("Non-food", "Household") becomes products with no ingredient |
 | A sheet with no headings | More ingredients (no category), merged by key; prices on their rows |
 | Anything that fits none of these | Listed under "Not imported" with the cell's address and why - never dropped silently |
 
 **A meal-ideas cell** (`SheetText.MealIdea`): `4x Name (a, b, c)`. The `Nx` is optional and may be `8?x`; the
-parenthesis may never close (everything after it is ingredients). Inside, `/` or " or " is alternatives: the first is
-the line, the rest its note ("or lime juice"). A trailing `?` is dropped from the name, and any `?` in the cell puts the
+parenthesis may never close (everything after it is ingredients). Inside, parentheses nest: "rice (basmati)" is rice,
+noted "basmati", and the list goes on after it. `/` or " or " is alternatives: the first is the line, the rest its note
+("or ham"). A trailing `?` is dropped from the name, and any `?` in the cell puts the
 whole cell in the meal's notes ("From the spreadsheet: 8?x ..."), so the doubt is not lost.
 
 | The cell | Kind | Serves |
 |---|---|---|
 | `Nx` with N of 2 or more | Cooked | N |
 | Parentheses, no `Nx` | asked; left empty, single serve (Simple) | 1 |
-| No parentheses ("Bananas", "Garlic bread") | Simple, its one line the ingredient of the same name if there is one | 1 |
+| No parentheses ("Pears", "Garlic naan") | Simple, its one line the ingredient of the same name if there is one | 1 |
 | The same name twice | added once, and said | |
 
 **A price** (`SheetText.Price`, `CostItem`) is read in three places: after the name in its cell (`Toilet rolls 14.50/24`,
@@ -90,7 +101,9 @@ values in `SheetTextTests`:
 | `$2.95` | none - asked |
 | `~$6`, `~ $4` | the price, as written |
 | `$2.10 for 110g OR $0.80 for 40` | only the first |
-| `(try to buy on sale)`, `(berry/apricot)` | notes in parentheses are dropped |
+| `(on special)`, `(berry/apricot)` | notes in parentheses are dropped |
+| `2 for $5`, `3 for 10.00` | a multi-buy: the price for the count, `2 each` - never $2 for five of something |
+| `2 for 5` | not read: which is the price is not guessed |
 | `<$12 (only on sale)` | not a price: the name is added with none, and "Not imported" lists the cell's words |
 
 ## Stores, when the sheet names none
@@ -103,7 +116,7 @@ out: no store chosen" - a sheet that names no store at all is one tap, not one p
 ## Units are guesses, marked
 
 The sheet never says what anything is counted in. `UnitGuess.For` guesses by the most specific word of the name
-("lime juice" is ml though "lime" is each; "tinned tomato" g though "tomato" is each), then the category, then grams;
+("juice of a lime" is ml though "lime" is each; "tinned tomato puree" g though "tomato" is each), then the category, then grams;
 a pack the sheet gave beats both ("24" is a count, "2kg" grams - `SheetImport.GuessUnit`). Every guessed ingredient is
 created with **`UnitGuessed = true`** (an ingredient field, [the catalogue](../catalogue/catalogue.md#ingredients)). A
 unit chosen in the review is not a guess.
@@ -118,7 +131,7 @@ unit chosen in the review is not a guess.
 | Is "Sweet chili sauce" one already here? | on a later import, a shopping-list name resembling an ingredient here, and not answered before (a product of that name) | the same: a likely misspelling, else new |
 | Units the prices disagree with | an ingredient here whose unit is still the import's guess, and a price's pack is counted another way ("guessed as g · the sheet says $2.00 for 1 each") | keep; until changed, that price is left out with why. Changing it sends the unit and `UnitGuessed = false` |
 | How many serves? | a meal with ingredients and no `Nx`, or `N?x` | empty (single serve), or N |
-| Headings | a meal-ideas or costs heading not exactly a group or category ("Snacks/desserts") | the closest ("Snack"), or a new one at the end |
+| Headings | a meal-ideas or costs heading not exactly a group or category ("Snacks/sweets") | the closest ("Snack"), or a new one at the end |
 | A price's store and pack | always shown, each "Will be imported", "Already here - the same as its latest price" or "Left out: why" | the store and pack the sheet gave |
 | Where prices that name no store were seen | some price names no store and its ingredient has no usual store | none - left out until chosen |
 | Where household items are bought | there is a non-food column | none - they are left out until chosen |
@@ -129,14 +142,15 @@ New ingredients are listed with their guessed unit and a g / ml / each switch ea
 
 `SheetImport.Plan` - pure, from the parsed sheet, what the database holds (`ImportKnownReader`), the answers and the
 day. In order: categories and groups (new ones at the end), ingredients, meals and their lines (no quantities),
-products, prices (`Manual`, seen on the day of the import).
+products, prices (`Sheet`, seen on the day of the import).
 
 - **A product is the same one** when its store, its ingredient (for a household item, its name) and its pack size
   match; otherwise a new product named as the sheet names it - which is how an answer is remembered (traps, above).
 - A household item has no unit: its pack is a count, or what the pack says (`100g` is 100).
-- **A price is written only when it differs from the product's latest** (`PriceReadings`' order). So a later download
-  of the sheet with more prices filled in adds exactly those prices, and the same sheet twice adds nothing
-  (`ImportSyncTests.A_later_download_with_more_prices_adds_only_those_prices`).
+- **A price is written only when the sheet says something new for its product** (traps, above). So a later download of
+  the sheet with more prices filled in adds exactly those prices, and the same sheet twice adds nothing - whatever
+  receipts arrived between (`ImportSyncTests.A_later_download_with_more_prices_adds_only_those_prices`,
+  `SheetImportTests.A_price_the_sheet_said_last_time_*`, `Two_prices_for_one_product_*`).
 - A household item with no price becomes a product of pack 1 at the household store, to be priced on the Prices page.
 - A pack of the wrong kind for an existing ingredient's unit ("2kg" for one counted in each) is left out with the
   reason, never converted.
@@ -164,7 +178,7 @@ import guessed this. Check it - saving marks it as checked." Saving (unit change
 price filled in), two headless Chromes on fresh profiles against a fresh server database (holding only what
 `chrome-catalogue-check.mjs` leaves): the review asked 2 ingredient, 7 serves and 2 heading questions and listed 71 new
 ingredients; with household items at Costco, Import wrote 219 ops in one transaction in about 7 s - 71 ingredients (all marked guessed), 31 meals, 107 lines with no
-quantity, 1 group, 8 household products and the sheet's one price as a manual observation. The server's log grew by
+quantity, 1 group, 8 household products and the sheet's one price (source `Sheet`). The server's log grew by
 exactly 219, and both profiles' SQLite held the same counts with outboxes empty. The same sheet on profile B, and again
 on A after a reload: "Nothing new to import", Import greyed, the server unchanged. B saved a guessed ingredient
 unchanged: the chip went on A (71 to 70) and the server row read `UnitGuessed = 0`. Phone-sized screenshots of the
@@ -176,8 +190,8 @@ name and no store named anywhere, imported **on top of the first**, same script 
 <first.xlsx> <later.xlsx>`), on a fresh server database after the first import above. The sheet holds 70 cells with a
 `$` in them: 2 are "less than" amounts, reported as not prices (their items added with none); the review listed the 68
 others. With prices that name no store at Woolworths and household items at Costco, every name question left at its
-suggestion (7 asked) and each of the 10 unit questions answered as the price says: 48 prices imported as manual
-observations, 1 already here (the first import's, unchanged), and 19 left out with the reason - 13 priced per serving
+suggestion (7 asked) and each of the 10 unit questions answered as the price says: 48 prices imported (source
+`Sheet`), 1 already here (the first import's, unchanged), and 19 left out with the reason - 13 priced per serving
 or per months (the sheet's words shown), 6 with no amount. 48 + 1 + 19 = 68. The server gained exactly 48 prices, 48
 products and 10 ingredients; comparing every field of every row from before, **nothing had changed but the 10 units
 answered**, each now confirmed. Both profiles' SQLite matched the server; the later sheet again on B, choosing the same
@@ -194,3 +208,9 @@ nothing; a later sheet adds only its new prices; renamed and deleted rows; nothi
 Each was checked by breaking the code - the latest-price skip, the swapped-letters distance, `WriteAllAsync`'s
 up-front check, the unclosed parenthesis; for the later sheet, servings read as a count, counts written bare, the one
 store for unnamed prices, the remembered answer (on its own) and the weekday columns - and every break failed tests.
+
+The same checks were re-run on 2026-10-21 after a review panel's findings were fixed - the same counts, every check
+passing. Those fixes have their own tests, each failing when its fix was broken, one at a time where two masked each
+other: the sheet's own last prices as the comparison (any source instead, every day instead of the last), product and
+household-product tombstones, the plural "Costs" heading, the gap between side-by-side regions and their column limit,
+a flat-list row with no name, the multi-buy, nested parentheses, and the likely-match fallback taken unanswered.

@@ -15,7 +15,7 @@ public sealed record KnownNamed(Guid Id, string Name, bool Deleted);
 
 public sealed record KnownProduct(Guid Id, string Name, Guid StoreId, Guid? IngredientId, decimal PackQuantity, bool Deleted);
 
-public sealed record KnownPrice(Guid Id, Guid ProductId, long PriceCents, DateOnly ObservedOn, bool Deleted);
+public sealed record KnownPrice(Guid Id, Guid ProductId, long PriceCents, DateOnly ObservedOn, bool Deleted, PriceSource Source = PriceSource.Manual);
 
 /// <summary>What this browser's database already holds, tombstones included, free of the database rows.</summary>
 public sealed record ImportKnown(
@@ -93,7 +93,7 @@ public sealed class ImportChoices
 /// </summary>
 public sealed record UnitQuestion(string Key, string Name, BaseUnit Unit, BaseUnit PriceSays, string Why);
 
-/// <summary>A heading that is not obviously one the app has: "Snacks/desserts" for the group "Snack".</summary>
+/// <summary>A heading that is not obviously one the app has: "Snacks/sweets" for the group "Snack".</summary>
 public sealed record HeadingQuestion(string Heading, IReadOnlyList<KnownOrdered> Options, Guid? Suggested);
 
 /// <summary>
@@ -158,10 +158,11 @@ public sealed record ImportPlan(
 /// <remarks>
 /// <b>Running it twice writes nothing the second time.</b> Everything is matched against what is already here by name
 /// - an ingredient by <see cref="ImportNames.Key"/> ("egg" is "Eggs"), the rest by <see cref="Names.Same"/> - and what
-/// matches is left alone, never updated: the planner may have fixed it since. Something deleted here is not brought
-/// back. A product is the same one when its store, its ingredient (or, for a household item, its name) and its pack
-/// size match; a price is written only when it differs from the product's latest. So a later download of the sheet,
-/// with more prices filled in, adds exactly those prices.
+/// matches is left alone, never updated: the planner may have fixed it since. Something deleted here - an ingredient, a
+/// meal, a product, a price - is not brought back. A product is the same one when its store, its ingredient (or, for a
+/// household item, its name) and its pack size match; its prices are written (as <see cref="PriceSource.Sheet"/>) only
+/// when the sheet says something it did not say last time, whatever receipts or typed prices came since. So a later
+/// download of the sheet, with more prices filled in, adds exactly those prices.
 /// </remarks>
 public sealed class SheetImport
 {
@@ -481,8 +482,7 @@ public sealed class SheetImport
 
             List<Guid> used = [];
             IEnumerable<(string Key, string Name, string? Note)> lines = idea.Ingredients is { } refs
-                ? refs.Select(r => (ImportNames.Key(r.Name), r.Name,
-                    r.Alternatives.Count > 0 ? MealIngredientRules.NormaliseNote(Clip("or " + string.Join(" or ", r.Alternatives), MealIngredientRules.MaxNoteLength)) : null))
+                ? refs.Select(r => (ImportNames.Key(r.Name), r.Name, LineNote(r)))
                 : targets.ContainsKey(ImportNames.Key(idea.Name)) ? [(ImportNames.Key(idea.Name), idea.Name, null)] : [];
             foreach ((string key, string name, string? note) in lines)
             {
@@ -501,13 +501,10 @@ public sealed class SheetImport
             }
         }
 
-        // Products and prices.
+        // Products and prices. Products tombstones and all, live ones first: one the planner deleted is not made again.
         HashSet<string>    samePrices = new(StringComparer.Ordinal);
-        List<KnownProduct> products = [.. _known.Products.Where(p => !p.Deleted)];
-        Dictionary<Guid, long> latest = _known.Prices
-            .Where(p => !p.Deleted)
-            .GroupBy(p => p.ProductId)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.ObservedOn).ThenByDescending(p => p.Id).First().PriceCents);
+        List<KnownProduct> products   = [.. _known.Products.OrderBy(p => p.Deleted)];
+        List<(PriceCell Cell, KnownProduct Product)> priced = [];
 
         // A price's store: the planner's answer for it, else the store the sheet names beside it, else (an ingredient's)
         // usual store or (a household item's) the household store, else the one store for prices that name none.
@@ -540,6 +537,11 @@ public sealed class SheetImport
             KnownProduct? product = products.FirstOrDefault(p =>
                 p.StoreId == storeId && p.PackQuantity == pack
                 && (ingredient is { } id ? p.IngredientId == id : p.IngredientId is null && Names.Same(p.Name, item)));
+            if (product is { Deleted: true })
+            {
+                leftOut.Add($"{what}: its product was deleted here, so not added again.");
+                return;
+            }
             if (product is null)
             {
                 product = new KnownProduct(newId(), item, storeId, ingredient, pack, false);
@@ -548,17 +550,7 @@ public sealed class SheetImport
                     new ProductDraft(product.Name, storeId, null, pack, ingredient).FieldsChangedFrom(null)));
                 newProducts++;
             }
-
-            if (latest.TryGetValue(product.Id, out long cents) && cents == cell.Price.Cents)
-            {
-                alreadyHere++;
-                samePrices.Add(cell.Id);
-                return;
-            }
-            latest[product.Id] = cell.Price.Cents;
-            edits.Add(new(PriceRules.Entity, newId(), OpKind.Create,
-                new PriceEntry(product.Id, cell.Price.Cents, today, PriceSource.Manual, null).Fields()));
-            newPrices++;
+            priced.Add((cell, product));
         }
 
         foreach (SheetIngredient item in _sheetIngredients)
@@ -575,8 +567,11 @@ public sealed class SheetImport
                 continue;
 
             // Not priced yet: a product the planner can price later on the Prices page, at the household store.
-            if (products.Any(p => p.IngredientId is null && Names.Same(p.Name, name)))
+            List<KnownProduct> named = [.. products.Where(p => p.IngredientId is null && Names.Same(p.Name, name))];
+            if (named.Any(p => !p.Deleted))
                 alreadyHere++;
+            else if (named.Count > 0)
+                leftOut.Add($"{name}: deleted here before, so not added again.");
             else if (choices.HouseholdStore is not { } store)
                 leftOut.Add($"{name}: a household item - choose where household items are bought to add it.");
             else
@@ -588,8 +583,50 @@ public sealed class SheetImport
             }
         }
 
+        // A product's prices are written when the sheet now says something it did not say last time - compared with the
+        // sheet's own earlier prices (deleted ones too: a price the planner deleted is not said again), never with a
+        // receipt or a typed price, which an unchanged sheet must not overwrite. Then all of them, so "what the sheet
+        // said last" is always its whole say: a product with two prices in the sheet stays at two, run after run.
+        foreach (IGrouping<Guid, (PriceCell Cell, KnownProduct Product)> product in priced.GroupBy(p => p.Product.Id))
+        {
+            HashSet<long> says = [.. product.Select(p => p.Cell.Price.Cents)];
+            if (says.IsSubsetOf(SheetSaidLast(product.Key)))
+            {
+                alreadyHere += product.Count();
+                samePrices.UnionWith(product.Select(p => p.Cell.Id));
+                continue;
+            }
+            foreach (long cents in says)
+            {
+                edits.Add(new(PriceRules.Entity, newId(), OpKind.Create,
+                    new PriceEntry(product.Key, cents, today, PriceSource.Sheet, null).Fields()));
+                newPrices++;
+            }
+        }
+
         return new ImportPlan(edits, fresh, newCategories, newGroups, newMeals, newLines, newProducts, newPrices, alreadyHere, leftOut,
             unitQuestions, changedUnits, samePrices);
+    }
+
+    /// <summary>A meal ingredient's note: what was in its own parentheses, then its alternatives - "basmati; or brown".</summary>
+    private static string? LineNote(IngredientRef line)
+    {
+        string note = string.Join("; ", new[]
+        {
+            line.Note,
+            line.Alternatives.Count > 0 ? "or " + string.Join(" or ", line.Alternatives) : null,
+        }.OfType<string>());
+        return MealIngredientRules.NormaliseNote(Clip(note, MealIngredientRules.MaxNoteLength));
+    }
+
+    /// <summary>The prices the sheet gave a product on the last day it gave any - tombstones included.</summary>
+    private HashSet<long> SheetSaidLast(Guid product)
+    {
+        List<KnownPrice> said = [.. _known.Prices.Where(p => p.ProductId == product && p.Source == PriceSource.Sheet)];
+        if (said.Count == 0)
+            return [];
+        DateOnly last = said.Max(p => p.ObservedOn);
+        return [.. said.Where(p => p.ObservedOn == last).Select(p => p.PriceCents)];
     }
 
     private Target NewIngredient(

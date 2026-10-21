@@ -160,7 +160,8 @@ select), per price `import-price` (`data-id`) with `import-price-store`, `import
 `import-unit-question` (`data-key`, `data-says` = the unit the price says) with `import-unit-Gram|Millilitre|Each`; new
 ingredients `import-new-ingredient` with the same buttons; `import-left-out`. On Ingredients, a guessed unit is
 `ingredient-unit-guessed` (chip) and `ingredient-unit-guessed-note` (in the editor).
-`node .claude/tools/chrome-import-check.mjs <scratch>/import "$PWD/private/Grocery budget.xlsx" ["$PWD/private/<later>.xlsx"]`
+`node .claude/tools/chrome-import-check.mjs <scratch>/import <sheet.xlsx> [<later-sheet.xlsx>]` - the planner's exports
+are kept out of git (see AGENTS.md); pass their absolute paths -
 (ports 19352/19353, about 3 minutes with a later sheet) drives it from two profiles and prints counts only; with a later
 download of the sheet it imports that on top and checks nothing already there changed. Start from a fresh server
 database (stop the app, delete `mealplanner.db*`, start it) - against one already holding the import it can only say
