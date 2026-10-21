@@ -1,0 +1,350 @@
+@page "/shopping"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.LocalData.Sync
+@using AshersLab.MealPlanner.Shared.Data.Shopping
+@using AshersLab.MealPlanner.Shared.Data.Stores
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Prices
+@using AshersLab.MealPlanner.Shared.Domain.Shopping
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject NavigationManager Navigation
+
+@*
+    The shopping list, used one-handed in a shop with poor reception. Every line is the week's meals less the pantry, in
+    whole packs, under its usual store and category (ShoppingBook - computed here, from this browser's own database, so it
+    works offline). Tap a line - the whole row - to tick it bought; "Have" says it is already in the kitchen. Ticks are ops
+    like any edit: queued offline, synced when the phone is back in reception, shown on every other device. Below: extra
+    items typed by hand, what the pantry already covers (to check), and the other lists.
+*@
+
+<PageTitle>Shopping - Meal Planner</PageTitle>
+
+<LocalDataGate Start="Start">
+    <MudText Typo="Typo.h5" Component="h1">Shopping</MudText>
+
+    <div class="d-flex align-center flex-wrap gap-2 mt-1">
+        <MudText Typo="Typo.subtitle1" data-testid="shop-range">@ShoppingText.Range(_from, _to)</MudText>
+        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.DateRange"
+                   OnClick="() => _editingRange = !_editingRange" data-testid="shop-range-edit">Change days</MudButton>
+    </div>
+    @if (_editingRange)
+    {
+        <form class="d-flex flex-wrap gap-2 align-end mt-2" @onsubmit="ShowRange" @onsubmit:preventDefault data-testid="shop-range-form">
+            <label class="native-select flex-grow-1">
+                <span>From</span>
+                <input type="date" class="native-date" @bind="_newFrom" data-testid="shop-from"/>
+            </label>
+            <label class="native-select flex-grow-1">
+                <span>To</span>
+                <input type="date" class="native-date" @bind="_newTo" data-testid="shop-to"/>
+            </label>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="shop-tall" data-testid="shop-range-save">Show</MudButton>
+        </form>
+        @if (_rangeError is not null)
+        {
+            <MudText Color="Color.Error" Typo="Typo.body2" data-testid="shop-range-error">@_rangeError</MudText>
+        }
+    }
+
+    @if (_book is not null)
+    {
+        <MudPaper Outlined="true" Class="d-flex flex-wrap gap-4 px-4 py-2 mt-2">
+            <div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Spend</MudText>
+                <MudText Typo="Typo.h6" data-testid="shop-spend">@_book.Spend.Format()</MudText>
+            </div>
+            <div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Food eaten</MudText>
+                <MudText Typo="Typo.h6" data-testid="shop-eaten">@_book.Eaten.Format()</MudText>
+            </div>
+            <div class="flex-grow-1 align-self-center">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="shop-progress">@Progress()</MudText>
+            </div>
+        </MudPaper>
+
+        @if (_book.Groups.Count == 0 && _book.InPantry.Count == 0)
+        {
+            <MudText Class="pa-4 mud-text-secondary" data-testid="shop-empty">
+                Nothing to buy - the calendar has no meals with ingredients on these days, and no staple is running low.
+            </MudText>
+        }
+
+        @foreach (StoreGroup group in _book.Groups)
+        {
+            <MudText Typo="Typo.h6" Component="h2" Class="mt-5" data-testid="shop-store" data-id="@group.Store?.Id">@(group.Store?.Name ?? "No usual store")</MudText>
+            @foreach ((var category, IReadOnlyList<ShoppingLine> lines) in group.Categories)
+            {
+                <MudText Typo="Typo.overline" Component="h3" Class="d-block mt-2" data-testid="shop-category">@(category?.Name ?? "No category")</MudText>
+                <MudPaper Outlined="true">
+                    @foreach (ShoppingLine line in lines)
+                    {
+                        bool bought = line.Tick == ShoppingTick.Bought, have = line.Tick == ShoppingTick.HaveIt;
+                        <div class="@($"list-row shop-row d-flex align-center gap-2 pl-4 pr-2 {(bought || have ? "shop-ticked" : "")}")" @key="line.ItemId"
+                             data-testid="shop-line" data-id="@line.Ingredient.Id" data-tick="@line.Tick" data-need="@line.Plan.Need">
+                            <div class="d-flex align-center gap-3 flex-grow-1 shop-tap" role="checkbox" tabindex="0" aria-checked="@(bought ? "true" : "false")"
+                                 aria-label="@($"{line.Ingredient.Name}: bought")" @onclick="() => Tick(line, bought ? ShoppingTick.None : ShoppingTick.Bought)"
+                                 data-testid="shop-line-tap">
+                                <MudIcon Icon="@(bought ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                         Color="@(bought ? Color.Success : Color.Default)" Size="Size.Large"/>
+                                <div class="flex-grow-1">
+                                    <MudText Class="shop-name" data-testid="shop-line-name">@line.Ingredient.Name</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="shop-line-detail">@(have ? "have it" : ShoppingText.Detail(line))</MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Class="text-nowrap" data-testid="shop-line-cost">@(have ? "" : ShoppingText.Cost(line))</MudText>
+                            </div>
+                            <MudButton Variant="@(have ? Variant.Filled : Variant.Outlined)" Color="@(have ? Color.Secondary : Color.Default)" Class="shop-tall"
+                                       aria-label="@($"{line.Ingredient.Name}: have it already")"
+                                       OnClick="() => Tick(line, have ? ShoppingTick.None : ShoppingTick.HaveIt)" data-testid="shop-have">Have</MudButton>
+                        </div>
+                    }
+                </MudPaper>
+            }
+            @if (group.Extras.Count > 0)
+            {
+                <MudText Typo="Typo.overline" Component="h3" Class="d-block mt-2">Extras</MudText>
+                <MudPaper Outlined="true">
+                    @foreach (ShoppingListItem extra in group.Extras)
+                    {
+                        bool bought = extra.Tick == ShoppingTick.Bought;
+                        <div class="@($"list-row shop-row d-flex align-center gap-2 pl-4 pr-2 {(bought ? "shop-ticked" : "")}")" @key="extra.Id"
+                             data-testid="shop-extra" data-id="@extra.Id" data-tick="@extra.Tick">
+                            <div class="d-flex align-center gap-3 flex-grow-1 shop-tap" role="checkbox" tabindex="0" aria-checked="@(bought ? "true" : "false")"
+                                 aria-label="@($"{extra.Name}: bought")" @onclick="() => TickExtra(extra)" data-testid="shop-extra-tap">
+                                <MudIcon Icon="@(bought ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                         Color="@(bought ? Color.Success : Color.Default)" Size="Size.Large"/>
+                                <MudText Class="flex-grow-1 shop-name" data-testid="shop-extra-name">@extra.Name</MudText>
+                                <MudText Typo="Typo.body2" Class="text-nowrap" data-testid="shop-extra-cost">@(extra.PriceCents is { } c ? Money.Format(c) : "unpriced")</MudText>
+                            </div>
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" aria-label="@($"Remove {extra.Name}")" OnClick="() => RemoveExtra(extra)"
+                                           data-testid="shop-extra-delete"/>
+                        </div>
+                    }
+                </MudPaper>
+            }
+        }
+
+        <MudText Typo="Typo.h6" Component="h2" Class="mt-6">Add something</MudText>
+        <form class="d-flex flex-wrap gap-2 align-end" @onsubmit="AddExtra" @onsubmit:preventDefault data-testid="shop-extra-form">
+            <MudTextField T="string" @bind-Value="_extraName" Label="Bin bags, candles…" Variant="Variant.Outlined" Class="flex-grow-1"
+                          Immediate="true" MaxLength="Names.MaxLength" InputId="shop-extra-new-name" data-testid="shop-extra-new-name"/>
+            <label class="native-select">
+                <span>Store</span>
+                <select @bind="_extraStore" data-testid="shop-extra-new-store">
+                    <option value="">Anywhere</option>
+                    @foreach (Store store in _stores)
+                    {
+                        <option value="@store.Id">@store.Name</option>
+                    }
+                </select>
+            </label>
+            <MudTextField T="string" @bind-Value="_extraPrice" Label="Price (if known)" Variant="Variant.Outlined" Style="max-width: 9rem"
+                          Immediate="true" InputMode="@(InputMode.@decimal)" InputId="shop-extra-new-price" data-testid="shop-extra-new-price"/>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="shop-tall" data-testid="shop-extra-add">Add</MudButton>
+        </form>
+        @if (_extraError is not null)
+        {
+            <MudText Color="Color.Error" Typo="Typo.body2" data-testid="shop-extra-error">@_extraError</MudText>
+        }
+
+        @if (_book.InPantry.Count > 0)
+        {
+            <MudText Typo="Typo.h6" Component="h2" Class="mt-6">In the pantry</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Enough at home for these days, if the pantry is right. Tick to say you checked.</MudText>
+            <MudPaper Outlined="true" Class="mt-1">
+                @foreach (ShoppingLine line in _book.InPantry)
+                {
+                    bool have = line.Tick != ShoppingTick.None;
+                    <div class="@($"list-row shop-row d-flex align-center gap-3 px-4 shop-tap {(have ? "shop-ticked" : "")}")" @key="line.ItemId" role="checkbox" tabindex="0"
+                         aria-checked="@(have ? "true" : "false")" aria-label="@($"{line.Ingredient.Name}: checked")"
+                         @onclick="() => Tick(line, have ? ShoppingTick.None : ShoppingTick.HaveIt)"
+                         data-testid="shop-pantry-line" data-id="@line.Ingredient.Id" data-tick="@line.Tick">
+                        <MudIcon Icon="@(have ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                 Color="@(have ? Color.Success : Color.Default)" Size="Size.Large"/>
+                        <div class="flex-grow-1">
+                            <MudText Class="shop-name">@line.Ingredient.Name</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="shop-pantry-detail">@ShoppingText.Detail(line)</MudText>
+                        </div>
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        @if (_lists.Count > 0)
+        {
+            <MudText Typo="Typo.h6" Component="h2" Class="mt-6">Other lists</MudText>
+            <MudPaper Outlined="true" Class="mt-1">
+                @foreach (ShoppingList list in _lists)
+                {
+                    <a class="list-row d-flex align-center px-4 shop-row" href="@Link(list.StartsOn, list.EndsOn)" data-testid="shop-list-link" data-id="@list.Id">
+                        <MudText Class="flex-grow-1">@ShoppingText.Range(list.StartsOn, list.EndsOn)</MudText>
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight"/>
+                    </a>
+                }
+            </MudPaper>
+        }
+    }
+</LocalDataGate>
+
+@code {
+    /// <summary>"2026-10-26": the list's first day, so a link or a reload keeps it.</summary>
+    [SupplyParameterFromQuery(Name = "from")] public string? FromParameter { get; set; }
+
+    [SupplyParameterFromQuery(Name = "to")] public string? ToParameter { get; set; }
+
+    private ShoppingBook?      _book;
+    private List<Store>        _stores = [];
+    private List<ShoppingList> _lists  = [];
+
+    private DateOnly _from;
+    private DateOnly _to;
+    private bool     _chosen;
+
+    private bool      _editingRange;
+    private DateOnly? _newFrom;
+    private DateOnly? _newTo;
+    private string?   _rangeError;
+
+    private string? _extraName;
+    private string? _extraStore;
+    private string? _extraPrice;
+    private string? _extraError;
+
+    /// <summary>Set while a tap's ops are written: a second tap on a line in that moment would undo the first from stale state.</summary>
+    private bool _busy;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+
+    private static string Link(DateOnly from, DateOnly to) => $"shopping?from={OpValues.FormatDate(from)}&to={OpValues.FormatDate(to)}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (OpValues.TryParseDate(FromParameter, out DateOnly from) && OpValues.TryParseDate(ToParameter, out DateOnly to)
+            && ShoppingListRules.RangeProblem(from, to) is null)
+        {
+            bool changed = !_chosen || from != _from || to != _to;
+            (_from, _to, _chosen) = (from, to, true);
+            if (changed && Ready)
+                await Reload();
+        }
+        else if (_chosen && Ready)
+        {
+            // Back to /shopping with no days: choose again.
+            _chosen = false;
+            await Reload();
+        }
+    }
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        List<ShoppingList> lists = await db.ShoppingLists.AsNoTracking().Where(l => !l.Deleted).ToListAsync();
+        if (!_chosen)
+        {
+            // The list covering today, the latest started; otherwise the coming seven days.
+            (_from, _to) = lists.Where(l => l.StartsOn <= Today && l.EndsOn >= Today).OrderByDescending(l => l.StartsOn).FirstOrDefault() is { } current
+                ? (current.StartsOn, current.EndsOn)
+                : (Today, Today.AddDays(6));
+            _chosen = true;
+        }
+        _book   = await ShoppingBook.LoadAsync(db, _from, _to);
+        _stores = [.. (await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync()).OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)];
+        _lists  = [.. lists.Where(l => l.Id != _book.ListId && l.EndsOn >= Today.AddDays(-28)).OrderByDescending(l => l.StartsOn).Take(8)];
+        (_newFrom, _newTo) = (_from, _to);
+    }
+
+    /// <summary>"3 to buy · 2 in the trolley".</summary>
+    private string Progress()
+    {
+        List<ShoppingLine> lines = [.. _book!.Groups.SelectMany(g => g.Categories).SelectMany(c => c.Lines)];
+        int extras = _book.Extras.Count;
+        int done = lines.Count(l => l.Tick != ShoppingTick.None) + _book.Extras.Count(e => e.Tick == ShoppingTick.Bought);
+        int left = lines.Count + extras - done;
+        return left == 0 && done > 0 ? "all done" : $"{left} to get · {done} done";
+    }
+
+    private void ShowRange()
+    {
+        if (_newFrom is not { } from || _newTo is not { } to)
+        {
+            _rangeError = "Pick both days.";
+            return;
+        }
+        if (ShoppingListRules.RangeProblem(from, to) is { } problem)
+        {
+            _rangeError = problem;
+            return;
+        }
+        _rangeError   = null;
+        _editingRange = false;
+        Navigation.NavigateTo(Link(from, to));
+    }
+
+    private async Task Tick(ShoppingLine line, ShoppingTick to)
+    {
+        if (_busy || _book is null)
+            return;
+        _busy = true;
+        try
+        {
+            List<ShoppingEdit> edits;
+            await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
+                edits = await ShoppingTicking.EditsAsync(db, _book, line, to, Today, Guid.CreateVersion7);
+            await WriteAllAsync([.. edits.Select(e => new LocalEdit(e.Type, e.Id, e.Kind, e.Fields))]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TickExtra(ShoppingListItem extra)
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        try
+        {
+            ShoppingTick to = extra.Tick == ShoppingTick.Bought ? ShoppingTick.None : ShoppingTick.Bought;
+            await WriteAsync(SyncedEntities.ShoppingListItem, extra.Id, OpKind.Update, [new OpField(ShoppingItemRules.TickField, ShoppingTicks.Format(to))]);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddExtra()
+    {
+        long? price = null;
+        if (!string.IsNullOrWhiteSpace(_extraPrice))
+        {
+            price = Money.ParseCents(_extraPrice, out string? priceProblem);
+            if (priceProblem is not null)
+            {
+                _extraError = priceProblem;
+                return;
+            }
+        }
+        Guid? store = Guid.TryParse(_extraStore, out Guid s) ? s : null;
+        ExtraItemDraft draft = new(_extraName ?? "", store, price);
+        if (draft.Problem() is { } problem)
+        {
+            _extraError = problem;
+            return;
+        }
+
+        List<ShoppingEdit> list;
+        await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
+            list = await ShoppingTicking.ListAsync(db, _from, _to);
+        await WriteAllAsync([
+            .. list.Select(e => new LocalEdit(e.Type, e.Id, e.Kind, e.Fields)),
+            new LocalEdit(SyncedEntities.ShoppingListItem, Guid.CreateVersion7(), OpKind.Create, draft.FieldsChangedFrom(_book!.ListId, null)),
+        ]);
+        (_extraName, _extraPrice, _extraError) = (null, null, null);
+    }
+
+    private Task RemoveExtra(ShoppingListItem extra) => WriteAsync(SyncedEntities.ShoppingListItem, extra.Id, OpKind.Delete, []);
+}

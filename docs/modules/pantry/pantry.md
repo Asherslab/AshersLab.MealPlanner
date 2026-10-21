@@ -46,14 +46,16 @@ shopping list (which subtracts it), receipts (which add to it) or anything else 
 
 ## The ledger
 
-`StockMovement (Id, IngredientId, Quantity, OccurredOn, Reason, Deleted)`, in the ingredient's base unit. Rules in
-`Shared.Domain/Pantry/StockRules.cs`; appended and deleted (undo), never edited - updates are accepted only so a restored
-server can be given its fields back, as for prices.
+`StockMovement (Id, IngredientId, Quantity, OccurredOn, Reason, ShoppingItemId, Deleted)`, in the ingredient's base unit.
+Rules in `Shared.Domain/Pantry/StockRules.cs`; appended and deleted (undo), never edited - updates are accepted only so a
+restored server can be given its fields back, as for prices. `ShoppingItemId` names the shopping-list tick that wrote it,
+null for one made here: the list reads stock without its own ticks' movements, and unticking deletes them
+([the shopping list](../shopping/shopping-list.md)).
 
 | `Reason` | `Quantity` | Does |
 |---|---|---|
-| `Bought` | more than 0 | adds it - whole packs; later, ticked shopping-list lines and matched receipt lines |
-| `Adjusted` | not 0, usually negative | adds it - "threw this out"; down past zero is out |
+| `Bought` | more than 0 | adds it - whole packs, here or ticked bought on the shopping list; later, matched receipt lines |
+| `Adjusted` | not 0, usually negative | adds it - "threw this out"; down past zero is out; "have it" on the shopping list adds what it lacked |
 | `Counted` | 0 or more | **sets** the level - "out", "½ pack", "that's what's left" |
 
 What the calendar uses (`PantryBook`): a `Cooked` entry uses its meal's lines once, on the day it is cooked (the batch -
@@ -65,8 +67,8 @@ if it should be, the change is the `times` in `PantryBook.UsesAsync`.
 Stock (`Shared.Domain/Pantry/Stock.cs`, pure): the movements and uses folded per ingredient, day by day. An ingredient is
 `NotTracked` until its first movement - meals before it draw nothing, and there is no estimate. Then each day it is
 `InStock`, `Out` (someone said so) or `ProbablyOut` (the meals ran it down). `StockLedger.At(ingredient, day)` is the start
-of the day - after its hand changes, before its meals - **which is what the shopping list subtracts**: load with
-`PantryBook.LoadAsync(db, start, end)` and read `At(ingredient, start)`. `After` is the end of a day, `RunsOut` the first day
+of the day - after its hand changes, before its meals - **which is what the shopping list subtracts**: it loads
+`PantryBook.LoadAsync(db, start, end, ignoringItems: its own items)` and reads `At(ingredient, start)`. `After` is the end of a day, `RunsOut` the first day
 in a range whose meals take the last of it, and each `StockDay` carries `Short`, how much more the meals wanted than there
 was.
 

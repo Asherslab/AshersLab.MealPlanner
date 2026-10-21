@@ -70,11 +70,18 @@ public static class StockRules
     /// <summary>A <see cref="StockReason"/> by name.</summary>
     public const string ReasonField = "Reason";
 
+    /// <summary>
+    /// The shopping-list tick that wrote it - bought packs, or "have it" - or absent for one made in the pantry. The list
+    /// leaves its own ticks' movements out of the stock it subtracts, so ticking a line does not turn it into "in the
+    /// pantry" under the shopper's thumb; unticking deletes them.
+    /// </summary>
+    public const string ShoppingItemField = "ShoppingItemId";
+
     public const string Noun = "A stock change";
 
     public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal)
     {
-        IngredientField, QuantityField, OccurredOnField, ReasonField,
+        IngredientField, QuantityField, OccurredOnField, ReasonField, ShoppingItemField,
     };
 
     private static readonly string[] RequiredOnCreate = [IngredientField, QuantityField, OccurredOnField, ReasonField];
@@ -112,6 +119,7 @@ public static class StockRules
                                    && decimal.Round(quantity, Quantity.MaxDecimals) == quantity ? null : "The amount is not a quantity.",
                 OccurredOnField => OpValues.TryParseDate(field.Value, out _) ? null : "The date is not a date.",
                 ReasonField     => StockReasons.TryParse(field.Value, out _) ? null : "The reason is not bought, adjusted or counted.",
+                ShoppingItemField => OpValues.TryParseId(field.Value, out _) ? null : "The shopping item is not an id.",
                 _               => null,
             }) is { } problem)
             return problem;
@@ -123,14 +131,20 @@ public static class StockRules
     }
 }
 
-/// <summary>A new movement as the pantry writes it: every field, in one create.</summary>
-public sealed record StockEntry(Guid IngredientId, decimal Quantity, DateOnly OccurredOn, StockReason Reason)
+/// <summary>A new movement as the pantry or a shopping-list tick writes it: every field, in one create.</summary>
+public sealed record StockEntry(Guid IngredientId, decimal Quantity, DateOnly OccurredOn, StockReason Reason, Guid? ShoppingItemId = null)
 {
-    public IReadOnlyList<OpField> Fields() =>
-    [
-        new(StockRules.IngredientField, OpValues.FormatId(IngredientId)),
-        new(StockRules.QuantityField, OpValues.FormatDecimal(Quantity)),
-        new(StockRules.OccurredOnField, OpValues.FormatDate(OccurredOn)),
-        new(StockRules.ReasonField, StockReasons.Format(Reason)),
-    ];
+    public IReadOnlyList<OpField> Fields()
+    {
+        List<OpField> fields =
+        [
+            new(StockRules.IngredientField, OpValues.FormatId(IngredientId)),
+            new(StockRules.QuantityField, OpValues.FormatDecimal(Quantity)),
+            new(StockRules.OccurredOnField, OpValues.FormatDate(OccurredOn)),
+            new(StockRules.ReasonField, StockReasons.Format(Reason)),
+        ];
+        if (ShoppingItemId is { } item)
+            fields.Add(new(StockRules.ShoppingItemField, OpValues.FormatId(item)));
+        return fields;
+    }
 }

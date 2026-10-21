@@ -61,12 +61,18 @@ public sealed class PantryBook
     /// read only back to the first movement, which is all the stock needs.
     /// </param>
     /// <param name="through">The last day whose meals are drawn down: the furthest a projection is wanted.</param>
-    public static async Task<PantryBook> LoadAsync(DbContext db, DateOnly from, DateOnly through, CancellationToken cancellationToken = default)
+    /// <param name="ignoringItems">
+    /// Shopping-list items whose ticks' movements are left out: a list reads the stock as it was before anyone ticked it, so
+    /// a line ticked bought stays a line to buy (<see cref="StockMovement.ShoppingItemId"/>).
+    /// </param>
+    public static async Task<PantryBook> LoadAsync(DbContext db, DateOnly from, DateOnly through, CancellationToken cancellationToken = default,
+                                                   IReadOnlySet<Guid>? ignoringItems = null)
     {
         Dictionary<Guid, Ingredient> ingredients = await db.Set<Ingredient>().AsNoTracking().Where(i => !i.Deleted)
             .ToDictionaryAsync(i => i.Id, cancellationToken);
         List<StockMovement> movements = [.. (await db.Set<StockMovement>().AsNoTracking().Where(m => !m.Deleted).ToListAsync(cancellationToken))
-            .Where(m => ingredients.TryGetValue(m.IngredientId, out Ingredient? i) && !i.IsStaple)];
+            .Where(m => ingredients.TryGetValue(m.IngredientId, out Ingredient? i) && !i.IsStaple
+                        && !(m.ShoppingItemId is { } item && ignoringItems?.Contains(item) == true))];
 
         DateOnly first = movements.Count > 0 && movements.Min(m => m.OccurredOn) is var earliest && earliest < from ? earliest : from;
         List<StockUse> uses = first <= through ? await UsesAsync(db, ingredients, first, through, cancellationToken) : [];

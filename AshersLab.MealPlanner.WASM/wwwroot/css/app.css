@@ -261,3 +261,23 @@
     right: 0.75rem;
     top: 0.5rem;
 }
+
+/* The shopping list is used one-handed in a shop: every row and button is a big target (ShoppingPage). */
+.shop-row {
+    min-height: 60px;
+}
+
+.shop-tap {
+    cursor: pointer;
+    min-height: 60px;
+    user-select: none;
+}
+
+.shop-tall {
+    min-height: 48px;
+}
+
+.shop-ticked .shop-name {
+    text-decoration: line-through;
+    color: var(--mud-palette-text-secondary);
+}

@@ -19,10 +19,20 @@ public class StockRulesTests
         Assert.Equal(new[] { "IngredientId", "Quantity", "OccurredOn", "Reason" }, Fields(2000, StockReason.Bought).Select(f => f.Name));
         Assert.Equal(new[] { OpValues.FormatId(Mince), "1.5", "2026-10-26", "Counted" }, Fields(1.50m, StockReason.Counted).Select(f => f.Value));
 
-        foreach (string field in StockRules.Fields)
+        foreach (string field in StockRules.Fields.Where(f => f != StockRules.ShoppingItemField))
             Assert.NotNull(StockRules.OpProblem(OpKind.Create, [.. Fields(1, StockReason.Bought).Where(f => f.Name != field)]));
         Assert.NotNull(StockRules.OpProblem(OpKind.Create, [.. Fields(1, StockReason.Bought), new OpField("Note", "x")]));
         Assert.Null(StockRules.OpProblem(OpKind.Delete, []));
+    }
+
+    [Fact]
+    public void A_movement_a_shopping_list_tick_wrote_names_the_tick()
+    {
+        Guid tick = new("01900000-0000-7000-8000-0000000000b1");
+        List<OpField> fields = [.. new StockEntry(Mince, 2000, Mon, StockReason.Bought, tick).Fields()];
+        Assert.Equal(OpValues.FormatId(tick), fields.Single(f => f.Name == "ShoppingItemId").Value);
+        Assert.Null(StockRules.OpProblem(OpKind.Create, fields));
+        Assert.NotNull(StockRules.OpProblem(OpKind.Create, [.. Fields(1, StockReason.Bought), new OpField(StockRules.ShoppingItemField, "mince")]));
     }
 
     [Fact]

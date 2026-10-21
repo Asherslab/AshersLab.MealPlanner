@@ -27,6 +27,9 @@ public sealed class StockMovementEntity : SyncedEntity<StockMovement>
             case StockRules.ReasonField:
                 row.Reason = StockReasons.TryParse(field.Value, out StockReason reason) ? reason : throw Unreadable(field);
                 break;
+            case StockRules.ShoppingItemField:
+                row.ShoppingItemId = OpValues.TryParseId(field.Value, out Guid? item) ? item : throw Unreadable(field);
+                break;
             default:
                 throw new ArgumentException($"A stock change has no field '{field.Name}'.", nameof(field));
         }
@@ -38,6 +41,7 @@ public sealed class StockMovementEntity : SyncedEntity<StockMovement>
         new(StockRules.QuantityField, OpValues.FormatDecimal(row.Quantity)),
         new(StockRules.OccurredOnField, OpValues.FormatDate(row.OccurredOn)),
         new(StockRules.ReasonField, StockReasons.Format(row.Reason)),
+        new(StockRules.ShoppingItemField, OpValues.FormatId(row.ShoppingItemId)),
     ];
 
     private static ArgumentException Unreadable(OpField field) =>

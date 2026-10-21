@@ -52,6 +52,9 @@ Present tense, kept current, no dates.
 - [The pantry](modules/pantry/pantry.md) — stock on hand: a ledger of bought / adjusted / counted movements, what the
   calendar's meals use read rather than stored, never below zero, a count setting the level, staples as Have / Running low
   / Out, and the stock at a date the shopping list subtracts.
+- [The shopping list](modules/shopping/shopping-list.md) — the days' meals less the pantry in whole packs by store, why it
+  reads the pantry without its own ticks, what Bought and Have it write to stock, derived ids for two phones, and the
+  Spend and Eaten costs.
 - [Meals](modules/meals/meals.md) — meal groups, meals and their five kinds, a meal's ingredients, and its batch and
   per-serve cost (incomplete, never lower, when anything is unpriced).
 

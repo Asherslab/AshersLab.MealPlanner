@@ -71,6 +71,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "planning", "planning", "{8D
 		docs\modules\planning\README.md = docs\modules\planning\README.md
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "shopping", "shopping", "{A144BDA0-3528-4BEE-A5FC-29CC2A13168F}"
+	ProjectSection(SolutionItems) = preProject
+		docs\modules\shopping\shopping-list.md = docs\modules\shopping\shopping-list.md
+	EndProjectSection
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sync", "sync", "{40EBDCC4-B806-496B-A5E1-F709430AC2AB}"
 	ProjectSection(SolutionItems) = preProject
 		docs\modules\sync\browser-database.md = docs\modules\sync\browser-database.md
@@ -224,6 +229,7 @@ Global
 		{2140B86A-4D17-433F-81CE-037A454B86FE} = {331AE102-A8F0-47ED-9C68-E28C98929852}
 		{1F2FF96A-A9A7-42C3-9473-5E71361AA341} = {331AE102-A8F0-47ED-9C68-E28C98929852}
 		{8D9E495F-DB87-44DB-916E-71F72DB23F89} = {331AE102-A8F0-47ED-9C68-E28C98929852}
+		{A144BDA0-3528-4BEE-A5FC-29CC2A13168F} = {331AE102-A8F0-47ED-9C68-E28C98929852}
 		{40EBDCC4-B806-496B-A5E1-F709430AC2AB} = {331AE102-A8F0-47ED-9C68-E28C98929852}
 		{9F36046B-D670-48EE-8A95-18FFAED4C4BF} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
 		{E246D070-6AAB-4CF7-B7DE-F885A8F04473} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}

@@ -5,6 +5,7 @@ using AshersLab.MealPlanner.Shared.Data.Pantry;
 using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
+using AshersLab.MealPlanner.Shared.Data.Shopping;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Domain;
 using AshersLab.MealPlanner.Shared.Domain.Meals;
@@ -65,10 +66,14 @@ public static class SyncedEntities
 
     public static readonly StockMovementEntity StockMovement = new();
 
+    public static readonly ShoppingListEntity ShoppingList = new();
+
+    public static readonly ShoppingListItemEntity ShoppingListItem = new();
+
     public static readonly IReadOnlyList<SyncedEntity> All =
     [
         Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal, MealIngredient,
-        Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice, CalendarEntry, StockMovement,
+        Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice, CalendarEntry, StockMovement, ShoppingList, ShoppingListItem,
     ];
 
     // Text in the op's own format, converted here rather than by the provider: see PriceObservation.ObservedOn.
@@ -255,6 +260,29 @@ public static class SyncedEntities
             movement.Property(m => m.OccurredOn).HasConversion(DateText).HasMaxLength(10);
             // An ingredient's ledger. Not a foreign key.
             movement.HasIndex(m => m.IngredientId);
+        });
+
+        modelBuilder.Entity<ShoppingList>(list =>
+        {
+            list.ToTable("ShoppingList");
+            list.HasKey(l => l.Id);
+            // Derived from its dates (ShoppingListRules.ListId), so two devices make the same list.
+            list.Property(l => l.Id).ValueGeneratedNever();
+            list.Property(l => l.StartsOn).HasConversion(DateText).HasMaxLength(10);
+            list.Property(l => l.EndsOn).HasConversion(DateText).HasMaxLength(10);
+        });
+
+        modelBuilder.Entity<ShoppingListItem>(item =>
+        {
+            item.ToTable("ShoppingListItem");
+            item.HasKey(i => i.Id);
+            // A tick's id is derived from its list and ingredient (ShoppingItemRules.TickId); an extra's is minted.
+            item.Property(i => i.Id).ValueGeneratedNever();
+            item.Property(i => i.Name).HasMaxLength(Names.MaxLength);
+            // By name, as the op carries it.
+            item.Property(i => i.Tick).HasConversion<string>().HasMaxLength(10);
+            // A list's items. Not a foreign key.
+            item.HasIndex(i => i.ListId);
         });
     }
 }

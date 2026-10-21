@@ -3,6 +3,7 @@
 @using AshersLab.MealPlanner.LocalData.Planning
 @using AshersLab.MealPlanner.Shared.Data.Meals
 @using AshersLab.MealPlanner.Shared.Data.Planning
+@using AshersLab.MealPlanner.Shared.Data.Shopping
 @using AshersLab.MealPlanner.Shared.Data.Sync
 @using AshersLab.MealPlanner.Shared.Domain.Planning
 @using AshersLab.MealPlanner.Shared.Domain.Sync
@@ -135,6 +136,21 @@
         </MudPaper>
     </MudHidden>
 
+    @* The week's two costs: what the shop costs (whole packs after the pantry), and what the food eaten was worth. *@
+    <MudPaper Outlined="true" Class="d-flex flex-wrap align-center gap-4 px-4 py-2 mt-4" data-testid="cal-week-cost">
+        <div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Spend this week</MudText>
+            <MudText Typo="Typo.subtitle1" data-testid="cal-week-spend">@_week.Spend.Format()</MudText>
+        </div>
+        <div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Food eaten</MudText>
+            <MudText Typo="Typo.subtitle1" data-testid="cal-week-eaten">@_week.Eaten.Format()</MudText>
+        </div>
+        <MudSpacer/>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ShoppingCart" Href="@($"shopping?from={OpValues.FormatDate(_monday)}&to={OpValues.FormatDate(_monday.AddDays(6))}")"
+                   data-testid="cal-shopping">Shopping list</MudButton>
+    </MudPaper>
+
     @if (ServesNotes() is { Count: > 0 } notes)
     {
         <MudText Typo="Typo.h6" Component="h2" Class="mt-6">Serves</MudText>
@@ -174,6 +190,7 @@
     private CalendarBook             _calendar = null!;
     private ServesBook               _serves   = null!;
     private MealCostBook             _costs    = null!;
+    private ShoppingBook             _week     = null!;
     private List<Slot>               _slots    = [];
     private List<Person>             _people   = [];
     private Dictionary<Guid, Meal>   _meals    = [];
@@ -203,6 +220,7 @@
         _calendar = await CalendarBook.LoadAsync(db, _monday, _monday.AddDays(6));
         _serves   = await ServesBook.LoadAsync(db, _monday, _monday.AddDays(6));
         _costs    = await MealCostBook.LoadAsync(db);
+        _week     = await ShoppingBook.LoadAsync(db, _monday, _monday.AddDays(6));
         _slots    = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _meals    = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id);

@@ -6,6 +6,7 @@ using AshersLab.MealPlanner.Shared.Data.Pantry;
 using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
+using AshersLab.MealPlanner.Shared.Data.Shopping;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,10 @@ public class LocalDbContext(
     public DbSet<CalendarEntry> CalendarEntries => Set<CalendarEntry>();
 
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+
+    public DbSet<ShoppingList> ShoppingLists => Set<ShoppingList>();
+
+    public DbSet<ShoppingListItem> ShoppingListItems => Set<ShoppingListItem>();
 
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 

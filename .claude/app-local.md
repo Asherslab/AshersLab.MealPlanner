@@ -219,6 +219,20 @@ product gives a pack), `pantry-amount` (input id) with `pantry-amount-count` / `
 meals on tomorrow and the day after next, and expects nothing else on the server to use its run-named mince. Compare
 `StockMovement.Quantity` with `cast(Quantity as real)` - decimal as text is "1000.0" on the server and "1000" in a browser.
 
+**Shopping** (`/shopping?from=yyyy-mm-dd&to=yyyy-mm-dd`, `nav-shopping`; without the query, the list covering today):
+`shop-range`, `shop-range-edit` (opens `shop-range-form` with native dates `shop-from` / `shop-to` and `shop-range-save`),
+`shop-spend`, `shop-eaten`, `shop-progress`; store headings `shop-store` (`data-id`), categories `shop-category`; per line
+`shop-line` (`data-id` = the ingredient, `data-tick` = `None|HaveIt|Bought`, `data-need` = `Buy|InPantry|Staple`) holding
+`shop-line-tap` (the whole tap target - bought), `shop-line-name`, `shop-line-detail`, `shop-line-cost` and the button
+`shop-have`; extras `shop-extra` (`data-id`, `data-tick`) with `shop-extra-tap`, `shop-extra-name`, `shop-extra-cost`,
+`shop-extra-delete`; the add form `shop-extra-form` (`shop-extra-new-name` / `shop-extra-new-price` input ids,
+`shop-extra-new-store` native select, `shop-extra-add`); "In the pantry" `shop-pantry-line` (`data-id`, `data-tick`) with
+`shop-pantry-detail`; `shop-list-link`. Under the calendar's week: `cal-week-cost` with `cal-week-spend`, `cal-week-eaten`,
+`cal-shopping`. `node .claude/tools/chrome-shopping-check.mjs <scratch>/shop` (ports 19362/19363, about two minutes)
+drives it from two profiles, B phone-sized and offline for its ticks. **It needs a fresh server database** (stop the app,
+delete `mealplanner.db*`, start it): it checks Spend and Eaten to the cent, and any other meal or running-low staple on
+the same days adds to them.
+
 **`build_solution` after a source edit sometimes needs running twice** before the test project's copies of `Shared.*.dll`
 are newer than the source (seen repeatedly on 2026-10-22, also with `get_file_problems` first). Check `[ dll -nt source ]`
 before trusting a test run, above all a mutation run - a stale one passes.

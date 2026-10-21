@@ -23,6 +23,9 @@ public class StockMovement : ISyncedRow
 
     public StockReason Reason { get; set; }
 
+    /// <summary>The shopping-list tick that wrote it, or null for one made in the pantry. Not a foreign key.</summary>
+    public Guid? ShoppingItemId { get; set; }
+
     public bool Deleted { get; set; }
 
     public StockEvent Event() => new(IngredientId, OccurredOn, StockEvent.From(Reason), Quantity, Id);
