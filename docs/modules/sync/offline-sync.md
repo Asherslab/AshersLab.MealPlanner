@@ -186,25 +186,32 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   step commits on its own and repeating one is harmless, so a round that dies halfway loses nothing.
 - **A snapshot is merged, not copied** (`LocalOps.ApplySnapshotAsync`): each field at its own clock, so an
   unsynced local edit newer than the server's value survives.
-- **What a restored server lost comes back from the browsers** (`LocalOps.QueueWhatTheServerLostAsync`, on a
+- **What a restored server lost comes back from the browsers** (`LocalOps.WhatTheServerLacksAsync`, on a
   `HistoryLost` snapshot). Every field newer here than in the snapshot is queued as an update **with the clock
   that set it, as an op from the device that made the edit** (`OutboxOp.DeviceId`), so it merges on the server
-  exactly as the original did. Its op id is derived from the edit, so two browsers giving back the same edit
-  send one op id and the server logs it once. A tombstone the snapshot lacks goes back as a new delete from this
+  exactly as the original did. **The device matters**: the server refuses an op whose clock names another device,
+  so another phone's edit sent as this one's is refused and lost for good. Its op id is derived from the edit, so
+  two browsers giving back the same edit send one op id and the server logs it once. An edit still in the outbox is
+  not queued twice - it goes back by itself. A tombstone the snapshot lacks goes back as a new delete from this
   device (a delete needs no clock - it wins). Seen: a restore that lost a create, a rename and another browser's
   create got all three back from the first browser to reconnect; the second found nothing missing.
 - **A server that came back empty is the planner's call, never the browser's** - see "The server came back empty"
   below. Until they answer, that browser pushes and pulls nothing.
-- **When a round runs** (`WASM/Sync/SyncLoop.cs`): on start; after every edit; when the change stream reports a
-  seq other than the cursor's (a restored server reports one *below* it), or reconnects after a drop; on the
-  browser's `online` event (`wwwroot/js/connectivity.js`); every 5 s while the server cannot be reached; and every
-  30 s regardless. The 5 s retry is not optional: an idle open stream can survive the network going away, so it
-  cannot be relied on to notice the network coming back.
-- **Offline is not the same as broken** (`LocalData/Sync/SyncFailure.cs`). Not reaching the server - a failed
-  fetch, `Unavailable` (also what the Supervisor's 502/503 become while the add-on restarts), a cut-off response -
-  is "Offline", logged at Information, retried every 5 s. Anything else - a pulled op that will not apply, a server
-  error, `Unimplemented` - is "Failed": logged as an error and shown. It does not fix itself: a pull that fails
-  rolls back, the cursor stays put, and this browser receives nothing after that op until the cause is fixed.
+- **When a round runs** (`WASM/Sync/SyncLoop.cs`, its decisions in `LocalData/Sync/SyncSchedule.cs` and tested in
+  `Tests/Sync/SyncScheduleTests.cs`): on start; after every edit; when the change stream reports a seq other than
+  the cursor's (a restored server reports one *below* it), or reconnects after a drop; on the browser's `online`
+  event (`wwwroot/js/connectivity.js`); every 5 s while the server cannot be reached; and every 30 s regardless. The
+  5 s retry is not optional: an idle open stream can survive the network going away, so it cannot be relied on to
+  notice the network coming back.
+- **Offline is not the same as broken** (`LocalData/Sync/SyncFailure.cs`, `SyncSchedule.AfterFailure`). Not reaching
+  the server - a failed fetch, `Unavailable` (also what the Supervisor's 502/503 become while the add-on restarts), a
+  cut-off response - is "Offline", logged at Information, retried every 5 s. Anything else - a pulled op that will
+  not apply, a server error, `Unimplemented` - is "Failed": logged as an error and shown. It does not fix itself: a
+  pull that fails rolls back, the cursor stays put, and this browser receives nothing after that op until the cause
+  is fixed. **While Failed, change notices do not start rounds** - the stream's 25 s heartbeat and every other
+  device's edit would each re-run a round that cannot succeed - so it retries every 30 s, on the planner's own edits,
+  and when they tap the chip. A dropped stream never turns "Sync problem", "Update needed" or "Paused · needs you"
+  into "Offline".
 - **Every window runs its own loop.** Safe because every step is idempotent; two windows pushing the same outbox
   only do the work twice (seen: the server logged a second window's create exactly once).
 
@@ -258,8 +265,11 @@ its outbox is in SQLite, survives the reload, is migrated by the new build and t
 the same session shows "Update needed" instead of reloading in a loop.
 
 Bump `Current` when an entity's fields or their meaning change in a way an older browser would misread; raise
-`OldestSupported` when the server can no longer accept the older shape. **While nothing is in production, wipe
-both databases instead** - the version is 1 and nothing older exists.
+`OldestSupported` when the server can no longer accept the older shape. A change to *how* sync works counts, not
+only an entity's shape: version 2 is the restore check - a pull carries the chain at its cursor and may be answered
+with a `HistoryLost` snapshot - which a version-1 browser can neither send nor read, so both `Current` and
+`OldestSupported` are 2. **While nothing is in production, wipe both databases instead** of keeping an old version
+alive.
 
 The refusal is tested over gRPC-Web for all three calls (`SyncEndToEndTests.Refuses_a_client_on_a_protocol_version_it_cannot_read`).
 The browser's reload-on-refusal has not been seen in a browser: it needs a server built with a higher
@@ -326,6 +336,9 @@ window as a *tab* failed: Chrome throttled the hidden tab, whose rounds then ran
 flapped to "Offline" each time its idle change stream dropped. Windows side by side, as the owner uses them, are
 not throttled.
 
+2026-10-21, after protocol 2 and the `SyncSchedule` split: `chrome-sync-check.mjs`, `chrome-restore-check.mjs` (a real
+backup restored under both profiles) and `chrome-server-reset-check.mjs` (two wipes) all passed again unchanged.
+
 The chip in the user's Chrome with a page's `fetch` patched: a `Pull` answered with gRPC status 13 showed red "Sync
 problem" and logged `fail: ... Sync round failed` with the exception; a rejected `fetch` showed "Offline"; restored,
 "Synced".
@@ -335,9 +348,16 @@ The in-process tests cover the same cases against real hosts over gRPC-Web: `Tes
 applier, the server, a snapshot and a pull, more than one pull page, the change stream, overlapping writes in one
 window, rejected ops and the browser refusing exactly what the server would) and `Tests/Sync/SyncRecoveryTests.cs`
 (a second host started on the first's backup: cursor past the end, and seqs renumbered by another browser; an
-accepted op lost to a restore) and `Tests/Sync/ServerReplacedTests.cs` (a new database: asking, sending from two
-browsers in either order, clearing, one answer only). `Tests/Sync/HookedServer.cs` lets a test edit between a round's push
+accepted op lost to a restore; another device's edit given back as that device's; two browsers giving back the same
+edit, logged once; an edit still queued when history is lost, sent once) and `Tests/Sync/ServerReplacedTests.cs` (a
+new database: asking, not asking about a tombstone it never had, sending from two browsers in either order, clearing,
+one answer only). `Tests/Sync/HookedServer.cs` lets a test edit between a round's push
 and its pull, lose an answer, or cut the network mid-round - without it the outbox is always empty when a snapshot
-arrives and the snapshot paths go untested. Each of these was checked by breaking the code it covers (no outbox
-replay, no chain check, dropping accepted ops, no tombstone, `HasMore` always false, no push-back): every one failed at
-least one test. `ServerReplacedTests` has not had that treatment.
+arrives and the snapshot paths go untested. Each of these was checked by breaking the code it covers, and every break
+failed at least one test: no outbox replay, no chain check, dropping accepted ops, no tombstone, `HasMore` always
+false, no push-back; a given-back edit sent as this device's, a minted op id for it, queuing an edit already in the
+outbox; and for a new database, the server logging a push aimed at another epoch, taking the snapshot without
+asking, asking about tombstones of rows it never had, a second answer applying, a round that pushes while the
+question is open, "clear" keeping the outbox, "send" forgetting to compare the next snapshot. The SyncLoop decisions
+were broken the same way (a failing round kicked by notices, a dropped stream hiding "Sync problem", the refusal
+classified as a failure).

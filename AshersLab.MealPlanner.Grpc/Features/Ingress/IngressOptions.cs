@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 
 namespace AshersLab.MealPlanner.Grpc.Features.Ingress;
 
@@ -24,11 +25,23 @@ public sealed class IngressOptions
     public string? TrustedProxy { get; set; }
 
     public IPAddress? TrustedProxyAddress =>
-        TrustedProxy is { Length: > 0 } configured ? IPAddress.Parse(configured) : null;
+        TrustedProxy is { Length: > 0 } configured ? Address(configured) ?? throw new FormatException($"Not an address: '{configured}'.") : null;
 
     /// <summary>
     /// At startup (<c>ValidateOnStart</c>): a typo in the add-on's environment stops the host with this message,
     /// instead of answering every request with a 500 from a parse inside the middleware.
     /// </summary>
-    public bool IsValid => TrustedProxy is not { Length: > 0 } configured || IPAddress.TryParse(configured, out _);
+    public bool IsValid => TrustedProxy is not { Length: > 0 } configured || Address(configured) is not null;
+
+    /// <summary>
+    /// An IPv6 address, or an IPv4 one written out in full. <see cref="IPAddress.TryParse(string, out IPAddress)"/>
+    /// also takes the old shorthands - "172.30.32" is 172.30.0.32, and padded octets ("172.30.32.010") and bare
+    /// numbers are accepted too - so a dropped or padded octet would quietly trust some other machine and refuse the
+    /// Supervisor, instead of stopping the host. Written out in full, an IPv4 address reads back as itself.
+    /// </summary>
+    private static IPAddress? Address(string configured) =>
+        IPAddress.TryParse(configured, out IPAddress? address)
+        && (address.AddressFamily == AddressFamily.InterNetworkV6 || address.ToString() == configured)
+            ? address
+            : null;
 }

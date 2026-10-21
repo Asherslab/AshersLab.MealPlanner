@@ -14,9 +14,14 @@ namespace AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Sync;
 /// </remarks>
 public static class SyncProtocol
 {
-    public const int Current = 1;
+    /// <summary>
+    /// 2: a pull carries the chain at its cursor and may be answered with a <c>HistoryLost</c> snapshot, and an op
+    /// stays queued until the cursor passes it. A version-1 browser sends no chain, so the server cannot tell it its
+    /// cursor names ops a restore renumbered, and it cannot read the snapshot's reason - refused, so it reloads.
+    /// </summary>
+    public const int Current = 2;
 
-    public const int OldestSupported = 1;
+    public const int OldestSupported = 2;
 
     /// <summary>
     /// The gRPC status for a refused version is <c>FailedPrecondition</c> with this as its detail, so the client

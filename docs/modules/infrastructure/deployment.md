@@ -139,7 +139,11 @@ set. When it is:
    means something in between did not, and the request is treated as nobody's (`IngressRequest.UserFrom`).
 
 `Ingress:TrustedProxy` that is not an IP address stops the host at startup ("Ingress:TrustedProxy is not an IP
-address.", `ValidateOnStart` in `Program.cs`) rather than failing every request. Reviewed 2026-10-21 against the
+address.", `ValidateOnStart` in `Program.cs`) rather than failing every request. **IPv4 must be written out in full**
+(`IngressOptions.Address`): .NET's `IPAddress.TryParse` also takes the old shorthands, so a dropped octet
+(`172.30.32` is 172.30.0.32), a padded one (`172.30.32.010`) or a bare number would otherwise be accepted, and a typo
+could trust some other machine and refuse the Supervisor - every page a 403 instead of a host that will not start.
+IPv6 is taken as written (`IngressTests.A_trusted_proxy_is_an_ipv6_address_or_an_ipv4_one_in_full`). Reviewed 2026-10-21 against the
 Supervisor's source: the only trusted input is the peer address, and the base path is held to plain path segments
 before it is written into HTML; no other defect found.
 

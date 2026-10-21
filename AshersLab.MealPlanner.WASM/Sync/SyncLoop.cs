@@ -19,10 +19,11 @@ namespace AshersLab.MealPlanner.WASM.Sync;
 /// <remarks>
 /// A round runs on start, after every local edit (<see cref="Kick"/>), whenever the change stream says the server
 /// has moved past this browser's cursor, when the stream comes back after a drop, on the browser's <c>online</c>
-/// event, every 5 s while rounds are failing, and every 30 s regardless.
+/// event, every 5 s while the server cannot be reached, and every 30 s regardless (<see cref="SyncSchedule"/>).
 /// A failure to reach the server counts as "offline" and is retried every 5 s - the outbox is in SQLite, so nothing
-/// is lost by waiting. Any other failure is "failed": logged as an error, shown on the chip, retried every 30 s
-/// (<see cref="SyncFailure"/>). The server refusing this build's sync protocol version reloads the app once. A server
+/// is lost by waiting. Any other failure is "failed": logged as an error, shown on the chip, retried every 30 s and
+/// on the planner's own edits, but not on change notices (<see cref="SyncSchedule.KickOnNotice"/>). The server
+/// refusing this build's sync protocol version reloads the app once. A server
 /// that came back empty while this browser holds what it lacks stops every round until the planner answers
 /// <see cref="DecideAsync"/> (<c>ServerReplacedDialog</c> asks).
 /// <para>
@@ -41,13 +42,6 @@ public sealed class SyncLoop(
 {
     private const string ReloadedKey = "mealplanner-sync-protocol-reload";
 
-    private static readonly TimeSpan Fallback     = TimeSpan.FromSeconds(30);
-
-    /// <summary>
-    /// While a round is failing. Short, because signal in a shop comes and goes for seconds at a time, and an
-    /// open change stream does not always notice the network went (an idle connection can survive it).
-    /// </summary>
-    private static readonly TimeSpan OfflineRetry = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(10);
 
     private readonly CancellationTokenSource _stopping = new();
@@ -115,7 +109,7 @@ public sealed class SyncLoop(
             try
             {
                 // Failed waits the 30 s fallback: retrying a broken pull every 5 s only fills the log.
-                await _wake.WaitAsync(Status.Connection == SyncConnection.Offline ? OfflineRetry : Fallback, _stopping.Token);
+                await _wake.WaitAsync(SyncSchedule.Wait(Status.Connection), _stopping.Token);
             }
             catch (OperationCanceledException)
             {
@@ -166,23 +160,26 @@ public sealed class SyncLoop(
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
-        catch (RpcException ex) when (IsRefusal(ex))
-        {
-            await Refused();
-        }
-        catch (Exception ex) when (SyncFailure.IsOffline(ex))
-        {
-            // Offline, the server restarting, a proxy timing out: all the same to the planner. Edits wait.
-            logger.LogInformation("Sync round could not reach the server, will retry: {Message}", ex.Message);
-            await SetStatus(SyncConnection.Offline, null, Status.LastSyncedAt);
-        }
         catch (Exception ex)
         {
-            // Not the network: a pulled op that will not apply, a server error, a bug. Retrying does not fix it -
-            // a pull that fails keeps the cursor where it is, so nothing after it arrives - so it is shown.
-            logger.LogError(ex, "Sync round failed");
-            await SetStatus(SyncConnection.Failed, $"Sync is not working: {ex.Message}. Changes are kept on this device.",
-                Status.LastSyncedAt);
+            switch (SyncSchedule.AfterFailure(ex))
+            {
+                case SyncConnection.Refused:
+                    await Refused();
+                    break;
+                case SyncConnection.Offline:
+                    // Offline, the server restarting, a proxy timing out: all the same to the planner. Edits wait.
+                    logger.LogInformation("Sync round could not reach the server, will retry: {Message}", ex.Message);
+                    await SetStatus(SyncConnection.Offline, null, Status.LastSyncedAt);
+                    break;
+                default:
+                    // Not the network: a pulled op that will not apply, a server error, a bug. Retrying does not fix it -
+                    // a pull that fails keeps the cursor where it is, so nothing after it arrives - so it is shown.
+                    logger.LogError(ex, "Sync round failed");
+                    await SetStatus(SyncConnection.Failed, $"Sync is not working: {ex.Message}. Changes are kept on this device.",
+                        Status.LastSyncedAt);
+                    break;
+            }
         }
     }
 
@@ -202,8 +199,7 @@ public sealed class SyncLoop(
                 {
                     backoff = TimeSpan.FromSeconds(1);
 
-                    // != rather than >: a server restored from an older backup announces a seq below the cursor.
-                    if (Status.Connection != SyncConnection.Online || notice.ServerEpoch != _epoch || notice.LatestSeq != _pulledThrough)
+                    if (SyncSchedule.KickOnNotice(Status.Connection, _epoch, _pulledThrough, notice.ServerEpoch, notice.LatestSeq))
                         Kick();
                 }
             }
@@ -211,7 +207,7 @@ public sealed class SyncLoop(
             {
                 return;
             }
-            catch (RpcException ex) when (IsRefusal(ex))
+            catch (RpcException ex) when (SyncSchedule.IsRefusal(ex))
             {
                 await Refused();
                 return;
@@ -219,9 +215,8 @@ public sealed class SyncLoop(
             catch (Exception ex)
             {
                 logger.LogInformation("Change stream dropped, reconnecting in {Seconds}s: {Message}", backoff.TotalSeconds, ex.Message);
-                // Only the rounds say Failed; a dropped stream says nothing about whether they work.
-                if (Status.Connection is not (SyncConnection.Refused or SyncConnection.Failed or SyncConnection.WaitingForChoice))
-                    await SetStatus(SyncConnection.Offline, null, Status.LastSyncedAt);
+                if (SyncSchedule.AfterStreamDropped(Status.Connection) is { } connection)
+                    await SetStatus(connection, null, Status.LastSyncedAt);
             }
 
             try
@@ -236,9 +231,6 @@ public sealed class SyncLoop(
             backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, MaxBackoff.Ticks));
         }
     }
-
-    private static bool IsRefusal(RpcException ex) =>
-        ex.StatusCode == StatusCode.FailedPrecondition && ex.Status.Detail == SyncProtocol.RefusedStatus;
 
     /// <summary>
     /// The server cannot read this build's ops: a newer app has been deployed. Reload once to fetch it - the
@@ -307,22 +299,6 @@ public sealed class SyncLoop(
         await _stopping.CancelAsync();
         _stopping.Dispose();
     }
-}
-
-public enum SyncConnection
-{
-    Connecting,
-    Online,
-    Offline,
-
-    /// <summary>The server refused this build's sync protocol version.</summary>
-    Refused,
-
-    /// <summary>The server was reachable and the round still failed - see <see cref="SyncFailure"/>.</summary>
-    Failed,
-
-    /// <summary>The server came back empty; nothing syncs until the planner chooses - see <see cref="SyncStatus.Replaced"/>.</summary>
-    WaitingForChoice,
 }
 
 /// <param name="Pending">Edits in the outbox, not yet confirmed by the server.</param>

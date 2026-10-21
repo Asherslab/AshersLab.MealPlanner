@@ -72,6 +72,27 @@ public sealed class ServerReplacedTests
     }
 
     [Fact]
+    public async Task A_deleted_row_the_new_database_never_had_is_not_worth_asking_about()
+    {
+        // Added and deleted before the wipe: all this browser holds is the tombstone, of nothing the planner would miss.
+        await using MealPlannerHost old = new();
+        await using TestBrowser a = await TestBrowser.OpenAsync(old.CreateGrpcWebClient<ISyncService>());
+        Guid typo = await a.CreateIngredientAsync("fluor");
+        await a.SyncAsync();
+        a.Now = a.Now.AddMinutes(1);
+        await a.DeleteAsync(typo);
+        await a.SyncAsync();
+
+        await using MealPlannerHost fresh = new();
+        a.Server = fresh.CreateGrpcWebClient<ISyncService>();
+        SyncRoundResult round = await a.SyncAsync();
+
+        Assert.Null(round.Replaced);
+        Assert.Equal(await EpochAsync(fresh), (await a.StateAsync()).ServerEpoch);
+        Assert.Equal(MealPlannerHost.SeedOps, await OpCountAsync(fresh));
+    }
+
+    [Fact]
     public async Task A_deleted_seed_is_something_the_new_database_lacks()
     {
         await using MealPlannerHost old = new();

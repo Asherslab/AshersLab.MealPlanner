@@ -153,10 +153,24 @@ public class IngressTests
         Assert.NotNull(IngressRequest.UserFrom(headers));
     }
 
-    [Fact]
-    public async Task Refuses_to_start_on_a_trusted_proxy_that_is_not_an_address()
+    [Theory]
+    [InlineData("172.30.32.2", true)]
+    [InlineData("::ffff:172.30.32.2", true)]
+    [InlineData("fd00::2", true)]
+    [InlineData("172.30.32", false)]           // IPAddress.TryParse: 172.30.0.32
+    [InlineData("172.30.32.010", false)]       // IPAddress.TryParse accepts the padding
+    [InlineData("2887655426", false)]          // IPAddress.TryParse: 172.30.32.2 as one number - right, but unreadable
+    [InlineData("172.30.32.2.5", false)]
+    [InlineData("supervisor", false)]
+    public void A_trusted_proxy_is_an_ipv6_address_or_an_ipv4_one_in_full(string configured, bool valid) =>
+        Assert.Equal(valid, new IngressOptions { TrustedProxy = configured }.IsValid);
+
+    [Theory]
+    [InlineData("172.30.32.2.5")]
+    [InlineData("172.30.32")]
+    public async Task Refuses_to_start_on_a_trusted_proxy_that_is_not_an_address(string configured)
     {
-        await using MealPlannerHost host = new MealPlannerHost().BehindIngress("172.30.32.2.5");
+        await using MealPlannerHost host = new MealPlannerHost().BehindIngress(configured);
 
         Exception thrown = Assert.ThrowsAny<Exception>(() => host.CreateClient());
 

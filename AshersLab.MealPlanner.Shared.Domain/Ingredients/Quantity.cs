@@ -49,10 +49,28 @@ public static partial class Quantity
             return null;
         }
 
-        decimal amount = decimal.Parse(match.Groups["amount"].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
-        decimal count  = match.Groups["count"].Success ? decimal.Parse(match.Groups["count"].Value, CultureInfo.InvariantCulture) : 1;
-        return count * amount * factor.Value;
+        // The shape allows any number of digits, so a pasted run of them is more than a decimal holds: refused, never
+        // thrown - this runs while the sheet renders its helper text.
+        decimal count = 1;
+        if (!decimal.TryParse(match.Groups["amount"].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal amount)
+            || (match.Groups["count"].Success && !decimal.TryParse(match.Groups["count"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out count)))
+        {
+            problem = TooBig;
+            return null;
+        }
+
+        try
+        {
+            return count * amount * factor.Value;
+        }
+        catch (OverflowException)
+        {
+            problem = TooBig;
+            return null;
+        }
     }
+
+    private const string TooBig = "That number is too big.";
 
     /// <summary>
     /// Null when <paramref name="quantity"/> is within the limits every quantity shares; otherwise why not, with
@@ -75,8 +93,17 @@ public static partial class Quantity
         _                                         => $"{Number(quantity)} {unit.Symbol()}",
     };
 
-    /// <summary>What goes back into the box for editing: "2kg" reads back as 2000 g.</summary>
-    public static string Editable(decimal quantity, BaseUnit unit) => Format(quantity, unit).Replace(" ", "");
+    /// <summary>
+    /// What goes back into the box for editing: "2kg" reads back as 2000 g. Every digit is kept - 1234.5 g is "1.2345kg",
+    /// not <see cref="Format"/>'s "1.235 kg" - because Save reads the box again, and a rounded box would change the
+    /// quantity (and send an op) without the planner touching it.
+    /// </summary>
+    public static string Editable(decimal quantity, BaseUnit unit) => unit switch
+    {
+        BaseUnit.Gram       when quantity >= 1000 => $"{Exact(quantity / 1000)}kg",
+        BaseUnit.Millilitre when quantity >= 1000 => $"{Exact(quantity / 1000)}L",
+        _                                         => $"{Exact(quantity)}{unit.Symbol()}",
+    };
 
     /// <summary>"500g, 2kg or 8x250g" - what to type for this unit.</summary>
     public static string Example(BaseUnit unit) => unit switch
@@ -87,6 +114,9 @@ public static partial class Quantity
     };
 
     private static string Number(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    // A decimal holds at most 28 places; '#' drops the trailing zeros.
+    private static string Exact(decimal value) => value.ToString("0.############################", CultureInfo.InvariantCulture);
 
     /// <summary>How many base units one of the typed unit is; null when it is not this ingredient's kind.</summary>
     private static decimal? Factor(string typed, BaseUnit unit) => (unit, typed) switch

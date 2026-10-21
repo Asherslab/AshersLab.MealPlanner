@@ -232,6 +232,59 @@ public sealed class MealSyncTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task A_deleted_line_product_or_price_stops_counting_in_the_cost()
+    {
+        // Tombstones stay in the tables (a delete is a row with Deleted set), so the cost has to leave them out itself.
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        Guid mince = await a.CreateIngredientAsync("beef mince", BaseUnit.Gram,
+            new OpField(IngredientRules.UsualStoreField, OpValues.FormatId(CatalogueSeed.Costco)));
+
+        // Two packs at the usual store: the cheaper per gram wins. The dearer one's latest price is the newer one.
+        Guid cheap = Guid.CreateVersion7(), dear = Guid.CreateVersion7(), newer = Guid.CreateVersion7();
+        await a.WriteAsync(SyncedEntities.Product, cheap, OpKind.Create,
+            new ProductDraft("Beef mince 2kg, on special", CatalogueSeed.Costco, null, 2000, mince).FieldsChangedFrom(null));
+        await a.WriteAsync(SyncedEntities.PriceObservation, Guid.CreateVersion7(), OpKind.Create,
+            new PriceEntry(cheap, 1000, new DateOnly(2026, 10, 1), PriceSource.Manual, null).Fields());
+        await a.WriteAsync(SyncedEntities.Product, dear, OpKind.Create,
+            new ProductDraft("Beef mince 8x250g", CatalogueSeed.Costco, null, 2000, mince).FieldsChangedFrom(null));
+        await a.WriteAsync(SyncedEntities.PriceObservation, Guid.CreateVersion7(), OpKind.Create,
+            new PriceEntry(dear, 2499, new DateOnly(2026, 10, 1), PriceSource.Manual, null).Fields());
+        await a.WriteAsync(SyncedEntities.PriceObservation, newer, OpKind.Create,
+            new PriceEntry(dear, 3000, new DateOnly(2026, 10, 14), PriceSource.Manual, null).Fields());
+
+        Guid meal = Guid.CreateVersion7(), extra = Guid.CreateVersion7();
+        await a.WriteAsync(SyncedEntities.Meal, meal, OpKind.Create, new MealDraft("Bolognese", null, MealKind.Cooked, 4, null, null).FieldsChangedFrom(null));
+        await a.WriteAsync(SyncedEntities.MealIngredient, Guid.CreateVersion7(), OpKind.Create, new MealIngredientDraft(meal, mince, 500, null).FieldsChangedFrom(null));
+        await a.WriteAsync(SyncedEntities.MealIngredient, extra, OpKind.Create, new MealIngredientDraft(meal, mince, 100, null).FieldsChangedFrom(null));
+
+        async Task<Cost?> BatchAsync()
+        {
+            await using LocalDbContext db = a.CreateDbContext();
+            MealCostBook book = await MealCostBook.LoadAsync(db, Ct);
+            return book.CostOf(await db.Meals.AsNoTracking().SingleAsync(m => m.Id == meal, Ct)).Batch;
+        }
+
+        Assert.Equal(new Cost(300, 0), await BatchAsync());     // 600 g at $10 / 2 kg
+
+        await a.WriteAsync(SyncedEntities.MealIngredient, extra, OpKind.Delete, []);
+        Assert.Equal(new Cost(250, 0), await BatchAsync());     // 500 g
+
+        await a.WriteAsync(SyncedEntities.Product, cheap, OpKind.Delete, []);
+        Assert.Equal(new Cost(750, 0), await BatchAsync());     // the dearer pack's latest, $30 / 2 kg
+
+        await a.WriteAsync(SyncedEntities.PriceObservation, newer, OpKind.Delete, []);
+        Assert.Equal(new Cost(625, 0), await BatchAsync());     // its earlier price, $24.99 / 2 kg
+
+        // The same through the server, for a browser that only ever saw the tombstones arrive.
+        await a.SyncAsync();
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        await b.SyncAsync();
+        await using LocalDbContext other = b.CreateDbContext();
+        Assert.Equal(new Cost(625, 0),
+            (await MealCostBook.LoadAsync(other, Ct)).CostOf(await other.Meals.AsNoTracking().SingleAsync(m => m.Id == meal, Ct)).Batch);
+    }
+
     [Theory]
     [InlineData(OpKind.Create, MealGroupRules.NameField, "Pasta", true)]
     [InlineData(OpKind.Update, MealGroupRules.NameField, " Pasta", true)]

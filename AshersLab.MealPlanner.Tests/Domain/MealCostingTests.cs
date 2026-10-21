@@ -1,3 +1,4 @@
+using AshersLab.MealPlanner.Shared.Domain.Ingredients;
 using AshersLab.MealPlanner.Shared.Domain.Meals;
 using AshersLab.MealPlanner.Shared.Domain.Prices;
 
@@ -145,22 +146,31 @@ public class MealCostingTests
     }
 
     [Fact]
-    public void Variable_weight_meat_priced_by_the_kilo_costs_by_the_gram()
+    public void Variable_weight_meat_priced_by_the_kilo_costs_by_the_gram_rounding_half_away_from_zero()
     {
-        // $14.99/kg (IngredientPricing.PerUnit for a per-kg reading); 600 g is 899.4 c.
-        MealCost cost = MealCosting.Cost(MealKind.Cooked, 2, null, [Line(600, new UnitPrice(1499, 1000))]);
+        // Rump steak sold as "about 1 kg" trays: this one weighed 1.234 kg and cost $18.50 at $14.99/kg. The per-kg
+        // price is what a gram costs - the tray's price is for that tray, not the 1 kg pack size - so 1.5 kg is
+        // 2248.5 c, not 2775 c by the pack.
+        PriceReading tray = new(Guid.Empty, 1850, new DateOnly(2026, 10, 14), PriceSource.Manual, PerKgCents: 1499);
+        UnitPrice perGram = IngredientPricing.PerUnit(BaseUnit.Gram, 1000, tray);
 
-        Assert.Equal(new Cost(899, 0), cost.Batch);
-        Assert.Equal(new Cost(450, 0), cost.PerServe);    // 449.5
+        MealCost cost = MealCosting.Cost(MealKind.Cooked, 2, null, [Line(1500, perGram)]);
+
+        // Both halves land on an even floor, so banker's rounding would say 2248 and 1124.
+        Assert.Equal(new Cost(2249, 0), cost.Batch);      // 2248.5
+        Assert.Equal(new Cost(1125, 0), cost.PerServe);   // 2249 / 2 = 1124.5
     }
 
     [Fact]
-    public void The_largest_quantities_and_prices_do_not_overflow()
+    public void The_largest_quantities_and_prices_cost_to_the_exact_cent()
     {
-        // A tonne at $100,000 a gram is absurd, but must not throw: 10^6 g x 10^7 c.
-        MealCost cost = MealCosting.Cost(MealKind.Cooked, 99, null, [Line(1_000_000, new UnitPrice(10_000_000, 1))]);
+        // At the limits the pages allow: $99,999.99 for the smallest pack (0.001 g), a tonne less a milligram of it.
+        // Absurd, but it must neither throw nor drift: 9,999,999 x 999,999,999 c is odd and past 2^53, where a double
+        // no longer counts every cent.
+        UnitPrice dearest = new(Money.MaxCents - 1, 0.001m);
+        MealCost cost = MealCosting.Cost(MealKind.Cooked, 1, null, [Line(Quantity.Max - 0.001m, dearest)]);
 
-        Assert.Equal(10_000_000_000_000L, cost.Batch!.Value.Cents);
+        Assert.Equal(9_999_998_990_000_001L, cost.Batch!.Value.Cents);
     }
 
     [Theory]

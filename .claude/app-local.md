@@ -139,7 +139,10 @@ sheet (`meal-ingredient-sheet`): `meal-ingredient-search` (input id), choices `m
 Enter), `meal-ingredient-save`, `meal-ingredient-cancel`, `meal-ingredient-remove`. **Wait for a saved row before
 navigating**: `go()` is a full reload, and a write still in flight when the dialog closes is lost with the page.
 `node .claude/tools/chrome-meals-check.mjs <scratch>/meals`
-(ports 19347/19348) drives all of it from two profiles.
+(ports 19347/19348) drives all of it from two profiles. `node .claude/tools/chrome-edit-roundtrip-check.mjs <scratch>/rt`
+(port 19351, after a prices check has left a product in grams) saves a line and a pack of 1234.5 g, reopens each and
+saves untouched: no op, still 1234.5, on the server and in the profile's SQLite. **Wait on the server's rows, not the
+chip**, after a save: the chip reads "online, 0 waiting" before a write made a moment ago is even queued.
 
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).

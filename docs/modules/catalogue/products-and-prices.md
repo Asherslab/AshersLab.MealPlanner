@@ -59,7 +59,13 @@ the catalogue: a product whose store or ingredient is gone shows "store removed"
 quantities share; tested in `Tests/Domain/PackSizeTests.cs`):
 `500g`, `2kg`, `1.4KG`, `8x250g`, `375ml`, `2L`, `6x375ml`, `18pk`, `148CT`. Only the units of the ingredient's own
 kind are accepted - `1.5L` for an ingredient in grams is refused ("It is counted in g"), never converted. A comma is
-never a decimal point. The editor shows what it read ("= 2 kg") under the box before saving.
+never a decimal point. The editor shows what it read ("= 2 kg") under the box before saving. A number too big for a
+decimal (a pasted run of digits) is refused, "That number is too big.", never thrown while the box renders.
+
+**Trap: the edit box holds every digit, not what the list shows.** The list reads 1234.5 g as "1.235 kg"; the box reads
+"1.2345kg" (`Quantity.Editable`). Save reads the box again, so a box filled from the rounded text would change the pack
+size to 1235 g - and send an op - without the planner touching it. `Tests/Domain/QuantityTests.cs` reads every
+quantity back through both editors.
 
 **Deleting**: a product can always be deleted. An ingredient a product is bought as cannot (the ingredient editor's
 Delete says "mince is used by 1 product: ... Delete them on the Prices page first."), nor can a store that sells one

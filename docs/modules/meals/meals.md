@@ -95,7 +95,9 @@ fields. A page left open on a meal deleted elsewhere says "This meal is not here
   every one of them - and the meal's cost says it is incomplete until it is entered. In the ingredient's base unit
   (`OpValues.FormatDecimal`), read in whatever unit the ingredient has now, like a pack size. Typed the way a pack size
   is (`Ingredients/Quantity.cs`, shared with `PackSize`): `500g`, `1.5kg`, `2`, `2x250g`; the wrong kind of unit is
-  refused, never converted.
+  refused, never converted. The sheet's box is filled with every digit ("1.2345kg", not the line's "1.235 kg"), so
+  saving the sheet with the quantity untouched sends no op
+  ([the same trap for pack sizes](../catalogue/products-and-prices.md)).
 - For a batch meal the quantity is what **a batch** uses; for a single-serve meal, what **one serve** uses. The page
   says which above the list.
 - `Note` is normalised text up to 200 ("browned", "for the sauce"), or null.
@@ -177,7 +179,12 @@ tombstones on the server. Phone-sized screenshots of the page with its lines, th
 and the list with costs. `chrome-prices-check.mjs` and `chrome-catalogue-check.mjs` pass as before.
 
 The in-process tests: `Tests/Domain/MealCostingTests.cs` (every kind, rounding of a line, a serve and the lines adding
-up, incomplete states, no ingredients, variable-weight meat, the largest values), `MealIngredientRulesTests.cs`,
+up, incomplete states, no ingredients, variable-weight meat through `IngredientPricing.PerUnit` with a half cent that
+banker's rounding would send the other way, the largest values the pages allow costed to the exact cent),
+`QuantityTests.cs` (the edit box round trip, numbers too big for a decimal), `MealIngredientRulesTests.cs`,
 `MealRulesTests.cs`, and `Tests/Meals/MealSyncTests.cs` - seeds, every field by op and by snapshot, concurrent edits,
-lines added on two offline browsers both surviving and costing the same on each, and a line whose ingredient was
-deleted elsewhere.
+lines added on two offline browsers both surviving and costing the same on each, a line whose ingredient was
+deleted elsewhere, and a deleted line, product and price each dropping out of the cost (`MealCostBook` leaves out
+tombstones itself). Each of these was checked by breaking the code it covers - rounding to even, ignoring the per-kg
+price, `double` arithmetic, each of `MealCostBook`'s three tombstone filters, the rounded edit box, a throwing parse -
+and every break failed a test.
