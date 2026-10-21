@@ -20,6 +20,13 @@
 <MudText Typo="Typo.h5" Component="h1">@CalendarText.LongDay(Today)</MudText>
 
 <LocalDataGate Start="Start">
+    @* With nobody added, "everyone" is one person: a batch of 4 looks like it leaves 3 serves. *@
+    @if (_noPeople)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-2" data-testid="home-no-people">
+            Add the household on <MudLink Href="people">People</MudLink> first - until then a meal for everyone counts as one serve.
+        </MudAlert>
+    }
     <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="home-today">
         @if (_today.Count == 0)
         {
@@ -112,6 +119,7 @@
     private bool        _loading;
 
     private List<(string Slot, string Meal, bool Skipped)> _today = [];
+    private bool _noPeople;
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
@@ -122,6 +130,7 @@
         CalendarBook calendar = await CalendarBook.LoadAsync(db, Today, Today);
         List<Slot> slots = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         Dictionary<Guid, string> meals = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, m => m.Name);
+        _noPeople = !await db.People.AnyAsync(p => !p.Deleted);
 
         _today = [.. calendar.On(Today)
             .OrderBy(e => slots.FindIndex(s => s.Id == e.SlotId) is var i and >= 0 ? i : int.MaxValue)
