@@ -51,6 +51,12 @@
                         <MudText>@option.Name</MudText>
                     </div>
                 }
+                @* Planning the week is when a new meal comes up: make it here rather than on the Meals page and back. *@
+                @if (IsNew && NewName() is { } newName)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-1"
+                               OnClick="() => NewMeal(newName)" data-testid="cal-new-meal">New meal "@newName"</MudButton>
+                }
             </div>
         }
 
@@ -212,6 +218,17 @@
             .OrderBy(m => !m.Name.StartsWith(filter, StringComparison.CurrentCultureIgnoreCase))
             .ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase);
     }
+
+    /// <summary>The typed name, when no meal is called exactly that - offered as a new one.</summary>
+    private string? NewName()
+    {
+        string name = Names.Normalise(_search);
+        return name.Length > 0 && !Meals.Any(m => string.Equals(m.Name, name, StringComparison.CurrentCultureIgnoreCase)) ? name : null;
+    }
+
+    private void NewMeal(string name) =>
+        Dialog.Close(DialogResult.Ok(new CalendarEntrySheetResult(
+            new CalendarEntryDraft(null, _people?.ToList(), false, _day, _slot), Remove: false, NewMeal: name)));
 
     private void Pick(Guid meal)
     {

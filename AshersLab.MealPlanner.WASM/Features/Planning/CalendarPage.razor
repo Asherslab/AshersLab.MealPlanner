@@ -9,6 +9,8 @@
 @using AshersLab.MealPlanner.Shared.Domain.Sync
 @using AshersLab.MealPlanner.WASM.Data
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using AshersLab.MealPlanner.WASM.Features.Meals
+@using AshersLab.MealPlanner.Shared.Domain.Meals
 @using Microsoft.EntityFrameworkCore
 @inherits LocalDataPage
 @inject IDialogService Dialogs
@@ -194,6 +196,7 @@
     private List<Slot>               _slots    = [];
     private List<Person>             _people   = [];
     private Dictionary<Guid, Meal>   _meals    = [];
+    private List<MealGroup>          _groups   = [];
 
     private DateOnly _monday = Rotation.MondayOf(Today);
     private DateOnly _day    = Today;
@@ -224,6 +227,7 @@
         _slots    = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _meals    = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id);
+        _groups   = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
     }
 
     private void GoToWeek(DateOnly monday) => Navigation.NavigateTo($"calendar?week={OpValues.FormatDate(monday)}");
@@ -299,9 +303,29 @@
 
     private async Task AddEntry(DateOnly date, Slot slot)
     {
-        CalendarEntrySheetResult? result = await PlanDialogs.EditCalendarEntryAsync(Dialogs, Viewport,
-            new CalendarEntryDraft(null, null, false, date, slot.Id), isNew: true, $"{CalendarText.LongDay(date)} · {slot.Name}", null,
-            [], MealOptions(), PersonOptions(), SlotOptions(), MealServes(), []);
+        CalendarEntryDraft start = new(null, null, false, date, slot.Id);
+        CalendarEntrySheetResult? result;
+        while (true)
+        {
+            result = await PlanDialogs.EditCalendarEntryAsync(Dialogs, Viewport,
+                start, isNew: true, $"{CalendarText.LongDay(date)} · {slot.Name}", null,
+                [], MealOptions(), PersonOptions(), SlotOptions(), MealServes(), []);
+            if (result is not { NewMeal: { } name, Saved: { } sofar })
+                break;
+
+            // The meal editor, as on the Meals page; saved, the sheet opens again with the new meal chosen and who eats it
+            // as it was. Its ingredients can wait: its cost says "no ingredients yet" until they are added.
+            MealEditorResult? newMeal = await MealDialogs.EditAsync(Dialogs, Viewport,
+                new MealDraft(name, null, MealKind.Cooked, 1, null, null), isNew: true,
+                [.. _groups.Select(g => new PickerOption(g.Id, g.Name))], [.. _meals.Values.Select(m => m.Name)]);
+            start = sofar;
+            if (newMeal?.Saved is { } mealDraft)
+            {
+                Guid mealId = Guid.CreateVersion7();
+                await WriteAsync(SyncedEntities.Meal, mealId, OpKind.Create, mealDraft.FieldsChangedFrom(null));
+                start = sofar with { Meal = mealId };
+            }
+        }
         if (result?.Saved is not { Meal: { } meal } draft)
             return;
 

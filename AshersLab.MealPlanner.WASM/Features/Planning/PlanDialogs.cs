@@ -18,8 +18,11 @@ public sealed record PlanEditorResult(string? Name, int Weeks, bool Delete);
 /// <summary>What the entry sheet needs to know of a meal: whether it cooks a batch or eats one, and its serves per batch.</summary>
 public sealed record MealServesOption(MealKind Kind, int ServesPerBatch);
 
-/// <summary>What the calendar entry sheet answers: the entry as saved (skipped or not, and where), or "remove it".</summary>
-public sealed record CalendarEntrySheetResult(CalendarEntryDraft? Saved, bool Remove);
+/// <summary>
+/// What the calendar entry sheet answers: the entry as saved (skipped or not, and where), or "remove it", or "make a new
+/// meal with this name" - <see cref="Saved"/> then holds what was chosen so far, with no meal, for the sheet to open with again.
+/// </summary>
+public sealed record CalendarEntrySheetResult(CalendarEntryDraft? Saved, bool Remove, string? NewMeal = null);
 
 /// <summary>A plan the calendar can be filled from, and which of its weeks the week on screen is now.</summary>
 public sealed record ApplyPlanOption(Guid Id, string Name, int Weeks, int WeekOnScreen);

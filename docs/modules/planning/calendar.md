@@ -138,7 +138,10 @@ next week on a phone: the arrow, Fill from a plan, Fill - three taps** once the 
 entry's choices as chips when it has more than one (one tap chooses), a search for any other meal, "Who eats it", and
 "Move to" a date and slot. **Skip** answers at once - "we didn't have it" is two taps. A skipped entry's sheet says so and
 offers **Not skipped**; picking another day and Save replans it (moved and no longer skipped, one op). **Remove** deletes it
-for good: applying the plan again does not bring it back. The + in a cell adds an entry by hand: search, tap, Save.
+for good: applying the plan again does not bring it back. The + in a cell adds an entry by hand: search, tap, Save. A
+name no meal has offers **New meal "Takeaway pizza"** (`cal-new-meal`): the meal editor opens with it filled in, and once
+saved the sheet comes back with the new meal chosen and who eats it as it was - planning the week is when a new meal comes
+up, and it should not cost a trip to Meals and back. Its ingredients wait; it costs "no ingredients yet" until they are added.
 
 **Deleting something the calendar uses** follows the catalogue's rule: a meal, person or slot named by a coming entry (today
 or later, not skipped) is refused, "... is planned in Rotation, the calendar on Tue 27 Oct". Past entries hold nothing back -
