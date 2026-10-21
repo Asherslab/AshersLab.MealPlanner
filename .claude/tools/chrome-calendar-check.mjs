@@ -121,7 +121,7 @@ const filled = await fill(a, 1, 2);
 check(/added 3 entries/.test(filled), `A fills two weeks from the plan, next week as week 1 ("${filled}")`);
 check(await shows(a, day(0), DINNER, [noodles]), 'Monday dinner is the usual choice, noodles');
 check(JSON.stringify(await costs(a, day(0), DINNER)) === '["no ingredients yet"]', `with what a serve costs: ${JSON.stringify(await costs(a, day(0), DINNER))}`);
-check(await shows(a, day(1), LUNCH, [unpriced]) && /^from \$0\.00 a serve \+ 1 unpriced$/.test((await costs(a, day(1), LUNCH))[0]),
+check(await shows(a, day(1), LUNCH, [unpriced]) && /^1 unpriced$/.test((await costs(a, day(1), LUNCH))[0]),
   `an unpriced meal shows as incomplete, never $0: ${JSON.stringify(await costs(a, day(1), LUNCH))}`);
 console.log(`  desktop screenshot: ${await screenshot(a, 'calendar-week')}`);
 check(server(`select StartsOn from PlanTemplate where Id = '${up(planId)}'`) === day(0), `the plan remembers week 1 began ${day(0)}`);

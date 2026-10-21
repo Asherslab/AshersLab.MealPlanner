@@ -11,9 +11,14 @@ public readonly record struct Cost(long Cents, int Missing)
 {
     public bool Complete => Missing == 0;
 
-    /// <summary>"$12.80", or "from $12.80 + 2 unpriced"; with a <paramref name="per"/> of " a serve", "from $3.20 a serve + 2 unpriced".</summary>
+    /// <summary>
+    /// "$12.80", or "from $12.80 + 2 unpriced"; with a <paramref name="per"/> of " a serve", "from $3.20 a serve + 2 unpriced".
+    /// With nothing known, only "2 unpriced": "from $0.00" reads as a price.
+    /// </summary>
     public string Format(string per = "") =>
-        Complete ? $"{Money.Format(Cents)}{per}" : $"from {Money.Format(Cents)}{per} + {Missing} unpriced";
+        Complete ? $"{Money.Format(Cents)}{per}"
+        : Cents == 0 ? $"{Missing} unpriced"
+        : $"from {Money.Format(Cents)}{per} + {Missing} unpriced";
 }
 
 /// <summary>Why one of a meal's ingredients has or has no cost.</summary>

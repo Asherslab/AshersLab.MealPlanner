@@ -122,7 +122,7 @@ and **Fill from a plan**. Under the title, which week of each plan this is ("Spr
 address (`?week=2026-10-26`), so a reload stays on it.
 
 - **On a desktop** (960 px and wider) the week is the plan's grid with dates across: each entry is its meal, a dot per
-  person when it is not for everyone, and what a serve costs - "$15.00 a serve", "from $0.00 a serve + 1 unpriced" (never
+  person when it is not for everyone, and what a serve costs - "$15.00 a serve", "from $3.20 a serve + 1 unpriced", "1 unpriced" (never
   a low number for an incomplete cost), "no ingredients yet", "no cost"; leftovers cost a serve of the batch they eat
   ("leftovers" when they eat none). Under it, a batch's serves or what leftovers eat ([batches and serves](batches-and-serves.md)).
   Today's date is coloured, past days greyed.
@@ -150,7 +150,7 @@ they show "meal removed" instead, so a meal eaten once is not undeletable foreve
 B phone-sized (390 px) - against the running app holding the imported plan and earlier runs' data, every check passing: A
 makes four meals (one with an unpriced ingredient, a $45 takeaway for 3) and a two-week plan, opens next week's calendar
 (the grid) and fills two weeks with next week as week 1 - "added 3 entries"; Monday dinner is the usual choice; costs read
-"no ingredients yet", "from $0.00 a serve + 1 unpriced" and "$15.00 a serve"; the server's plan has `StartsOn` that Monday;
+"no ingredients yet", "1 unpriced" and "$15.00 a serve"; the server's plan has `StartsOn` that Monday;
 the following week says "week 2". B (the day view) chooses the other choice and A shows it. A skips Tuesday's lunch - struck
 through, listed to replan on both; B replans it onto Wednesday's dinner from the list and A shows it there. A adds a takeaway
 by hand and removes another entry. Both fill the same two weeks again: "added 0 entries; 3 already on the calendar", and the

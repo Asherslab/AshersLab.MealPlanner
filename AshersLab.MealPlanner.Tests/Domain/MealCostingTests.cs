@@ -92,7 +92,7 @@ public class MealCostingTests
         MealCost cost = MealCosting.Cost(MealKind.Cooked, 4, null, [Line(null, null), Line(500, null), Line(null, Mince)]);
 
         Assert.Equal(new Cost(0, 3), cost.Batch);
-        Assert.Equal("from $0.00 + 3 unpriced", cost.Batch!.Value.Format());
+        Assert.Equal("3 unpriced", cost.Batch!.Value.Format());
         Assert.NotEqual("$0.00", cost.PerServe!.Value.Format());
     }
 
@@ -184,6 +184,9 @@ public class MealCostingTests
     [InlineData(1234, 0, " a serve", "$12.34 a serve")]
     [InlineData(1234, 1, "", "from $12.34 + 1 unpriced")]
     [InlineData(5, 3, " a serve", "from $0.05 a serve + 3 unpriced")]
+    // Nothing known: "from $0.00" reads as a price. Seen on a phone, 2026-10-22, on a new meal before any prices.
+    [InlineData(0, 4, "", "4 unpriced")]
+    [InlineData(0, 1, " a serve", "1 unpriced")]
     public void A_cost_reads_as_money_or_as_from_and_how_many_are_missing(long cents, int missing, string per, string text) =>
         Assert.Equal(text, new Cost(cents, missing).Format(per));
 }
