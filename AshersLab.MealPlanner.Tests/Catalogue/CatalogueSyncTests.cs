@@ -1,12 +1,16 @@
 using AshersLab.MealPlanner.Grpc.Data;
 using AshersLab.MealPlanner.Grpc.Features.Catalogue;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
+using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Sync;
+using AshersLab.MealPlanner.Shared.Domain;
+using AshersLab.MealPlanner.Shared.Domain.Categories;
 using AshersLab.MealPlanner.Shared.Domain.Stores;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using AshersLab.MealPlanner.Tests.Grpc;
 using AshersLab.MealPlanner.Tests.Sync;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AshersLab.MealPlanner.Tests.Catalogue;
@@ -45,6 +49,48 @@ public sealed class CatalogueSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_new_browser_gets_the_seeded_categories_in_the_spreadsheet_order()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();
+
+        Assert.Equal(CatalogueSeed.Categories, (await a.CategoriesAsync()).Select(c => c.Name));
+    }
+
+    [Fact]
+    public async Task Moves_on_two_browsers_offline_both_survive()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        // A moves Household (last) up one; B, offline, moves Dairy (second) up to the top. Each is one op on a
+        // different row, so neither undoes the other.
+        await MoveAsync(a, "Household", -1);
+        b.Now = b.Now.AddSeconds(1);
+        await MoveAsync(b, "Dairy", -1);
+        await a.SyncAsync();
+        await b.SyncAsync();
+        await a.SyncAsync();
+
+        string[] expected = ["Dairy", "Meat", "Fruit", "Vegetables", "Carbs/sides", "Pantry", "Fridge", "Household", "Freezer"];
+        Assert.Equal(expected, (await a.CategoriesAsync()).Select(c => c.Name));
+        Assert.Equal(expected, (await b.CategoriesAsync()).Select(c => c.Name));
+        Assert.Equal(expected, CategoryEntity.InOrder(await ServerAsync(db => db.Categories.Where(c => !c.Deleted).ToListAsync(Ct))).Select(c => c.Name));
+    }
+
+    /// <summary>What the categories page's arrows do.</summary>
+    private static async Task MoveAsync(TestBrowser browser, string name, int direction)
+    {
+        List<Category> categories = await browser.CategoriesAsync();
+        int index = categories.FindIndex(c => c.Name == name);
+        foreach ((int at, decimal position) in ListPosition.Move([.. categories.Select(c => c.Position)], index, direction))
+            await browser.WriteAsync(SyncedEntities.Category, categories[at].Id, OpKind.Update,
+                [new OpField(CategoryRules.PositionField, ListPosition.Format(position))]);
+    }
+
+    [Fact]
     public async Task Seeds_are_written_once_and_a_deleted_seed_stays_deleted()
     {
         await using TestBrowser a = await TestBrowser.OpenAsync(_server);
@@ -56,7 +102,7 @@ public sealed class CatalogueSyncTests : IAsyncLifetime
         // A restart runs the seeding again.
         int written = await ServerAsync(async db =>
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(Ct);
+            await using IDbContextTransaction transaction =await db.Database.BeginTransactionAsync(Ct);
             long? latest = await CatalogueSeed.WriteMissingAsync(db, Ct);
             await transaction.CommitAsync(Ct);
             return latest is null ? 0 : 1;

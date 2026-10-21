@@ -2,6 +2,8 @@ using AshersLab.MealPlanner.Grpc.Data;
 using AshersLab.MealPlanner.Grpc.Data.Models.Sync;
 using AshersLab.MealPlanner.Grpc.Features.Sync;
 using AshersLab.MealPlanner.Shared.Data.Sync;
+using AshersLab.MealPlanner.Shared.Domain;
+using AshersLab.MealPlanner.Shared.Domain.Categories;
 using AshersLab.MealPlanner.Shared.Domain.Stores;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AshersLab.MealPlanner.Grpc.Features.Catalogue;
 
 /// <summary>
-/// The stores every household starts with, written into the op log as the server's own ops - so they reach
+/// The stores and shopping categories every household starts with, written into the op log as the server's own ops - so they reach
 /// every browser like any other edit, and the household can rename or delete them.
 /// </summary>
 /// <remarks>
@@ -39,12 +41,24 @@ public static class CatalogueSeed
     public static readonly Guid Woolworths = new("00000000-5eed-7000-8000-000000000101");
     public static readonly Guid Costco     = new("00000000-5eed-7000-8000-000000000102");
 
+    /// <summary>The shopping categories of the planner's spreadsheet, in its order.</summary>
+    public static readonly IReadOnlyList<string> Categories =
+        ["Meat", "Dairy", "Fruit", "Vegetables", "Carbs/sides", "Pantry", "Fridge", "Freezer", "Household"];
+
+    /// <summary>The seeded category's id, by its position in <see cref="Categories"/> (0 is Meat).</summary>
+    public static Guid Category(int index) => new($"00000000-5eed-7000-8000-000000000{201 + index}");
+
     public sealed record Seed(SyncedEntity Type, Guid Id, IReadOnlyList<OpField> Fields);
 
     public static readonly IReadOnlyList<Seed> All =
     [
         new(SyncedEntities.Store, Woolworths, [new OpField(StoreRules.NameField, "Woolworths")]),
         new(SyncedEntities.Store, Costco,     [new OpField(StoreRules.NameField, "Costco")]),
+        .. Categories.Select((name, i) => new Seed(SyncedEntities.Category, Category(i),
+        [
+            new OpField(CategoryRules.NameField, name),
+            new OpField(CategoryRules.PositionField, ListPosition.Format(i + 1)),
+        ])),
     ];
 
     /// <summary>Writes every seed this database has never held. The caller holds the write transaction.</summary>

@@ -1,0 +1,64 @@
+@page "/categories"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Categories
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Categories
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+
+@*
+    The shopping categories, in the order the household walks the shop: the ingredients list is grouped in this
+    order, and so will the shopping list be. Seeded from the planner's spreadsheet; arranged with the arrows. A
+    category an ingredient is in cannot be deleted.
+*@
+
+<PageTitle>Categories - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Categories</MudText>
+<MudText Class="mt-1 mud-text-secondary">The ingredients and the shopping list are grouped in this order.</MudText>
+
+<LocalDataGate Start="Start">
+    <NameList Items="_items" Noun="category" TestId="category" NewLabel="New category"
+              NameProblem="CategoryRules.NameProblem"
+              InUseHint="Move them to another category first."
+              OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
+</LocalDataGate>
+
+@code {
+    private List<Category>     _categories = [];
+    private List<NameListItem> _items = [];
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _categories = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
+        _items      = [.. _categories.Select(c => new NameListItem(c.Id, c.Name, []))];
+    }
+
+    private Task Add(string name) =>
+        WriteAsync(SyncedEntities.Category, Guid.CreateVersion7(), OpKind.Create,
+        [
+            new OpField(CategoryRules.NameField, name),
+            new OpField(CategoryRules.PositionField, ListPosition.Format(ListPosition.AtEnd(_categories.Select(c => c.Position)))),
+        ]);
+
+    private Task Rename(Guid id, string name) =>
+        WriteAsync(SyncedEntities.Category, id, OpKind.Update, [new OpField(CategoryRules.NameField, name)]);
+
+    private Task Delete(Guid id) => WriteAsync(SyncedEntities.Category, id, OpKind.Delete, []);
+
+    private async Task Move(Guid id, int direction)
+    {
+        int index = _categories.FindIndex(c => c.Id == id);
+        if (index < 0)
+            return;
+
+        // Usually one op, the moved category's new position. A renumbering is one op per category it changes.
+        List<Category> before = _categories;
+        foreach ((int at, decimal position) in ListPosition.Move([.. before.Select(c => c.Position)], index, direction))
+            await WriteAsync(SyncedEntities.Category, before[at].Id, OpKind.Update,
+                [new OpField(CategoryRules.PositionField, ListPosition.Format(position))]);
+    }
+}

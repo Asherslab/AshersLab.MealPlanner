@@ -21,7 +21,7 @@
 <MudPaper Outlined="true" Class="mt-4">
     @if (Items.Count == 0)
     {
-        <MudText Class="pa-4" Color="Color.Secondary" data-testid="@($"{TestId}-empty")">None yet.</MudText>
+        <MudText Class="pa-4 mud-text-secondary"data-testid="@($"{TestId}-empty")">None yet.</MudText>
     }
     @* Plain rows, not MudList: a MudListItem takes Space and Enter for its own selection, so a text box inside
        one loses every space typed and never submits. *@

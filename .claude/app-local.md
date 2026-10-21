@@ -105,8 +105,8 @@ but not yet pulled back). Sync calls are
 **Stores** (`/stores`, "Stores" in the menu - a drawer behind `nav-menu` on a phone, `nav-stores`) is a `NameList`:
 `store-new-name` (input id too) and `store-add`; per row `store-row` (`data-id`), `store-name`, `store-rename` →
 `store-rename-input` / `store-rename-save`, `store-delete` (opens a MudBlazor message box - not a browser dialog -
-with a "Delete" button; or, when something uses it, shows `store-in-use` instead). Categories will use the same
-component with the prefix `category`, plus `category-up` / `category-down`.
+with a "Delete" button; or, when something uses it, shows `store-in-use` instead). **Categories** (`/categories`,
+`nav-categories`) is the same component with the prefix `category`, plus `category-up` / `category-down`.
 
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
@@ -190,7 +190,9 @@ sqlite3 "$HOME/Library/Application Support/AshersLab.MealPlanner/mealplanner.db"
 
 The host migrates at startup, so a missing table means the host has not started, not that a
 migration job is pending. Sync's tables: `Op` (the log, by `Seq`, each with its `Chain`; a new database's
-starts with the catalogue seeds at clock zero), `Ingredient`, `Store`, `FieldClock`, `SyncEpoch` (one row - a new value after a wipe means every browser forgets what it synced and takes a
+starts with the catalogue seeds at clock zero), `Ingredient`, `Store`, `Category` (its
+`Position` is decimal stored as text - `1.0` here, `1` in a browser's copy; compare with `cast(Position as real)`),
+`FieldClock`, `SyncEpoch` (one row - a new value after a wipe means every browser forgets what it synced and takes a
 snapshot on its next pull). Nothing in it is worth keeping until the household uses the app — delete
 the folder to start over (stop the app first; SQLite holds `-wal`/`-shm` files beside it).
 

@@ -6,7 +6,7 @@
 //
 // Needs the app running (AppHost: https) and sqlite3 on the PATH. Fresh profiles each run (ports 19343/19344); names
 // carry the run id, so runs do not disturb each other. APP_URL / SERVER_DB as in chrome-sync-check.mjs.
-import { RUN, launch, check, finish, settled, server, dump, nameList, phone, screenshot, sleep } from './lib/profiles.mjs';
+import { RUN, launch, check, finish, settled, server, dump, nameList, phone, screenshot, sleep, until } from './lib/profiles.mjs';
 
 const [scratch] = process.argv.slice(2);
 if (!scratch) { console.error('usage: chrome-catalogue-check.mjs <scratchDir>'); process.exit(2); }
@@ -54,6 +54,67 @@ const up = id => id.toUpperCase();
 
   await phone(a); await sleep(500);
   console.log(`  phone screenshot: ${await screenshot(a, 'stores')}`);
+  await phone(a, false);
+}
+
+// --- Categories -----------------------------------------------------------------------------------------------
+{
+  await a.go('categories'); await b.go('categories');
+  const ca = nameList(a, 'category'), cb = nameList(b, 'category');
+  const seeded = ['Meat', 'Dairy', 'Fruit', 'Vegetables', 'Carbs/sides', 'Pantry', 'Fridge', 'Freezer', 'Household'];
+  await cb.has('Household');
+  const startB = await cb.names();
+  check(seeded.every(s => startB.includes(s)), `B has every seeded category (${startB.join(', ')})`);
+
+  const added = `Bakery ${RUN}`;
+  check(await ca.add(added), 'A adds a category');
+  check(await cb.has(added), 'B shows it');
+  let names = await ca.names();
+  check(names.at(-1) === added, 'it goes at the end');
+
+  // Up twice: it passes the two categories above it.
+  const above = names.slice(-3, -1);
+  await ca.move(added, 'up'); await sleep(400); await ca.move(added, 'up');
+  const expectA = [...names.slice(0, -3), added, ...above];
+  check(await until(a, `JSON.stringify([...document.querySelectorAll('[data-testid=category-name]')].map(e => e.textContent.trim())) === ${JSON.stringify(JSON.stringify(expectA))}`),
+    `A moved it up two places (above ${above.join(', ')})`);
+  check(await until(b, `JSON.stringify([...document.querySelectorAll('[data-testid=category-name]')].map(e => e.textContent.trim())) === ${JSON.stringify(JSON.stringify(expectA))}`),
+    'B shows the same order');
+
+  // Concurrent moves of different categories offline on both: each keeps its move.
+  await a.offline(true); await b.offline(true);
+  const first = expectA[0], second = expectA[1];
+  await ca.move(second, 'up');                         // A: the second to the top
+  await sleep(300);
+  const last = expectA.at(-1);
+  await cb.move(last, 'up');                           // B: the last up one
+  await a.offline(false); await b.offline(false);
+  await settled(a); await settled(b); await sleep(1500);
+  const finalA = await ca.names(), finalB = await cb.names();
+  check(finalA[0] === second && finalA[1] === first && finalA.at(-2) === last, `both offline moves survive on A (${finalA.join(', ')})`);
+  check(JSON.stringify(finalA) === JSON.stringify(finalB), 'B ends on the same order');
+
+  const id = await ca.id(added);
+  check(await ca.rename(added, `Bread ${RUN}`), 'A renames it');
+  check(await cb.has(`Bread ${RUN}`), 'B shows the rename');
+
+  await settled(a); await settled(b);
+  // As numbers: the server's SQLite provider stores decimal 1 as '1.0', the browser's as '1'.
+  const serverOrder = server(`select Name || '=' || cast(Position as real) from Category where Deleted = 0`);
+  console.log(`  server Category:\n${serverOrder}`);
+  for (const p of [a, b]) {
+    const q = await dump(p);
+    const local = q(`select Name || '=' || cast(Position as real) from Category where Deleted = 0`);
+    check(local.split('\n').sort().join() === serverOrder.split('\n').sort().join() && q('select count(*) from Outbox') === '0',
+      `${p.name} SQLite holds the same names and positions as the server, outbox empty`);
+  }
+
+  check(await cb.remove(`Bread ${RUN}`) === 'deleted', 'B deletes it');
+  check(await ca.gone(`Bread ${RUN}`), 'A no longer shows it');
+  check(server(`select Deleted from Category where Id = '${up(id)}'`) === '1', 'the server keeps the tombstone');
+
+  await phone(a); await sleep(500);
+  console.log(`  phone screenshot: ${await screenshot(a, 'categories')}`);
   await phone(a, false);
 }
 

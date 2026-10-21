@@ -1,3 +1,4 @@
+using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Domain;
@@ -27,7 +28,9 @@ public static class SyncedEntities
 
     public static readonly StoreEntity Store = new();
 
-    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store];
+    public static readonly CategoryEntity Category = new();
+
+    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -56,6 +59,14 @@ public static class SyncedEntities
             store.HasKey(s => s.Id);
             store.Property(s => s.Id).ValueGeneratedNever();
             store.Property(s => s.Name).HasMaxLength(Names.MaxLength);
+        });
+
+        modelBuilder.Entity<Category>(category =>
+        {
+            category.ToTable("Category");
+            category.HasKey(c => c.Id);
+            category.Property(c => c.Id).ValueGeneratedNever();
+            category.Property(c => c.Name).HasMaxLength(Names.MaxLength);
         });
     }
 }

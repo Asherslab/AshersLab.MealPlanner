@@ -7,8 +7,13 @@ verified: 2026-10-21
 code:
   - AshersLab.MealPlanner.Shared.Domain/Names.cs
   - AshersLab.MealPlanner.Shared.Domain/Sync/OpRules.cs
+  - AshersLab.MealPlanner.Shared.Domain/ListPosition.cs
   - AshersLab.MealPlanner.Shared.Domain/Stores
+  - AshersLab.MealPlanner.Shared.Domain/Categories
   - AshersLab.MealPlanner.Shared.Data/Stores
+  - AshersLab.MealPlanner.Shared.Data/Categories
+  - AshersLab.MealPlanner.WASM/Features/Categories
+  - AshersLab.MealPlanner.Tests/Domain/ListPositionTests.cs
   - AshersLab.MealPlanner.Grpc/Features/Catalogue/CatalogueSeed.cs
   - AshersLab.MealPlanner.Grpc/Features/Sync/SyncStartup.cs
   - AshersLab.MealPlanner.WASM/Features/Stores
@@ -43,6 +48,10 @@ mechanism; this doc is what the catalogue does with it.
 | Entity | Seeded |
 |---|---|
 | Store | Woolworths, Costco |
+| Category | Meat, Dairy, Fruit, Vegetables, Carbs/sides, Pantry, Fridge, Freezer, Household - the planner's spreadsheet's shopping categories, in its order (positions 1-9) |
+
+A database that already existed when a seed was added gets it at its next start: the categories were added to a
+running dev database that way (seqs 12-20, after the stores and the ops between).
 
 - **Written once per database**: a seed is written when the log holds no op for its id. A renamed seed keeps its
   new name and a deleted one stays deleted across restarts.
@@ -52,7 +61,7 @@ mechanism; this doc is what the catalogue does with it.
   makes beats it, even one made before the seed was written (a server restored from a backup older than the seed
   gets it again at startup, and a browser's rename pushed back still wins). Pulling a seed never moves a browser's
   clock forward.
-- A new database's log therefore starts with the seeds, not empty; a browser's first op is seq 3.
+- A new database's log therefore starts with the seeds, not empty; a browser's first op follows them.
   `MealPlannerHost.SeedOps` is that count for the tests.
 
 ## Names
@@ -69,6 +78,29 @@ the shape checks every entity shares - plus its own per-field checks.
 **What the planner sees** (`/stores`, "Stores" in the menu): the stores by name; a "New store" box (Enter adds it);
 per row a pencil (rename in place) and a bin. The bin asks "Delete Costco? It goes from this list on every device."
 - one more tap. A store is deleted as a tombstone ([offline sync](../sync/offline-sync.md), merge rules).
+
+## Categories
+
+`Category (Id, Name, Position, Deleted)`. Groups the ingredients list - and later the shopping list - in the
+household's order, which is the order they walk the shop.
+
+**Order is a position per category, not a swap** (`Shared.Domain/ListPosition.cs`, tests in
+`Tests/Domain/ListPositionTests.cs`). Moving a category one place writes one op: its own new position, halfway
+between its new neighbours (or one past the end). Two phones moving *different* categories offline both keep their
+moves; swapping two positions would write both rows, and the later device's swap would silently undo part of the
+earlier one. Two phones moving the *same* category: the later move wins, like any field.
+
+- A new category goes after the last (`ListPosition.AtEnd`: the largest position, floored, plus one).
+- Equal positions happen (two phones each add one at the end offline). The list sorts them by name, then id
+  (`CategoryEntity.InOrder`), so every device shows the same order; a move that needs a gap between two equal
+  positions renumbers the list 1..n in its new order and writes only the categories whose number changed.
+- Halving one gap runs out of decimal digits after about 90 moves into it; that also renumbers.
+- **Sort in memory, never in SQL.** EF's SQLite providers store `decimal` as text and will not `ORDER BY` it - and
+  they do not even agree on the text: the server writes `1.0`, the browser `1`. Compare positions as numbers.
+
+**What the planner sees** (`/categories`, "Categories" in the menu): the categories in order, under "The
+ingredients and the shopping list are grouped in this order."; a "New category" box; per row up and down arrows
+(one tap moves one place; the top's up and the bottom's down are greyed), a pencil and a bin.
 
 ## Deleting something referenced
 
@@ -101,3 +133,9 @@ a duplicate ("costco") is refused with "There is already a store called costco."
 server; B deletes it after the confirmation and A drops it; both profiles' SQLite (copied out of OPFS) and the
 server's hold the same row and tombstone, outboxes empty. A phone-sized (390 px) screenshot shows the list with the
 drawer closed. Also by hand in Chrome desktop: add, the duplicate message, rename, the delete dialog.
+
+Categories, same script: a new profile has all nine seeds; a category added on A goes at the end and shows on B;
+two taps of its up arrow move it above the two before it, on A and B; both profiles offline, A moves the second
+category to the top while B moves the last up one - after reconnecting both moves stand, in the same order on both;
+rename and delete reach the other profile; names and positions (compared as numbers) match in both profiles' SQLite
+and the server's.

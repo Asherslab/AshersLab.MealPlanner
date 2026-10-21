@@ -1,6 +1,7 @@
 using AshersLab.MealPlanner.LocalData;
 using AshersLab.MealPlanner.LocalData.Sync;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
+using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using AshersLab.MealPlanner.Shared.Domain.Ingredients;
@@ -97,6 +98,13 @@ public sealed class TestBrowser : IDbContextFactory<LocalDbContext>, IAsyncDispo
     {
         await using LocalDbContext db = await Contexts.CreateDbContextAsync();
         await LocalOps.WriteAsync(db, DeviceId, Now, type, id, kind, fields);
+    }
+
+    /// <summary>Live categories in the page's order.</summary>
+    public async Task<List<Category>> CategoriesAsync()
+    {
+        await using LocalDbContext db = CreateDbContext();
+        return [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
     }
 
     /// <summary>Live stores only, as a page shows them.</summary>
