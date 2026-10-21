@@ -18,7 +18,7 @@ public static class ImportKnownReader
     public static async Task<ImportKnown> ReadAsync(DbContext db, CancellationToken cancellationToken = default) =>
         new(
             await db.Set<Ingredient>().AsNoTracking()
-                .Select(i => new KnownIngredient(i.Id, i.Name, i.BaseUnit, i.Deleted)).ToListAsync(cancellationToken),
+                .Select(i => new KnownIngredient(i.Id, i.Name, i.BaseUnit, i.Deleted, i.UnitGuessed, i.UsualStoreId)).ToListAsync(cancellationToken),
             await db.Set<Category>().AsNoTracking()
                 .Select(c => new KnownOrdered(c.Id, c.Name, c.Position, c.Deleted)).ToListAsync(cancellationToken),
             await db.Set<MealGroup>().AsNoTracking()

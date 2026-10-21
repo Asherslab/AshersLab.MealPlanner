@@ -7,7 +7,7 @@ using AshersLab.MealPlanner.Shared.Domain.Sync;
 
 namespace AshersLab.MealPlanner.Shared.Domain.Import;
 
-public sealed record KnownIngredient(Guid Id, string Name, BaseUnit Unit, bool Deleted);
+public sealed record KnownIngredient(Guid Id, string Name, BaseUnit Unit, bool Deleted, bool UnitGuessed = false, Guid? UsualStoreId = null);
 
 public sealed record KnownOrdered(Guid Id, string Name, decimal Position, bool Deleted);
 
@@ -56,10 +56,16 @@ public sealed class ImportChoices
     /// <summary>A meal-ideas heading: the existing meal group, or null for a new one.</summary>
     public Dictionary<string, Guid?> MealGroups { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>A meal idea's ingredient (by <see cref="ImportNames.Key"/>): the key of the ingredient it is, or null for a new one.</summary>
+    /// <summary>
+    /// A name the sheet uses that is not exactly an ingredient here (by <see cref="ImportNames.Key"/>) - a meal idea's
+    /// ingredient, or a shopping-list name on a later import: the key of the ingredient it is, or null for a new one.
+    /// </summary>
     public Dictionary<string, string?> Ingredients { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>A new ingredient's unit, chosen in the review - no longer a guess.</summary>
+    /// <summary>
+    /// A new ingredient's unit, chosen in the review - no longer a guess. For an ingredient already here whose unit is
+    /// still the import's own guess, a different unit chosen here changes it (<see cref="UnitQuestion"/>).
+    /// </summary>
     public Dictionary<string, BaseUnit> Units { get; } = new(StringComparer.Ordinal);
 
     /// <summary>A price (<see cref="PriceCell.Id"/>): the store it is at, or null to leave it out.</summary>
@@ -73,19 +79,38 @@ public sealed class ImportChoices
 
     /// <summary>Where the non-food items are bought. Null: those with no store of their own are left out.</summary>
     public Guid? HouseholdStore { get; set; }
+
+    /// <summary>
+    /// Where a price that names no store was seen, when its ingredient has no usual store either - one answer for the
+    /// whole sheet, since the planner's sheet names none. Null: those prices are left out.
+    /// </summary>
+    public Guid? PriceStore { get; set; }
 }
+
+/// <summary>
+/// An ingredient already here whose unit is still the import's guess, and the sheet's prices say otherwise: "Muffins"
+/// guessed as grams, priced "$2ea". Changing it is the planner's call; until then those prices are left out.
+/// </summary>
+public sealed record UnitQuestion(string Key, string Name, BaseUnit Unit, BaseUnit PriceSays, string Why);
 
 /// <summary>A heading that is not obviously one the app has: "Snacks/desserts" for the group "Snack".</summary>
 public sealed record HeadingQuestion(string Heading, IReadOnlyList<KnownOrdered> Options, Guid? Suggested);
 
-/// <summary>An ingredient a meal names that is not exactly one the sheet or the app has: "cheese".</summary>
-public sealed record IngredientQuestion(string Key, string Name, IReadOnlyList<string> Meals, IReadOnlyList<(string Key, string Name)> Options, string? Suggested);
+/// <summary>
+/// A name that is not exactly an ingredient the sheet or the app has, but resembles one: "cheese" in a meal, or a
+/// shopping-list name an earlier import knew by another ("Sweet chili sauce"). <paramref name="Meals"/> is empty for the
+/// latter, and <paramref name="Place"/> says where it is.
+/// </summary>
+public sealed record IngredientQuestion(
+    string Key, string Name, IReadOnlyList<string> Meals, IReadOnlyList<(string Key, string Name)> Options, string? Suggested,
+    SheetPlace? Place = null);
 
 /// <summary>A meal whose serves the sheet does not say for sure.</summary>
 public sealed record ServesQuestion(string Key, string Meal, int? Suggested, string Why);
 
 /// <summary>One price, and what is known of it - the review asks for the store and pack when the sheet does not say.</summary>
-public sealed record PriceQuestion(string Id, SheetPlace Place, string Item, bool Household, long Cents, string? Pack, Guid? Store);
+/// <paramref name="Note"/> is what the sheet said it is for when that is not a pack ("for 10 servings").
+public sealed record PriceQuestion(string Id, SheetPlace Place, string Item, bool Household, long Cents, string? Pack, Guid? Store, string? Note = null);
 
 public sealed record ImportReview(
     IReadOnlyList<HeadingQuestion> Categories,
@@ -102,6 +127,10 @@ public sealed record ImportEdit(string Entity, Guid Id, OpKind Kind, IReadOnlyLi
 public sealed record NewIngredientLine(string Key, string Name, BaseUnit Unit, bool Guessed, string? Category);
 
 /// <summary>What one run would write, and what it leaves out and why.</summary>
+/// <remarks>
+/// <paramref name="Units"/> depends on the answers (which ingredient a name is), so it comes with the plan, not the
+/// review. <paramref name="ChangedUnits"/> counts the guessed units the answers changed.
+/// </remarks>
 public sealed record ImportPlan(
     IReadOnlyList<ImportEdit> Edits,
     IReadOnlyList<NewIngredientLine> NewIngredients,
@@ -112,7 +141,10 @@ public sealed record ImportPlan(
     int NewProducts,
     int NewPrices,
     int AlreadyHere,
-    IReadOnlyList<string> LeftOut)
+    IReadOnlyList<string> LeftOut,
+    IReadOnlyList<UnitQuestion> Units,
+    int ChangedUnits,
+    IReadOnlySet<string> PricesAlreadyHere)
 {
     public bool NothingToDo => Edits.Count == 0;
 }
@@ -141,7 +173,7 @@ public sealed class SheetImport
     private readonly List<SheetIngredient>               _sheetIngredients = [];
     private readonly List<(string Name, IReadOnlyList<PriceCell> Prices)> _household = [];
 
-    private sealed record SheetIngredient(string Key, string Name, string? Category, string? UsualStore, List<PriceCell> Prices);
+    private sealed record SheetIngredient(string Key, string Name, string? Category, string? UsualStore, List<PriceCell> Prices, SheetPlace Place);
 
     public SheetImport(ParsedSheet sheet, ImportKnown known)
     {
@@ -171,20 +203,20 @@ public sealed class SheetImport
                     _household[at] = (_household[at].Name, [.. _household[at].Prices, .. item.Prices]);
                 continue;
             }
-            AddSheetIngredient(item.Name, item.Header, item.UsualStore, item.Prices);
+            AddSheetIngredient(item.Name, item.Header, item.UsualStore, item.Prices, item.Place);
         }
         foreach (FlatItemCell item in sheet.Flat)
-            AddSheetIngredient(item.Name, null, null, item.Prices);
+            AddSheetIngredient(item.Name, null, null, item.Prices, item.Place);
     }
 
-    private void AddSheetIngredient(string name, string? category, string? usualStore, IReadOnlyList<PriceCell> prices)
+    private void AddSheetIngredient(string name, string? category, string? usualStore, IReadOnlyList<PriceCell> prices, SheetPlace place)
     {
         string key = ImportNames.Key(name);
         if (key.Length == 0)
             return;
         SheetIngredient? known = _sheetIngredients.FirstOrDefault(i => i.Key == key);
         if (known is null)
-            _sheetIngredients.Add(new SheetIngredient(key, name, category, usualStore, [.. prices]));
+            _sheetIngredients.Add(new SheetIngredient(key, name, category, usualStore, [.. prices], place));
         else
         {
             known.Prices.AddRange(prices);
@@ -202,6 +234,20 @@ public sealed class SheetImport
     public ImportReview Review()
     {
         List<IngredientQuestion> ingredients = [];
+
+        // A shopping-list name not exactly an ingredient here but like one: on a later import, the planner may have
+        // written "Sweet chili sauce" where the first import made "Sweet chilli sauce". Only the app's ingredients are
+        // offered - two names on the sheet are two ingredients unless their keys are equal.
+        foreach (SheetIngredient item in _sheetIngredients.Where(i => !_live.ContainsKey(i.Key) && !_gone.Contains(i.Key) && KnownByProduct(i) is null))
+        {
+            List<NameCandidate<(string Key, string Name)>> candidates =
+                ImportNames.Candidates(item.Name, _live.Select(l => (l.Key, l.Value.Name)), p => p.Name);
+            if (candidates.Count == 0)
+                continue;
+            ingredients.Add(new IngredientQuestion(item.Key, item.Name, [], [.. candidates.Select(c => c.Item)],
+                candidates.FirstOrDefault(c => c.Strength >= MatchStrength.Likely)?.Item.Key, item.Place));
+        }
+
         foreach (IGrouping<string, (string Key, string Name, string Meal)> group in MealRefs().GroupBy(r => r.Key))
         {
             if (IsKnownIngredient(group.Key))
@@ -228,10 +274,12 @@ public sealed class SheetImport
         List<PriceQuestion> prices = [];
         foreach (SheetIngredient item in _sheetIngredients.Where(i => !_gone.Contains(i.Key)))
             foreach (PriceCell price in item.Prices)
-                prices.Add(new PriceQuestion(price.Id, price.Place, item.Name, false, price.Price.Cents, price.Price.Pack, _known.StoreFor(price.Price.Store)));
+                prices.Add(new PriceQuestion(price.Id, price.Place, item.Name, false, price.Price.Cents, price.Price.Pack,
+                    _known.StoreFor(price.Price.Store), price.Price.Note));
         foreach ((string name, IReadOnlyList<PriceCell> cells) in _household)
             foreach (PriceCell price in cells)
-                prices.Add(new PriceQuestion(price.Id, price.Place, name, true, price.Price.Cents, price.Price.Pack, _known.StoreFor(price.Price.Store)));
+                prices.Add(new PriceQuestion(price.Id, price.Place, name, true, price.Price.Cents, price.Price.Pack,
+                    _known.StoreFor(price.Price.Store), price.Price.Note));
 
         return new ImportReview(
             HeadingQuestions(_sheet.CostHeaders.Where(h => !h.Household).Select(h => h.Header), _known.Categories),
@@ -266,6 +314,17 @@ public sealed class SheetImport
         return (best.Item.Id, best.Strength == MatchStrength.Same);
     }
 
+    /// <summary>
+    /// The live ingredient a shopping-list name was answered as on an earlier import, by the product that import made
+    /// for its price - a product keeps the sheet's own name ("Natural yoghurt") under the ingredient it was answered as
+    /// ("Greek yoghurt"). So the planner answers once, not on every download. Null when there is none.
+    /// </summary>
+    private string? KnownByProduct(SheetIngredient item) =>
+        _known.Products
+            .Where(p => !p.Deleted && p.IngredientId is not null && Names.Same(p.Name, item.Name))
+            .Select(p => _live.FirstOrDefault(l => l.Value.Id == p.IngredientId).Key)
+            .FirstOrDefault(key => key is not null);
+
     private bool IsKnownIngredient(string key) => _live.ContainsKey(key) || _gone.Contains(key) || _sheetIngredients.Any(i => i.Key == key);
 
     /// <summary>Every ingredient a meal could be made of: the app's, and the sheet's not yet in the app. By key.</summary>
@@ -295,7 +354,7 @@ public sealed class SheetImport
     // ---------------------------------------------------------------------------------------------------------------
     // The plan: what one run writes.
 
-    private sealed record Target(Guid Id, string Name, BaseUnit Unit);
+    private sealed record Target(Guid Id, string Name, BaseUnit Unit, Guid? UsualStore);
 
     public ImportPlan Plan(ImportChoices choices, DateOnly today, Func<Guid> newId)
     {
@@ -315,7 +374,11 @@ public sealed class SheetImport
             "meal group", edits, leftOut, ref newGroups, newId);
 
         // Ingredients: the app's by key; the sheet's that are new; then each meal's that are neither.
-        Dictionary<string, Target> targets = _live.ToDictionary(l => l.Key, l => new Target(l.Value.Id, l.Value.Name, l.Value.Unit), StringComparer.Ordinal);
+        Dictionary<string, Target> targets = _live.ToDictionary(l => l.Key,
+            l => new Target(l.Value.Id, l.Value.Name, l.Value.Unit, l.Value.UsualStoreId), StringComparer.Ordinal);
+        Dictionary<string, string?> suggested = Review().Ingredients.ToDictionary(q => q.Key, q => q.Suggested, StringComparer.Ordinal);
+        string? Answer(string key) => choices.Ingredients.TryGetValue(key, out string? answer) ? answer : suggested.GetValueOrDefault(key);
+
         foreach (SheetIngredient item in _sheetIngredients)
         {
             if (_live.ContainsKey(item.Key))
@@ -328,17 +391,56 @@ public sealed class SheetImport
                 leftOut.Add($"{item.Name}: deleted here before, so not added again.");
                 continue;
             }
+            // Answered as an ingredient already here ("Natural yoghurt" is "Greek yoghurt"), now or on an earlier import:
+            // its prices go to that one.
+            if ((KnownByProduct(item) ?? Answer(item.Key)) is { } same && _live.ContainsKey(same))
+            {
+                targets[item.Key] = targets[same];
+                alreadyHere++;
+                continue;
+            }
             Guid? category = item.Category is { } header ? categories.GetValueOrDefault(header) : null;
             targets[item.Key] = NewIngredient(item.Key, item.Name, item.Category, category, _known.StoreFor(item.UsualStore),
                 [.. item.Prices.Select(p => p.Price.Pack)], choices, edits, fresh, newId);
         }
 
-        Dictionary<string, string?> suggested = Review().Ingredients.ToDictionary(q => q.Key, q => q.Suggested, StringComparer.Ordinal);
+        // An ingredient here whose unit is still the import's guess, and the sheet's price is counted another way: asked;
+        // changed only when the planner chose the other unit.
+        List<UnitQuestion> unitQuestions = [];
+        int changedUnits = 0;
+        Dictionary<Guid, KnownIngredient> liveById = _live.Values.ToDictionary(i => i.Id);
+        foreach (SheetIngredient item in _sheetIngredients)
+        {
+            if (!targets.TryGetValue(item.Key, out Target? target) || !liveById.TryGetValue(target.Id, out KnownIngredient? here)
+                || !here.UnitGuessed || unitQuestions.Any(q => q.Key == ImportNames.Key(here.Name)))
+                continue;
+            foreach (PriceCell cell in item.Prices)
+            {
+                string? pack = choices.PricePacks.TryGetValue(cell.Id, out string? typed) ? typed : cell.Price.Pack;
+                if (pack is null || PackSize.Parse(pack, here.Unit, out _) is not null || UnitOfPack(pack) is not { } says)
+                    continue;
+                string key = ImportNames.Key(here.Name);
+                unitQuestions.Add(new UnitQuestion(key, here.Name, here.Unit, says, $"{Money.Format(cell.Price.Cents)} for {pack}"));
+                if (choices.Units.TryGetValue(key, out BaseUnit chosen) && chosen != here.Unit)
+                {
+                    edits.Add(new(IngredientRules.Entity, here.Id, OpKind.Update,
+                    [
+                        new OpField(IngredientRules.BaseUnitField, BaseUnits.Format(chosen)),
+                        new OpField(IngredientRules.UnitGuessedField, OpValues.FormatBool(false)),
+                    ]));
+                    changedUnits++;
+                    foreach (string k in targets.Where(t => t.Value.Id == here.Id).Select(t => t.Key).ToList())
+                        targets[k] = targets[k] with { Unit = chosen };
+                }
+                break;
+            }
+        }
+
         foreach ((string key, string name, _) in MealRefs().DistinctBy(r => r.Key).ToList())
         {
             if (targets.ContainsKey(key) || _gone.Contains(key))
                 continue;
-            string? chosen = choices.Ingredients.TryGetValue(key, out string? answer) ? answer : suggested.GetValueOrDefault(key);
+            string? chosen = Answer(key);
             if (chosen is not null && targets.TryGetValue(chosen, out Target? same))
                 targets[key] = same;
             else
@@ -400,16 +502,21 @@ public sealed class SheetImport
         }
 
         // Products and prices.
+        HashSet<string>    samePrices = new(StringComparer.Ordinal);
         List<KnownProduct> products = [.. _known.Products.Where(p => !p.Deleted)];
         Dictionary<Guid, long> latest = _known.Prices
             .Where(p => !p.Deleted)
             .GroupBy(p => p.ProductId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.ObservedOn).ThenByDescending(p => p.Id).First().PriceCents);
 
-        void Price(PriceCell cell, string item, Guid? ingredient, BaseUnit unit, Guid? fallbackStore)
+        // A price's store: the planner's answer for it, else the store the sheet names beside it, else (an ingredient's)
+        // usual store or (a household item's) the household store, else the one store for prices that name none.
+        void Price(PriceCell cell, string item, Guid? ingredient, BaseUnit? unit, Guid? fallbackStore)
         {
             string what = $"{item} {Money.Format(cell.Price.Cents)} ({cell.Place})";
-            Guid? store = choices.PriceStores.TryGetValue(cell.Id, out Guid? chosenStore) ? chosenStore : _known.StoreFor(cell.Price.Store) ?? fallbackStore;
+            Guid? store = choices.PriceStores.TryGetValue(cell.Id, out Guid? chosenStore)
+                ? chosenStore
+                : _known.StoreFor(cell.Price.Store) ?? fallbackStore ?? choices.PriceStore;
             if (store is not { } storeId)
             {
                 leftOut.Add($"{what}: no store chosen.");
@@ -418,10 +525,13 @@ public sealed class SheetImport
             string? packText = choices.PricePacks.TryGetValue(cell.Id, out string? chosenPack) ? chosenPack : cell.Price.Pack;
             if (string.IsNullOrWhiteSpace(packText))
             {
-                leftOut.Add($"{what}: how much is in the pack was not given.");
+                leftOut.Add(cell.Price.Note is { } note
+                    ? $"{what}: how much is in the pack was not given - the sheet says \"{note}\"."
+                    : $"{what}: how much is in the pack was not given.");
                 return;
             }
-            if (PackSize.Parse(packText, unit, out string? problem) is not { } pack)
+            // A household item has no unit: its pack is a count, or what the pack says ("100g").
+            if (PackSize.Parse(packText, unit ?? UnitOfPack(packText) ?? BaseUnit.Each, out string? problem) is not { } pack)
             {
                 leftOut.Add($"{what}: the pack \"{packText}\" - {problem}");
                 return;
@@ -442,6 +552,7 @@ public sealed class SheetImport
             if (latest.TryGetValue(product.Id, out long cents) && cents == cell.Price.Cents)
             {
                 alreadyHere++;
+                samePrices.Add(cell.Id);
                 return;
             }
             latest[product.Id] = cell.Price.Cents;
@@ -453,12 +564,13 @@ public sealed class SheetImport
         foreach (SheetIngredient item in _sheetIngredients)
             if (targets.TryGetValue(item.Key, out Target? ingredient))
                 foreach (PriceCell cell in item.Prices)
-                    Price(cell, ingredient.Name, ingredient.Id, ingredient.Unit, null);
+                    // Named as the sheet names it, which is how a later import knows the answer (KnownByProduct).
+                    Price(cell, item.Name, ingredient.Id, ingredient.Unit, ingredient.UsualStore);
 
         foreach ((string name, IReadOnlyList<PriceCell> cells) in _household)
         {
             foreach (PriceCell cell in cells)
-                Price(cell, name, null, BaseUnit.Each, choices.HouseholdStore);
+                Price(cell, name, null, null, choices.HouseholdStore);
             if (cells.Count > 0)
                 continue;
 
@@ -476,7 +588,8 @@ public sealed class SheetImport
             }
         }
 
-        return new ImportPlan(edits, fresh, newCategories, newGroups, newMeals, newLines, newProducts, newPrices, alreadyHere, leftOut);
+        return new ImportPlan(edits, fresh, newCategories, newGroups, newMeals, newLines, newProducts, newPrices, alreadyHere, leftOut,
+            unitQuestions, changedUnits, samePrices);
     }
 
     private Target NewIngredient(
@@ -491,27 +604,24 @@ public sealed class SheetImport
         edits.Add(new(IngredientRules.Entity, id, OpKind.Create,
             new IngredientDraft(name, unit, category, store, false, UnitGuessed: !chosen).FieldsChangedFrom(null)));
         fresh.Add(new NewIngredientLine(key, name, unit, !chosen, categoryHeading));
-        return new Target(id, name, unit);
+        return new Target(id, name, unit, store);
     }
 
     /// <summary>
     /// A pack the sheet gave says more than the name does: "2kg" is grams, "2L" millilitres, "24" a count. Otherwise
     /// <see cref="UnitGuess"/>.
     /// </summary>
-    public static BaseUnit GuessUnit(string name, string? category, IReadOnlyList<string?> packs)
+    public static BaseUnit GuessUnit(string name, string? category, IReadOnlyList<string?> packs) =>
+        packs.Select(p => p is null ? null : UnitOfPack(p)).FirstOrDefault(u => u is not null) ?? UnitGuess.For(name, category);
+
+    /// <summary>What a pack is counted in: "2kg" grams, "2L" millilitres, "24" or "18pk" each; null when it is no pack.</summary>
+    public static BaseUnit? UnitOfPack(string pack)
     {
-        foreach (string? pack in packs)
-        {
-            if (pack is null)
-                continue;
-            foreach (BaseUnit unit in new[] { BaseUnit.Gram, BaseUnit.Millilitre, BaseUnit.Each })
-            {
-                bool hasLetters = pack.Any(char.IsLetter);
-                if ((hasLetters || unit == BaseUnit.Each) && PackSize.Parse(pack, unit, out _) is not null)
-                    return unit;
-            }
-        }
-        return UnitGuess.For(name, category);
+        bool hasLetters = pack.Any(char.IsLetter);
+        foreach (BaseUnit unit in new[] { BaseUnit.Gram, BaseUnit.Millilitre, BaseUnit.Each })
+            if ((hasLetters || unit == BaseUnit.Each) && PackSize.Parse(pack, unit, out _) is not null)
+                return unit;
+        return null;
     }
 
     private static Dictionary<string, Guid?> Headings(

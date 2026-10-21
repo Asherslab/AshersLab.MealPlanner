@@ -99,20 +99,73 @@ public class SheetTextTests
     }
 
     [Theory]
-    [InlineData("Toilet rolls 14.50/24", "Toilet rolls", 1450, "24", null)]
+    [InlineData("Toilet rolls 14.50/24", "Toilet rolls", 1450, "24 each", null)]
     [InlineData("Lamb mince $12.50/kg", "Lamb mince", 1250, "1kg", null)]
     [InlineData("Lamb mince 24.99/2kg Costco", "Lamb mince", 2499, "2kg", "Costco")]
     [InlineData("Korma paste 4.20 (Woolies)", "Korma paste", 420, null, "Woolies")]
-    [InlineData("Eggs 7.20 per 12", "Eggs", 720, "12", null)]
+    [InlineData("Eggs 7.20 per 12", "Eggs", 720, "12 each", null)]
     [InlineData("Milk 2L 3.10", "Milk", 310, "2L", null)]
     [InlineData("Cola 6x375ml $9", "Cola", 900, "6x375ml", null)]
-    [InlineData("Lemons 0.80 each", "Lemons", 80, "1", null)]
+    [InlineData("Lemons 0.80 each", "Lemons", 80, "1 each", null)]
     public void Reads_a_price_written_after_a_name(string cell, string name, long cents, string? pack, string? store)
     {
-        (string read, SheetPrice? price, _) = SheetText.CostItem(cell, Stores);
+        (string read, SheetPrice? price, _, _) = SheetText.CostItem(cell, Stores);
 
         Assert.Equal(name, read);
         Assert.Equal(new SheetPrice(cents, pack, store), price);
+    }
+
+    // The shapes of a sheet where the planner writes what each thing costs in words - every value here made up.
+    [Theory]
+    [InlineData("Lentils $2.40 for 375g", "Lentils", 240, "375g")]
+    [InlineData("Oat milk $2.75 for 1Litre", "Oat milk", 275, "1Litre")]
+    [InlineData("Frozen spinach $4.10 for kg", "Frozen spinach", 410, "1kg")]
+    [InlineData("Couscous $1.70 per 500g", "Couscous", 170, "500g")]
+    [InlineData("Crumpets $3.30 for 6", "Crumpets", 330, "6 each")]
+    [InlineData("Napkins $5.25 for 40pk", "Napkins", 525, "40 each")]
+    [InlineData("Cheese slices $6.40 for 24 slices", "Cheese slices", 640, "24 each")]
+    [InlineData("Kiwifruit $0.65ea", "Kiwifruit", 65, "1 each")]
+    [InlineData("Muffins $2ea", "Muffins", 200, "1 each")]
+    [InlineData("Pumpkin $3.40 per pumpkin", "Pumpkin", 340, "1 each")]
+    [InlineData("Cabbage $4.20 per cabbage head", "Cabbage", 420, "1 each")]
+    [InlineData("Pork mince $17.49 for 12 servings (6x250g)", "Pork mince", 1749, "6x250g")]
+    [InlineData("Pasta sauce $11 for 4x500g (16 servings)", "Pasta sauce", 1100, "4x500g")]
+    [InlineData("Sardines $2.10 for 110g OR $0.80 for 40", "Sardines", 210, "110g")]
+    [InlineData("Rolls $3.20 per bag, ~8 rolls per bag", "Rolls", 320, "1 each")]
+    [InlineData("Jam (berry/apricot) ~$6 per jar (one a month)", "Jam", 600, "1 each")]
+    [InlineData("Toilet rolls $14.50/24", "Toilet rolls", 1450, "24 each")]
+    public void Reads_a_price_and_what_it_is_for_in_words(string cell, string name, long cents, string pack)
+    {
+        CostText read = SheetText.CostItem(cell, Stores);
+
+        Assert.Equal(new CostText(name, new SheetPrice(cents, pack, null), null, null), read);
+    }
+
+    [Theory]
+    [InlineData("Lasagne sheets $3 for 5 servings", "Lasagne sheets", 300, "5 servings")]
+    [InlineData("Dumplings $9 for 7 (5?) servings", "Dumplings", 900, "7 servings")]
+    [InlineData("Stock cubes $12 for 20 servings (3 cubes)", "Stock cubes", 1200, "20 servings")]
+    [InlineData("Dish brush $14 for ~2 months", "Dish brush", 1400, "~2 months")]
+    public void A_price_for_servings_or_a_time_has_no_pack_and_keeps_what_the_sheet_said(string cell, string name, long cents, string note)
+    {
+        Assert.Equal(new CostText(name, new SheetPrice(cents, null, null, note), null, null), SheetText.CostItem(cell, Stores));
+    }
+
+    [Theory]
+    [InlineData("Relish ~ $4", "Relish", 400)]
+    [InlineData("Tea $4 (try to buy on sale)", "Tea", 400)]
+    [InlineData("Hot sauce $2.95", "Hot sauce", 295)]
+    public void A_price_with_nothing_said_of_what_it_is_for_has_no_pack(string cell, string name, long cents)
+    {
+        Assert.Equal(new CostText(name, new SheetPrice(cents, null, null), null, null), SheetText.CostItem(cell, Stores));
+    }
+
+    [Theory]
+    [InlineData("Razors <$12 (only on sale)", "Razors", "<$12 (only on sale)")]
+    [InlineData("Sponges about $5-6", "Sponges about", "$5-6")]
+    public void Something_like_a_price_that_is_not_one_is_kept_apart_from_the_name(string cell, string name, string unread)
+    {
+        Assert.Equal(new CostText(name, null, null, unread), SheetText.CostItem(cell, Stores));
     }
 
     [Theory]
@@ -123,10 +176,11 @@ public class SheetTextTests
     [InlineData("Lamb mince 12.505")] // three decimals is a typo
     public void A_name_without_a_price_is_only_a_name(string cell)
     {
-        (string name, SheetPrice? price, string? store) = SheetText.CostItem(cell, Stores);
+        (string name, SheetPrice? price, string? store, string? unread) = SheetText.CostItem(cell, Stores);
 
         Assert.Null(price);
         Assert.Null(store);
+        Assert.Null(unread);
         Assert.Equal(ImportNames.Tidy(cell), name);
     }
 
@@ -136,7 +190,7 @@ public class SheetTextTests
     [InlineData("Pears @ costco", "Costco")]
     public void A_store_after_a_name_with_no_price_is_its_usual_store(string cell, string store)
     {
-        (string name, SheetPrice? price, string? usual) = SheetText.CostItem(cell, Stores);
+        (string name, SheetPrice? price, string? usual, _) = SheetText.CostItem(cell, Stores);
 
         Assert.Equal("Pears", name);
         Assert.Null(price);
@@ -219,7 +273,7 @@ public class ImportNamesTests
         Assert.Equal(3, ImportNames.Distance("kitten", "sitting"));
     }
 
-    private static readonly string[] Known = ["Lamb korma", "Grated cheese", "Sliced cheese", "Cheese cubes", "Roast chook", "Rice"];
+    private static readonly string[] Known = ["Lamb korma", "Grated cheese", "Sliced cheese", "Cheese cubes", "Roast potatoes", "Rice"];
 
     [Fact]
     public void A_letter_transposition_is_likely_the_same()
@@ -240,9 +294,21 @@ public class ImportNamesTests
     }
 
     [Fact]
+    public void A_name_wholly_inside_comes_before_ones_only_sharing_a_word_or_spelt_alike()
+    {
+        string[] known = ["Frozen kale", "Frozen pies", "Frozen naan", "Frozen dough", "Frozen limes", "Beans & rice"];
+
+        List<NameCandidate<string>> found = ImportNames.Candidates("Frozen beans & rice", known, k => k);
+
+        Assert.Equal("Beans & rice", found[0].Item);
+        Assert.True(found[0].Inside);
+        Assert.Equal(5, found.Count);
+    }
+
+    [Fact]
     public void A_shared_long_word_is_possible_and_nothing_in_common_is_none()
     {
-        Assert.Equal("Roast chook", ImportNames.Candidates("roast chicken", Known, k => k).Single().Item);
+        Assert.Equal("Roast potatoes", ImportNames.Candidates("roast pumpkin", Known, k => k).Single().Item);
         Assert.Empty(ImportNames.Candidates("gravy", Known, k => k));
     }
 

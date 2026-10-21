@@ -16,7 +16,9 @@ public class SpreadsheetLayoutTests
 
         Assert.Equal([1, 2], sheet.Plan.Select(w => w.Number));
         PlanWeek one = sheet.Plan[0];
+        // The sheet's own sums beside the days ("Weekly cost", "Total") are not days.
         Assert.Equal(["Monday", "Tuesday"], one.Days);
+        Assert.All(one.Rows, r => Assert.Equal(2, r.Days.Count));
         Assert.Equal(["Breakfast", "Lunch", "Dinner"], one.Rows.Select(r => r.Slot));
         Assert.Equal("Lunch (at work)", one.Rows[1].Label);
         Assert.Equal([["Lamb korma"], ["soup"]], one.Rows[1].Days[0]!.Choices);
@@ -70,7 +72,7 @@ public class SpreadsheetLayoutTests
         ParsedSheet sheet = Parsed();
 
         Assert.Equal(["Toilet rolls", "Paper towel"], sheet.Costs.Where(c => c.Household).Select(c => c.Name));
-        Assert.Equal(new SheetPrice(1450, "24", null), sheet.Costs.Single(c => c.Name == "Toilet rolls").Prices.Single().Price);
+        Assert.Equal(new SheetPrice(1450, "24 each", null), sheet.Costs.Single(c => c.Name == "Toilet rolls").Prices.Single().Price);
     }
 
     [Fact]

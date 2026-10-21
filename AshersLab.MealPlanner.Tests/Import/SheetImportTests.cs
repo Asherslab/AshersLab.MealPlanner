@@ -279,7 +279,7 @@ public class SheetImportTests
         Assert.Contains("Pears: deleted here before, so not added again.", plan.LeftOut);
         Assert.Contains("chives in Omelette: that ingredient was deleted here.", plan.LeftOut);
         // The existing ingredient is counted in each, so the sheet's "2kg" is not its pack: said, not converted.
-        Assert.Contains(plan.LeftOut, l => l.StartsWith("lamb MINCE $24.99 (Plan C16): the pack \"2kg\""));
+        Assert.Contains(plan.LeftOut, l => l.StartsWith("Lamb mince $24.99 (Plan C16): the pack \"2kg\""));
         Assert.DoesNotContain(plan.Edits, e => e.Id == lamb);
     }
 
@@ -295,6 +295,8 @@ public class SheetImportTests
                      new KnownPrice(Guid.CreateVersion7(), product, 2499, new DateOnly(2026, 10, 1), false)]);
         Assert.DoesNotContain(Plan(same).Edits, e => e.Entity is ProductRules.Entity && Field(e, ProductRules.NameField) == "Lamb mince");
         Assert.DoesNotContain(Plan(same).Edits, e => e.Entity is PriceRules.Entity && Field(e, PriceRules.ProductField) == OpValues.FormatId(product));
+        // The review says which, so it does not show "will be imported" for it.
+        Assert.Equal(["Plan C16 0"], Plan(same).PricesAlreadyHere);
 
         // The latest is $22.99 (newer day): the sheet's $24.99 is news.
         ImportKnown older = same with
@@ -303,6 +305,150 @@ public class SheetImportTests
                       new KnownPrice(Guid.CreateVersion7(), product, 2299, new DateOnly(2026, 10, 1), false)],
         };
         Assert.Single(Plan(older).Edits, e => e.Entity is PriceRules.Entity && Field(e, PriceRules.ProductField) == OpValues.FormatId(product));
+    }
+
+    // A later download of the sheet: prices written in words after each name, no store named anywhere. Made up.
+    private static readonly Guid Lamb = Guid.CreateVersion7(), Muffins = Guid.CreateVersion7(), Chilli = Guid.CreateVersion7(),
+        Greek = Guid.CreateVersion7(), Rice = Guid.CreateVersion7();
+
+    private static ImportKnown AfterFirstImport() => Seeds(ingredients:
+    [
+        new KnownIngredient(Lamb, "Lamb mince", BaseUnit.Gram, false, UnitGuessed: true),
+        new KnownIngredient(Muffins, "Muffins", BaseUnit.Gram, false, UnitGuessed: true),
+        new KnownIngredient(Chilli, "Sweet chilli sauce", BaseUnit.Millilitre, false, UnitGuessed: true),
+        new KnownIngredient(Greek, "Greek yoghurt", BaseUnit.Gram, false, UnitGuessed: false),
+        new KnownIngredient(Rice, "Rice", BaseUnit.Gram, false, UnitGuessed: true, UsualStoreId: Costco),
+    ]);
+
+    private static SheetImport Later(ImportKnown known) => new(SpreadsheetLayout.Parse([SheetGrid.FromRows("S",
+        "COSTS|Meat|Pantry|Dairy|Non-food etc",
+        "|Lamb mince $26.49 for 2kg|Sweet chili sauce $3.50 for 250ml|Natural yoghurt $4 for 1kg|Soap $4.50 for 100g",
+        "|Muffins $2ea|Stock $9 for 12 servings|Greek yoghurt $5ea|Razors <$12 (on sale)",
+        "||Rice $13 for 5kg||")], known.StoreWords), known);
+
+    private static ImportEdit PriceOf(ImportPlan plan, Guid ingredient)
+    {
+        ImportEdit product = Of(plan, ProductRules.Entity).Single(p => Field(p, ProductRules.IngredientField) == OpValues.FormatId(ingredient));
+        return Of(plan, PriceRules.Entity).Single(p => Field(p, PriceRules.ProductField) == OpValues.FormatId(product.Id));
+    }
+
+    [Fact]
+    public void A_later_sheets_names_like_existing_ingredients_are_asked_and_a_likely_misspelling_suggested()
+    {
+        ImportReview review = Later(AfterFirstImport()).Review();
+
+        IngredientQuestion chili = review.Ingredients.Single(q => q.Name == "Sweet chili sauce");
+        Assert.Equal("sweet chilli sauce", chili.Suggested);
+        Assert.Empty(chili.Meals);
+        Assert.Equal(new SheetPlace("S", "C2"), chili.Place);
+
+        IngredientQuestion natural = review.Ingredients.Single(q => q.Name == "Natural yoghurt");
+        Assert.Null(natural.Suggested);
+        Assert.Equal(["Greek yoghurt"], natural.Options.Select(o => o.Name));
+        Assert.DoesNotContain(review.Ingredients, q => q.Name == "Stock");
+    }
+
+    [Fact]
+    public void A_name_answered_as_an_existing_ingredient_prices_that_one_and_adds_none()
+    {
+        ImportChoices choices = new() { PriceStore = Woolworths };
+        ImportPlan plan = Later(AfterFirstImport()).Plan(choices, Today, Guid.CreateVersion7);
+
+        // Suggested and taken: the chilli sauce here gets the price; unanswered, the natural yoghurt is new.
+        Assert.Equal("350", Field(PriceOf(plan, Chilli), PriceRules.PriceCentsField));
+        Assert.Equal(["Natural yoghurt", "Stock"], plan.NewIngredients.Select(i => i.Name).Order());
+        Assert.DoesNotContain(Of(plan, IngredientRules.Entity), e => e.Id == Chilli || e.Id == Greek || e.Id == Lamb);
+    }
+
+    [Fact]
+    public void An_answer_is_remembered_by_the_product_it_priced_so_the_next_download_does_not_ask_or_add_it()
+    {
+        ImportChoices choices = new() { PriceStore = Woolworths };
+        choices.Ingredients["natural yoghurt"] = "greek yoghurt";
+        ImportPlan first = Later(AfterFirstImport()).Plan(choices, Today, Guid.CreateVersion7);
+
+        // The product keeps the sheet's name, under the ingredient it was answered as.
+        ImportEdit product = Of(first, ProductRules.Entity).Single(p => Field(p, ProductRules.NameField) == "Natural yoghurt");
+        Assert.Equal(OpValues.FormatId(Greek), Field(product, ProductRules.IngredientField));
+
+        ImportKnown after = AfterFirstImport() with
+        {
+            Products = [new KnownProduct(product.Id, "Natural yoghurt", Woolworths, Greek, 1000, false)],
+            Prices   = [new KnownPrice(Guid.CreateVersion7(), product.Id, 400, Today, false)],
+        };
+        SheetImport again = Later(after);
+        Assert.DoesNotContain(again.Review().Ingredients, q => q.Name == "Natural yoghurt");
+        ImportPlan second = again.Plan(new ImportChoices { PriceStore = Woolworths }, Today, Guid.CreateVersion7);
+        Assert.DoesNotContain(second.NewIngredients, i => i.Name == "Natural yoghurt");
+        Assert.Contains("S D2 0", second.PricesAlreadyHere);
+    }
+
+    [Fact]
+    public void A_price_naming_no_store_goes_to_the_usual_store_else_the_one_chosen_for_all()
+    {
+        ImportPlan none = Later(AfterFirstImport()).Plan(new ImportChoices(), Today, Guid.CreateVersion7);
+        Assert.Contains("Lamb mince $26.49 (S B2): no store chosen.", none.LeftOut);
+        // Rice's usual store is Costco: no question needed.
+        ImportEdit rice = Of(none, ProductRules.Entity).Single(p => Field(p, ProductRules.IngredientField) == OpValues.FormatId(Rice));
+        Assert.Equal(OpValues.FormatId(Costco), Field(rice, ProductRules.StoreField));
+
+        ImportPlan chosen = Later(AfterFirstImport()).Plan(new ImportChoices { PriceStore = Woolworths }, Today, Guid.CreateVersion7);
+        ImportEdit lamb = Of(chosen, ProductRules.Entity).Single(p => Field(p, ProductRules.IngredientField) == OpValues.FormatId(Lamb));
+        Assert.Equal(OpValues.FormatId(Woolworths), Field(lamb, ProductRules.StoreField));
+        Assert.Equal("2649", Field(PriceOf(chosen, Lamb), PriceRules.PriceCentsField));
+    }
+
+    [Fact]
+    public void A_guessed_unit_the_price_contradicts_is_asked_and_changed_only_when_answered()
+    {
+        ImportChoices choices = new() { PriceStore = Woolworths };
+        ImportPlan asked = Later(AfterFirstImport()).Plan(choices, Today, Guid.CreateVersion7);
+
+        UnitQuestion muffins = asked.Units.Single();
+        Assert.Equal(("muffin", BaseUnit.Gram, BaseUnit.Each), (muffins.Key, muffins.Unit, muffins.PriceSays));
+        Assert.Contains(asked.LeftOut, l => l.StartsWith("Muffins $2.00 (S B3): the pack \"1 each\" - It is counted in g"));
+        Assert.DoesNotContain(asked.Edits, e => e.Id == Muffins);
+        Assert.Equal(0, asked.ChangedUnits);
+        // Greek yoghurt's unit was confirmed by the planner: never asked, its "each" price left out with why.
+        Assert.Contains(asked.LeftOut, l => l.StartsWith("Greek yoghurt $5.00 (S D3): the pack \"1 each\""));
+
+        choices.Units["muffin"] = BaseUnit.Each;
+        ImportPlan answered = Later(AfterFirstImport()).Plan(choices, Today, Guid.CreateVersion7);
+
+        ImportEdit change = answered.Edits.Single(e => e.Id == Muffins);
+        Assert.Equal(OpKind.Update, change.Kind);
+        Assert.Equal([new OpField("BaseUnit", "Each"), new OpField("UnitGuessed", "false")], change.Fields);
+        Assert.Equal("200", Field(PriceOf(answered, Muffins), PriceRules.PriceCentsField));
+        Assert.Equal(1, answered.ChangedUnits);
+    }
+
+    [Fact]
+    public void A_price_for_servings_is_left_out_saying_what_the_sheet_said_until_a_pack_is_typed()
+    {
+        SheetImport later = Later(AfterFirstImport());
+        PriceQuestion stock = later.Review().Prices.Single(p => p.Item == "Stock");
+        Assert.Equal((900, (string?)null, "12 servings"), (stock.Cents, stock.Pack, stock.Note));
+
+        ImportChoices choices = new() { PriceStore = Woolworths };
+        Assert.Contains("Stock $9.00 (S C3): how much is in the pack was not given - the sheet says \"12 servings\".",
+            later.Plan(choices, Today, Guid.CreateVersion7).LeftOut);
+
+        choices.PricePacks[stock.Id] = "1L";
+        choices.Units["stock"]       = BaseUnit.Millilitre;
+        ImportPlan typed = later.Plan(choices, Today, Guid.CreateVersion7);
+        Assert.DoesNotContain(typed.LeftOut, l => l.StartsWith("Stock"));
+    }
+
+    [Fact]
+    public void A_household_items_pack_may_be_a_weight_and_a_price_that_is_not_one_is_reported()
+    {
+        ImportPlan plan = Later(AfterFirstImport()).Plan(new ImportChoices { HouseholdStore = Costco }, Today, Guid.CreateVersion7);
+
+        ImportEdit soap = Of(plan, ProductRules.Entity).Single(p => Field(p, ProductRules.NameField) == "Soap");
+        Assert.Equal("100", Field(soap, ProductRules.PackQuantityField));
+        // Razors: added as a household product with no price; the "<$12" is reported, not read as $12.
+        Assert.Single(Of(plan, ProductRules.Entity), p => Field(p, ProductRules.NameField) == "Razors");
+        Assert.Contains(Later(AfterFirstImport()).Review().Unread, u => u.Text == "<$12 (on sale)" && u.Place.Address == "E3");
     }
 
     [Fact]

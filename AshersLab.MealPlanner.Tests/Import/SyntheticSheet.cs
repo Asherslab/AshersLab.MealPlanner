@@ -13,9 +13,9 @@ public static class SyntheticSheet
 {
     public static SheetGrid Main() => SheetGrid.FromRows("Plan",
         "OUR GROCERIES",
-        "WEEK 1|Monday|Tuesday",
-        "Breakfast|Toast, jam + fruit|Porridge",
-        "Lunch (at work)|Lamb korma/soup|Leftovers",
+        "WEEK 1|Monday|Tuesday|Weekly cost|Total",
+        "Breakfast|Toast, jam + fruit|Porridge|12.5|",
+        "Lunch (at work)|Lamb korma/soup|Leftovers|200g lamb, 1 jar korma paste, |",
         "Dinner|Family dinner|Shepherd pie",
         "",
         "WEEK 2|Monday|Tuesday",

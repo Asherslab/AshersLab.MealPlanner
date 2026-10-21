@@ -17,7 +17,8 @@ public enum MatchStrength
     Same,
 }
 
-public sealed record NameCandidate<T>(T Item, string Name, MatchStrength Strength, decimal Score);
+/// <param name="Inside">Every word of one name is in the other: "Beans &amp; rice" in "Frozen beans &amp; rice".</param>
+public sealed record NameCandidate<T>(T Item, string Name, MatchStrength Strength, decimal Score, bool Inside = false);
 
 /// <summary>
 /// The sheet's names, compared the way the planner reads them. The sheet has "bananas" and "Bananas", "egg" and
@@ -64,9 +65,10 @@ public static class ImportNames
     /// The known names <paramref name="name"/> could be, best first. <see cref="MatchStrength.Same"/> only for equal
     /// keys; <see cref="MatchStrength.Likely"/> for one or two letters wrong or swapped in a long enough name;
     /// <see cref="MatchStrength.Possible"/> when every word of one is in the other ("cheese", "Sliced cheese"), or they
-    /// share a word of four letters or more ("roast chicken", "Roast chook").
+    /// share a word of four letters or more ("roast pumpkin", "Roast potatoes"). Among the possible, a name wholly inside
+    /// the other comes first: "Beans & rice" before "Frozen kale" for "Frozen beans & rice", however close the spelling.
     /// </summary>
-    public static List<NameCandidate<T>> Candidates<T>(string name, IEnumerable<T> known, Func<T, string> nameOf, int max = 4)
+    public static List<NameCandidate<T>> Candidates<T>(string name, IEnumerable<T> known, Func<T, string> nameOf, int max = 5)
     {
         string key = Key(name);
         List<NameCandidate<T>> found = [];
@@ -83,18 +85,20 @@ public static class ImportNames
 
             int     distance = Distance(key, other);
             decimal score    = 1m - (decimal)distance / Math.Max(key.Length, other.Length);
+            bool    inside   = Words(key).IsSubsetOf(Words(other)) || Words(other).IsSubsetOf(Words(key));
             MatchStrength strength =
                 score >= 0.8m && distance <= 2 && Math.Min(key.Length, other.Length) >= 5 ? MatchStrength.Likely
-                : Words(key).IsSubsetOf(Words(other)) || Words(other).IsSubsetOf(Words(key)) ? MatchStrength.Possible
+                : inside ? MatchStrength.Possible
                 : score >= 0.75m ? MatchStrength.Possible
                 : Words(key).Intersect(Words(other)).Any(w => w.Length >= 4) ? MatchStrength.Possible
                 : MatchStrength.None;
             if (strength != MatchStrength.None)
-                found.Add(new(item, nameOf(item), strength, score));
+                found.Add(new(item, nameOf(item), strength, score, inside));
         }
 
         return [.. found
             .OrderByDescending(c => c.Strength)
+            .ThenByDescending(c => c.Inside)
             .ThenByDescending(c => c.Score)
             .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .Take(max)];

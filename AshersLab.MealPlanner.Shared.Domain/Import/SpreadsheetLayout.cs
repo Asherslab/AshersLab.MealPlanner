@@ -133,7 +133,8 @@ public static partial class SpreadsheetLayout
 
     private static PlanWeek ReadWeek(SheetGrid sheet, SheetCell heading, int number, int last)
     {
-        List<SheetCell> days = [.. sheet.Row(heading.Row).Where(c => c.Column > heading.Column)];
+        // Only the weekday columns: the sheet keeps its own sums beside them ("Weekly cost", "Total").
+        List<SheetCell> days = [.. sheet.Row(heading.Row).Where(c => c.Column > heading.Column && IsWeekday(c.Text))];
         List<PlanRow>   rows = [];
         for (int row = heading.Row + 1; row <= last; row++)
         {
@@ -145,6 +146,13 @@ public static partial class SpreadsheetLayout
                 [.. days.Select(d => sheet.At(row, d.Column) is { } cell ? SheetText.PlanCell(cell.Text) : null)]));
         }
         return new PlanWeek(number, [.. days.Select(d => Names.Normalise(d.Text))], rows);
+    }
+
+    /// <summary>"Monday", "mon", "Tues", "THU" - a day's name, or its first three letters and more.</summary>
+    public static bool IsWeekday(string text)
+    {
+        string word = Names.Normalise(text).ToLowerInvariant();
+        return word.Length >= 3 && Enum.GetNames<DayOfWeek>().Any(d => d.ToLowerInvariant().StartsWith(word, StringComparison.Ordinal));
     }
 
     private static void ReadMealIdeas(SheetGrid sheet, SheetCell heading, int last, List<string> headers, List<MealIdeaCell> ideas, List<UnreadCell> unread)
@@ -230,7 +238,7 @@ public static partial class SpreadsheetLayout
                     continue;
                 }
 
-                (string name, SheetPrice? inline, string? usualStore) = SheetText.CostItem(cell.Text, storeWords);
+                (string name, SheetPrice? inline, string? usualStore, string? notPrice) = SheetText.CostItem(cell.Text, storeWords);
                 if (name.Length == 0)
                 {
                     unread.Add(new UnreadCell(Place(sheet, cell), cell.Text, "It has no name."));
@@ -239,6 +247,8 @@ public static partial class SpreadsheetLayout
 
                 List<PriceCell> prices = [];
                 SheetPlace      place  = Place(sheet, cell);
+                if (notPrice is not null)
+                    unread.Add(new UnreadCell(place, notPrice, $"Not a price this can read, for {name} - it is added with no price."));
                 if (inline is not null)
                     prices.Add(new PriceCell($"{place} 0", place, inline));
 
@@ -270,9 +280,11 @@ public static partial class SpreadsheetLayout
                 continue;
             }
 
-            (string name, SheetPrice? inline, _) = SheetText.CostItem(first.Text, storeWords);
+            (string name, SheetPrice? inline, _, string? notPrice) = SheetText.CostItem(first.Text, storeWords);
             SheetPlace      place  = Place(sheet, first);
             List<PriceCell> prices = inline is null ? [] : [new PriceCell($"{place} 0", place, inline)];
+            if (notPrice is not null)
+                unread.Add(new UnreadCell(place, notPrice, $"Not a price this can read, for {name} - it is added with no price."));
             foreach (SheetCell cell in row.Where(c => c.Column != first.Column))
             {
                 SheetPlace at = Place(sheet, cell);

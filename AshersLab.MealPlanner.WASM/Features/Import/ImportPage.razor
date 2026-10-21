@@ -80,7 +80,7 @@
                 @foreach (IngredientQuestion q in _review.Ingredients)
                 {
                     <label class="native-select" data-testid="import-ingredient-question" data-key="@q.Key">
-                        <span>"@q.Name" in @string.Join(", ", q.Meals)</span>
+                        <span>"@q.Name" @(q.Meals.Count > 0 ? $"in {string.Join(", ", q.Meals)}" : $"in the shopping list ({q.Place}) - is it one already here?")</span>
                         <select value="@(Chosen(q) ?? "")" @onchange="e => Set(_choices.Ingredients, q.Key, Empty(e))">
                             <option value="">A new ingredient, "@q.Name"</option>
                             @foreach ((string key, string name) in q.Options)
@@ -153,6 +153,19 @@
                 Each is saved as typed in, seen today. A price needs the store and what it is for - "2kg", "24".
             </MudText>
             <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+                @if (_review.Prices.Any(p => !p.Household && p.Store is null))
+                {
+                    <label class="native-select" data-testid="import-price-store-all">
+                        <span>Prices that don't say where they are from were seen at</span>
+                        <select value="@(_choices.PriceStore?.ToString() ?? "")" @onchange="e => { _choices.PriceStore = Id(e); Replan(); }">
+                            <option value="">Leave them out for now</option>
+                            @foreach (KnownNamed store in Stores)
+                            {
+                                <option value="@store.Id">@store.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
                 @if (_review.HouseholdItems.Count > 0)
                 {
                     <label class="native-select" data-testid="import-household-store">
@@ -171,6 +184,12 @@
                     string? why = _plan.LeftOut.FirstOrDefault(l => l.Contains($"({q.Place})"));
                     <div data-testid="import-price" data-id="@q.Id">
                         <MudText><b>@q.Item</b> @Money.Format(q.Cents) <span class="mud-text-secondary">· @q.Place</span></MudText>
+                        @if (q.Note is not null && PricePack(q) is null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="import-price-note">
+                                The sheet says "@q.Note" - type what that is, like 500g or 6.
+                            </MudText>
+                        }
                         <div class="d-flex gap-2 mt-1">
                             <label class="native-select flex-grow-1">
                                 <span>Store</span>
@@ -190,8 +209,37 @@
                             </label>
                         </div>
                         <MudText Typo="Typo.caption" Color="@(why is null ? Color.Success : Color.Warning)" data-testid="import-price-state">
-                            @(why is null ? "Will be imported." : "Left out: " + why[(why.IndexOf("):", StringComparison.Ordinal) + 3)..])
+                            @(why is not null ? "Left out: " + why[(why.IndexOf("):", StringComparison.Ordinal) + 3)..]
+                              : _plan.PricesAlreadyHere.Contains(q.Id) ? "Already here - the same as its latest price."
+                              : "Will be imported.")
                         </MudText>
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        @if (_plan.Units.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Units the prices disagree with</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+                These were guessed by an earlier import and nobody has checked them. Their price is counted another way;
+                change the unit to import it, or leave it and the price is left out.
+            </MudText>
+            <MudPaper Outlined="true">
+                @foreach (UnitQuestion q in _plan.Units)
+                {
+                    BaseUnit chosen = _choices.Units.TryGetValue(q.Key, out BaseUnit u) ? u : q.Unit;
+                    <div class="d-flex align-center gap-2 px-4 py-1 import-unit-row" data-testid="import-unit-question" data-key="@q.Key" data-says="@q.PriceSays">
+                        <div class="flex-grow-1">
+                            <MudText>@q.Name</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">guessed as @q.Unit.Symbol() · the sheet says @q.Why</MudText>
+                        </div>
+                        @foreach (BaseUnit unit in Enum.GetValues<BaseUnit>())
+                        {
+                            <MudButton Size="Size.Small" Variant="@(chosen == unit ? Variant.Filled : Variant.Text)"
+                                       Color="Color.Primary" OnClick="() => SetUnit(q.Key, unit)"
+                                       data-testid="@($"import-unit-{unit}")">@unit.Symbol()</MudButton>
+                        }
                     </div>
                 }
             </MudPaper>
@@ -339,6 +387,7 @@
             Count(plan.NewCategories, "category", "categories"),
             Count(plan.NewProducts, "product"),
             Count(plan.NewPrices, "price"),
+            plan.ChangedUnits > 0 ? $"{Count(plan.ChangedUnits, "unit")} changed" : null,
         }.OfType<string>()) is { Length: > 0 } text ? text : "nothing";
 
     private static string? Count(int n, string noun, string? plural = null) =>
@@ -352,7 +401,7 @@
         answers.TryGetValue(q.Heading, out Guid? id) ? id : q.Suggested;
 
     private Guid? PriceStore(PriceQuestion q) =>
-        _choices.PriceStores.TryGetValue(q.Id, out Guid? store) ? store : q.Store ?? (q.Household ? _choices.HouseholdStore : null);
+        _choices.PriceStores.TryGetValue(q.Id, out Guid? store) ? store : q.Store ?? (q.Household ? _choices.HouseholdStore : null) ?? _choices.PriceStore;
 
     private string? PricePack(PriceQuestion q) => _choices.PricePacks.TryGetValue(q.Id, out string? pack) ? pack : q.Pack;
 

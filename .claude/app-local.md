@@ -154,13 +154,17 @@ chip**, after a save: the chip reads "online, 0 waiting" before a write made a m
 protocol's `DOM.setFileInputFiles`; the Chrome extension's `file_upload` only takes files shared with the session, and
 the real sheet is in `private/`), then `import-summary` (or `import-error`), `import-run`, `import-done` /
 `import-nothing`; questions `import-ingredient-question` / `import-serves-question` / `import-group-question` /
-`import-category-question` (`data-key`), `import-household-store` (a label around a native select), per price
-`import-price` (`data-id`) with `import-price-store`, `import-price-pack`, `import-price-state`; new ingredients
-`import-new-ingredient` with `import-unit-Gram|Millilitre|Each`; `import-left-out`. On Ingredients, a guessed unit is
+`import-category-question` (`data-key`), `import-household-store` and `import-price-store-all` (labels around a native
+select), per price `import-price` (`data-id`) with `import-price-store`, `import-price-pack`, `import-price-note`,
+`import-price-state` ("Will be imported", "Already here", "Left out: ..."); guessed units a price contradicts
+`import-unit-question` (`data-key`, `data-says` = the unit the price says) with `import-unit-Gram|Millilitre|Each`; new
+ingredients `import-new-ingredient` with the same buttons; `import-left-out`. On Ingredients, a guessed unit is
 `ingredient-unit-guessed` (chip) and `ingredient-unit-guessed-note` (in the editor).
-`node .claude/tools/chrome-import-check.mjs <scratch>/import "$PWD/private/Grocery budget.xlsx"` (ports 19352/19353)
-drives it from two profiles and prints counts only. Start from a fresh server database (stop the app, delete
-`mealplanner.db*`, start it) - against one already holding the import it can only say "nothing new".
+`node .claude/tools/chrome-import-check.mjs <scratch>/import "$PWD/private/Grocery budget.xlsx" ["$PWD/private/<later>.xlsx"]`
+(ports 19352/19353, about 3 minutes with a later sheet) drives it from two profiles and prints counts only; with a later
+download of the sheet it imports that on top and checks nothing already there changed. Start from a fresh server
+database (stop the app, delete `mealplanner.db*`, start it) - against one already holding the import it can only say
+"nothing new".
 
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
