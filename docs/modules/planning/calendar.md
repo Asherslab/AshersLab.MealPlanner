@@ -66,7 +66,8 @@ plans themselves are [plan templates](plan-templates.md); every edit is an op ([
   (`CalendarSyncTests.A_skip_from_a_stale_device_keeps_the_meal_another_device_chose`). The price: a skipped or moved
   entry follows its plan entry, so one whose plan entry is removed shows "meal removed" until a meal is chosen.
 - **A past entry still `Planned` counts as eaten** (`PlannedEntry.EatenBy`). Nobody ticks meals off; skipping is the one
-  thing recorded. Batches, serves and the pantry (slices 10 and 11) read it that way.
+  thing recorded. The pantry (slice 11) reads it that way; serves count past and coming entries alike, a skip being the
+  only thing that takes one out.
 
 ## The row
 
@@ -80,6 +81,8 @@ plans themselves are [plan templates](plan-templates.md); every edit is an op ([
 | `People` | null: the template entry's people (everyone, for one added by hand); `everyone`; or a `PlanPeople` list |
 | `Status` | `Planned` or `Skipped`, by name; a new entry is `Planned` |
 | `MovedDate`, `MovedSlotId` | where it is now, when moved; null where it was planned. Always written together |
+| `ServesMade` | a cooked entry's serves made; null: the meal's serves per batch |
+| `EatsFrom` | a leftovers entry's batch (a cooked entry's id); null: whatever is left, oldest first |
 
 `PlanTemplate.StartsOn` is the Monday the plan's week 1 began (null until it is first applied), and `PlanTemplate.Earlier`
 the rotations before its last change ("2026-11-02|2026-10-05|4;..." - until, start, weeks). It is one decision for the
@@ -105,13 +108,12 @@ finds what the calendar already holds by id, so a tombstone that never had a dat
 saw) still counts. Two plans applied to the same week are both shown - a separate toddler plan beside the household's is
 a real use.
 
-## What a skip leaves for slice 10
+## Batches and serves
 
-A skipped entry eats nothing, cooks nothing and costs nothing; this slice records it and nothing else. When batches
-arrive, **skipping a `Cooked` entry means its batch was never cooked**, and every leftovers entry drawing from it must be
-flagged as having nothing to eat; skipping a `Leftovers` entry returns its serve. The hook is the `Status` field and
-`PlannedEntry.Skipped`/`EatenBy`: batches must read entries through `CalendarBook`, and treat a removed (deleted) entry
-exactly like a skipped one. Nothing here computes serves yet.
+A cooked entry is a batch, and leftovers entries eat from it: [batches and serves](batches-and-serves.md). Two fields of the
+row are theirs - `ServesMade` on a cooked entry, `EatsFrom` on a leftovers one - and setting either touches the entry, so it
+stays when the plan moves. A skipped entry eats nothing, cooks nothing and costs nothing; a skipped cooked entry flags the
+leftovers that would have eaten it.
 
 ## What the planner sees
 
@@ -121,7 +123,8 @@ address (`?week=2026-10-26`), so a reload stays on it.
 
 - **On a desktop** (960 px and wider) the week is the plan's grid with dates across: each entry is its meal, a dot per
   person when it is not for everyone, and what a serve costs - "$15.00 a serve", "from $0.00 a serve + 1 unpriced" (never
-  a low number for an incomplete cost), "no ingredients yet", "leftovers" (costed by its batch, slice 10), "no cost".
+  a low number for an incomplete cost), "no ingredients yet", "no cost"; leftovers cost a serve of the batch they eat
+  ("leftovers" when they eat none). Under it, a batch's serves or what leftovers eat ([batches and serves](batches-and-serves.md)).
   Today's date is coloured, past days greyed.
 - **On a phone** a day at a time: seven day buttons (Mon/26 ...), "Monday 26 October", then the slots down the screen.
 - **A skipped entry** stays on its day, struck through, saying "skipped", and is listed under **To replan** below the

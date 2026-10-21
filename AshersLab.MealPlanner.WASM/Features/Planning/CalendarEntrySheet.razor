@@ -1,4 +1,5 @@
 @using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Meals
 @using AshersLab.MealPlanner.Shared.Domain.Planning
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
 
@@ -66,6 +67,33 @@
             }
         </div>
 
+        @if (KindOf(_meal) == MealKind.Cooked)
+        {
+            <MudText Typo="Typo.overline" Class="d-block mt-4">Serves made</MudText>
+            <MudNumericField T="int?" @bind-Value="_servesMade" Min="1" Max="CalendarEntryRules.MaxServes" Variant="Variant.Outlined" Immediate="true"
+                             Placeholder="@DefaultServes(_meal).ToString()" HelperText="@($"The meal makes {DefaultServes(_meal)}; leftovers eat what is left.")"
+                             InputId="cal-serves-made" data-testid="cal-serves-made"/>
+        }
+        else if (KindOf(_meal) == MealKind.Leftovers)
+        {
+            <MudText Typo="Typo.overline" Class="d-block mt-4">Eats from</MudText>
+            <label class="native-select">
+                <span>Batch</span>
+                <select value="@(_eatsFrom?.ToString() ?? "")" @onchange="e => _eatsFrom = Guid.TryParse(e.Value as string, out Guid b) ? b : null"
+                        data-testid="cal-eats-from">
+                    <option value="">Whatever is left, oldest first</option>
+                    @foreach (PickerOption batch in Batches)
+                    {
+                        <option value="@batch.Id">@batch.Name</option>
+                    }
+                    @if (_eatsFrom is { } chosen && Batches.All(b => b.Id != chosen))
+                    {
+                        <option value="@chosen">A batch no longer on the calendar</option>
+                    }
+                </select>
+            </label>
+        }
+
         <MudText Typo="Typo.overline" Class="d-block mt-4">@(Draft.Skipped ? "Replan it on" : IsNew ? "When" : "Move to")</MudText>
         <div class="d-flex gap-2 align-end">
             <label class="native-select flex-grow-1">
@@ -131,6 +159,14 @@
     /// <summary>The live slots of the day, in order.</summary>
     [Parameter] public IReadOnlyList<PickerOption> Slots { get; set; } = [];
 
+    /// <summary>Every live meal's kind and serves per batch: what decides "Serves made" or "Eats from".</summary>
+    [Parameter] public IReadOnlyDictionary<Guid, MealServesOption> MealServes { get; set; } = new Dictionary<Guid, MealServesOption>();
+
+    /// <summary>The batches a leftovers entry can be set to eat, most recent first ("Stew · Mon 26 Oct · 4 left").</summary>
+    [Parameter] public IReadOnlyList<PickerOption> Batches { get; set; } = [];
+
+    private Guid?          _eatsFrom;
+    private int?           _servesMade;
     private Guid?          _meal;
     private HashSet<Guid>? _people;
     private DateOnly       _day;
@@ -149,7 +185,13 @@
             : null;
         _day    = Draft.Day;
         _slot   = Draft.Slot;
+        _eatsFrom   = Draft.EatsFrom;
+        _servesMade = Draft.ServesMade;
     }
+
+    private MealKind? KindOf(Guid? meal) => meal is { } id ? MealServes.GetValueOrDefault(id)?.Kind : null;
+
+    private int DefaultServes(Guid? meal) => meal is { } id ? MealServes.GetValueOrDefault(id)?.ServesPerBatch ?? 1 : 1;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -202,7 +244,11 @@
             _error = IsNew ? "Pick a meal." : "Pick a meal, or Remove the entry.";
             return;
         }
-        CalendarEntryDraft saved = new(_meal, _people?.ToList(), skipped, home ? Draft.Day : _day, home ? Draft.Slot : _slot);
+        // The meal's own number is no number of the entry's: it follows the meal if that changes. Fields the chosen meal does
+        // not show are kept as they were - picking another meal for a moment loses nothing.
+        int? made = KindOf(_meal) == MealKind.Cooked ? (_servesMade == DefaultServes(_meal) ? null : _servesMade) : Draft.ServesMade;
+        Guid? eats = KindOf(_meal) == MealKind.Leftovers ? _eatsFrom : Draft.EatsFrom;
+        CalendarEntryDraft saved = new(_meal, _people?.ToList(), skipped, home ? Draft.Day : _day, home ? Draft.Slot : _slot, eats, made);
         Dialog.Close(DialogResult.Ok(new CalendarEntrySheetResult(saved, Remove: false)));
     }
 

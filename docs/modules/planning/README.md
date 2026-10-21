@@ -18,3 +18,5 @@ Who eats, when, and what: the household and the slots of the day, the rotating p
   and choices, the week grid and the day view.
 - [The calendar](calendar.md) — a plan applied to real dates (safe to repeat, and from two phones at once), choosing an
   alternative, overriding, skipping and replanning, and what a serve costs on each day.
+- [Batches and serves](batches-and-serves.md) — a cooked entry's batch counted down by the leftovers after it, what a skip
+  does, choosing which batch a lunch eats - counted from the calendar, never stored.

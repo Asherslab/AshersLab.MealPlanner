@@ -56,11 +56,20 @@ public static class CalendarEntryRules
 
     public const string MovedSlotField = "MovedSlotId";
 
+    /// <summary>A leftovers entry's batch - the cooked calendar entry it eats from; null eats whatever is left (<see cref="Serves"/>).</summary>
+    public const string EatsFromField = "EatsFrom";
+
+    /// <summary>A cooked entry's serves made, when not the meal's serves per batch (<see cref="OpValues.FormatInt"/>, 1 to 99).</summary>
+    public const string ServesMadeField = "ServesMade";
+
+    public const int MaxServes = 99;
+
     public const string Noun = "A calendar entry";
 
     public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal)
     {
         TemplateEntryField, DateField, SlotField, MealField, PeopleField, StatusField, MovedDateField, MovedSlotField,
+        EatsFromField, ServesMadeField,
     };
 
     private static readonly string[] RequiredOnCreate = [DateField, SlotField];
@@ -93,6 +102,9 @@ public static class CalendarEntryRules
             StatusField        => TryParseStatus(field.Value, out _) ? null : "The status is not Planned or Skipped.",
             MovedDateField     => field.Value is null || OpValues.TryParseDate(field.Value, out _) ? null : "The date it moved to is not a date.",
             MovedSlotField     => OpValues.TryParseId(field.Value, out _) ? null : "The slot it moved to is not an id.",
+            EatsFromField      => OpValues.TryParseId(field.Value, out _) ? null : "The batch it eats from is not an id.",
+            ServesMadeField    => field.Value is null ? null
+                : OpValues.TryParseInt(field.Value, out int made) ? ServesMadeProblem(made) : "The serves made are not a whole number.",
             _                  => null,
         });
 
@@ -105,8 +117,17 @@ public static class CalendarEntryRules
     ];
 
     /// <summary>Whether the planner has changed anything about an entry - a meal, people, a skip or a move.</summary>
-    public static bool Touched(Guid? meal, string? people, CalendarStatus status, DateOnly? movedDate, Guid? movedSlot) =>
-        meal is not null || people is not null || status != CalendarStatus.Planned || movedDate is not null || movedSlot is not null;
+    public static bool Touched(Guid? meal, string? people, CalendarStatus status, DateOnly? movedDate, Guid? movedSlot,
+                               Guid? eatsFrom = null, int? servesMade = null) =>
+        meal is not null || people is not null || status != CalendarStatus.Planned || movedDate is not null || movedSlot is not null
+        || eatsFrom is not null || servesMade is not null;
+
+    public static string? ServesMadeProblem(int made) => made switch
+    {
+        < 1         => "A batch makes at least one serve.",
+        > MaxServes => $"Keep it to {MaxServes} serves.",
+        _           => null,
+    };
 }
 
 /// <summary>
@@ -157,7 +178,9 @@ public sealed record CalendarEntryNow(
     DateOnly          Date,
     Guid              Slot,
     DateOnly?         MovedDate,
-    Guid?             MovedSlot
+    Guid?             MovedSlot,
+    Guid?             EatsFrom = null,
+    int?              ServesMade = null
 )
 {
     public Guid? Meal => MealField ?? (FromPlan ? Usual : null);
@@ -169,8 +192,12 @@ public sealed record CalendarEntryNow(
     public Guid InSlot => MovedSlot ?? Slot;
 }
 
-/// <summary>A calendar entry as the entry sheet answers it: the meal, who eats it, skipped or not, and where.</summary>
-public sealed record CalendarEntryDraft(Guid? Meal, IReadOnlyList<Guid>? People, bool Skipped, DateOnly Day, Guid Slot)
+/// <summary>
+/// A calendar entry as the entry sheet answers it: the meal, who eats it, skipped or not, and where - and for a batch, how
+/// many serves it made (null: the meal's), for leftovers which batch it eats (null: whatever is left).
+/// </summary>
+public sealed record CalendarEntryDraft(Guid? Meal, IReadOnlyList<Guid>? People, bool Skipped, DateOnly Day, Guid Slot,
+                                        Guid? EatsFrom = null, int? ServesMade = null)
 {
     /// <summary>
     /// What saving this over <paramref name="now"/> sends - <b>only the fields the planner changed</b>, since an op that
@@ -213,6 +240,11 @@ public sealed record CalendarEntryDraft(Guid? Meal, IReadOnlyList<Guid>? People,
             fields.Add(new OpField(CalendarEntryRules.MovedDateField, moved.Date is { } d ? OpValues.FormatDate(d) : null));
             fields.Add(new OpField(CalendarEntryRules.MovedSlotField, OpValues.FormatId(moved.Slot)));
         }
+
+        if (EatsFrom != now.EatsFrom)
+            fields.Add(new OpField(CalendarEntryRules.EatsFromField, OpValues.FormatId(EatsFrom)));
+        if (ServesMade != now.ServesMade)
+            fields.Add(new OpField(CalendarEntryRules.ServesMadeField, ServesMade is { } made ? OpValues.FormatInt(made) : null));
         return fields;
     }
 }

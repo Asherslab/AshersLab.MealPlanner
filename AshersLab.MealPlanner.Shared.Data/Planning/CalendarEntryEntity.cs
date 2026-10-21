@@ -39,6 +39,12 @@ public sealed class CalendarEntryEntity : SyncedEntity<CalendarEntry>
             case CalendarEntryRules.MovedSlotField:
                 row.MovedSlotId = OpValues.TryParseId(field.Value, out Guid? movedSlot) ? movedSlot : throw Unreadable(field);
                 break;
+            case CalendarEntryRules.EatsFromField:
+                row.EatsFrom = OpValues.TryParseId(field.Value, out Guid? batch) ? batch : throw Unreadable(field);
+                break;
+            case CalendarEntryRules.ServesMadeField:
+                row.ServesMade = field.Value is null ? null : OpValues.TryParseInt(field.Value, out int made) ? made : throw Unreadable(field);
+                break;
             default:
                 throw new ArgumentException($"A calendar entry has no field '{field.Name}'.", nameof(field));
         }
@@ -54,6 +60,8 @@ public sealed class CalendarEntryEntity : SyncedEntity<CalendarEntry>
         new(CalendarEntryRules.StatusField, CalendarEntryRules.FormatStatus(row.Status)),
         new(CalendarEntryRules.MovedDateField, row.MovedDate is { } moved ? OpValues.FormatDate(moved) : null),
         new(CalendarEntryRules.MovedSlotField, OpValues.FormatId(row.MovedSlotId)),
+        new(CalendarEntryRules.EatsFromField, OpValues.FormatId(row.EatsFrom)),
+        new(CalendarEntryRules.ServesMadeField, row.ServesMade is { } made ? OpValues.FormatInt(made) : null),
     ];
 
     private static ArgumentException Unreadable(OpField field) =>

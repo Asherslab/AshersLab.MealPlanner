@@ -33,7 +33,13 @@ public class CalendarEntry : ISyncedRow
 
     public Guid? MovedSlotId { get; set; }
 
+    /// <summary>Not a foreign key: a leftovers entry's batch, the cooked entry it eats from. Null: whatever is left.</summary>
+    public Guid? EatsFrom { get; set; }
+
+    /// <summary>A cooked entry's serves made; null: the meal's serves per batch.</summary>
+    public int? ServesMade { get; set; }
+
     public bool Deleted { get; set; }
 
-    public bool Touched => CalendarEntryRules.Touched(MealId, People, Status, MovedDate, MovedSlotId);
+    public bool Touched => CalendarEntryRules.Touched(MealId, People, Status, MovedDate, MovedSlotId, EatsFrom, ServesMade);
 }

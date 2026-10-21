@@ -1,3 +1,4 @@
+using AshersLab.MealPlanner.Shared.Domain.Meals;
 using AshersLab.MealPlanner.Shared.Domain.Planning;
 using AshersLab.MealPlanner.WASM.Features.Ingredients;
 using MudBlazor;
@@ -13,6 +14,9 @@ public sealed record TemplateEntrySheetResult(TemplateEntryDraft? Saved, bool Re
 
 /// <summary>What the plan editor answers: the new name and weeks, or a confirmed delete.</summary>
 public sealed record PlanEditorResult(string? Name, int Weeks, bool Delete);
+
+/// <summary>What the entry sheet needs to know of a meal: whether it cooks a batch or eats one, and its serves per batch.</summary>
+public sealed record MealServesOption(MealKind Kind, int ServesPerBatch);
 
 /// <summary>What the calendar entry sheet answers: the entry as saved (skipped or not, and where), or "remove it".</summary>
 public sealed record CalendarEntrySheetResult(CalendarEntryDraft? Saved, bool Remove);
@@ -36,13 +40,17 @@ public static class PlanDialogs
         IReadOnlyList<PickerOption> choices,
         IReadOnlyList<PickerOption> meals,
         IReadOnlyList<PersonOption> people,
-        IReadOnlyList<PickerOption> slots
+        IReadOnlyList<PickerOption> slots,
+        IReadOnlyDictionary<Guid, MealServesOption> mealServes,
+        IReadOnlyList<PickerOption> batches
     )
     {
         bool phone = await viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
 
         DialogParameters<CalendarEntrySheet> parameters = new()
         {
+            { s => s.MealServes, mealServes },
+            { s => s.Batches, batches },
             { s => s.Draft, draft },
             { s => s.IsNew, isNew },
             { s => s.Where, where },

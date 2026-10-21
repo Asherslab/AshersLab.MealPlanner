@@ -54,9 +54,11 @@ The browser's database itself - OPFS, migrations, sharing it across windows - is
   data exists it also needs a `SyncProtocol` bump (below). Its rules go in `Shared.Domain`, built on `OpRules`.
 - **Seed data is ops the server writes at startup, never a migration's rows** - see
   [the catalogue](../catalogue/catalogue.md). So a new server's log is not empty: it starts with the seeds.
-- **Never `Update` a counter** (serves eaten, stock counts). Two devices adding one each would both write
-  "previous + 1" and one would be lost. Counters get an `Increment` op kind, added with the first counter
-  (slice 10).
+- **Never `Update` a counter.** Two devices adding one each would both write "previous + 1" and one would be lost.
+  Count rows instead: serves eaten are the calendar's leftovers entries, counted when read
+  ([batches and serves](../planning/batches-and-serves.md)); stock on hand will be a ledger of movements, one row each.
+  Two devices adding one each add two rows, and nothing merges. There is no `Increment` op kind and none is planned. A
+  number the planner states ("we made 8") is not a counter - it is an ordinary field, and the later edit wins.
 - **`Seq` order relies on SQLite having one writer** (`Grpc/Data/Models/Sync/DbOp.cs`). A push numbers and
   commits its ops before the next push can number any, so a pull never sees seq N+1 without N. On Postgres a
   later seq could commit first and a pull would skip the earlier op forever. Revisit before moving.

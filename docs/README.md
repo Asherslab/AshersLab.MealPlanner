@@ -47,6 +47,8 @@ Present tense, kept current, no dates.
 - [The calendar](modules/planning/calendar.md) — a plan laid onto real dates (safe to repeat, and from two phones at
   once: derived ids, creates that carry only what never changes), choosing an alternative, overriding, skipping and
   replanning, and what a serve costs on each day.
+- [Batches and serves](modules/planning/batches-and-serves.md) — a cooked entry's batch, leftovers eating it oldest first
+  or by choice, what a skip does, and why serves are counted from the calendar instead of stored (no counter op).
 - [Meals](modules/meals/meals.md) — meal groups, meals and their five kinds, a meal's ingredients, and its batch and
   per-serve cost (incomplete, never lower, when anything is unpriced).
 

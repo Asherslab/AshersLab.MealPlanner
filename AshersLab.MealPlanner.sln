@@ -60,6 +60,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "meals", "meals", "{2140B86A
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "planning", "planning", "{8D9E495F-DB87-44DB-916E-71F72DB23F89}"
 	ProjectSection(SolutionItems) = preProject
+		docs\modules\planning\batches-and-serves.md = docs\modules\planning\batches-and-serves.md
 		docs\modules\planning\calendar.md = docs\modules\planning\calendar.md
 		docs\modules\planning\plan-templates.md = docs\modules\planning\plan-templates.md
 		docs\modules\planning\README.md = docs\modules\planning\README.md

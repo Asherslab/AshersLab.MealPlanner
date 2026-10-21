@@ -75,6 +75,10 @@
                                             <span data-testid="cal-entry-meal">@MealName(entry.MealId)</span>
                                             <PeopleDots People="PeopleOf(entry)"/>
                                             <span class="d-block mud-text-secondary cal-cost" data-testid="cal-entry-cost">@CostText(entry)</span>
+                                            @if (ServesLine(entry) is { } serves)
+                                            {
+                                                <span class="@ServesClass(entry)" data-testid="cal-entry-serves">@serves</span>
+                                            }
                                         </div>
                                     }
                                     <button type="button" class="plan-add" aria-label="@($"Add to {CalendarText.Day(date)} {slot.Name}")"
@@ -118,6 +122,10 @@
                             <div class="flex-grow-1">
                                 <MudText data-testid="cal-entry-meal">@MealName(entry.MealId)</MudText>
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="cal-entry-cost">@CostText(entry)</MudText>
+                                @if (ServesLine(entry) is { } serves)
+                                {
+                                    <span class="@ServesClass(entry)" data-testid="cal-entry-serves">@serves</span>
+                                }
                             </div>
                             <PeopleDots People="PeopleOf(entry)" Named="true"/>
                         </div>
@@ -126,6 +134,21 @@
             }
         </MudPaper>
     </MudHidden>
+
+    @if (ServesNotes() is { Count: > 0 } notes)
+    {
+        <MudText Typo="Typo.h6" Component="h2" Class="mt-6">Serves</MudText>
+        <MudPaper Outlined="true" Class="mt-1" data-testid="cal-serves">
+            @foreach ((string note, bool problem) in notes)
+            {
+                <div class="list-row d-flex align-center gap-2 px-4 py-2" data-testid="cal-serves-note" data-problem="@(problem ? "true" : "false")">
+                    <MudIcon Icon="@(problem ? Icons.Material.Filled.ErrorOutline : Icons.Material.Filled.Info)" Size="Size.Small"
+                             Color="@(problem ? Color.Error : Color.Default)"/>
+                    <MudText Typo="Typo.body2">@note</MudText>
+                </div>
+            }
+        </MudPaper>
+    }
 
     @if (_calendar.ToReplan.Count > 0)
     {
@@ -149,6 +172,7 @@
     [SupplyParameterFromQuery(Name = "week")] public string? WeekParameter { get; set; }
 
     private CalendarBook             _calendar = null!;
+    private ServesBook               _serves   = null!;
     private MealCostBook             _costs    = null!;
     private List<Slot>               _slots    = [];
     private List<Person>             _people   = [];
@@ -177,6 +201,7 @@
     protected override async Task LoadAsync(LocalDbContext db)
     {
         _calendar = await CalendarBook.LoadAsync(db, _monday, _monday.AddDays(6));
+        _serves   = await ServesBook.LoadAsync(db, _monday, _monday.AddDays(6));
         _costs    = await MealCostBook.LoadAsync(db);
         _slots    = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
@@ -196,16 +221,59 @@
 
     private string SlotName(Guid slot) => _slots.FirstOrDefault(s => s.Id == slot)?.Name ?? "a removed slot";
 
+    /// <summary>What a serve costs - for leftovers, a serve of the batch they eat.</summary>
     private string CostText(PlannedEntry entry) =>
         entry.Skipped ? "skipped"
+        : _serves.LeftoversOf(entry.Id) is { Got: > 0, BatchId: { } batch } && BatchMeal(batch) is { } eaten ? CalendarText.Serve(eaten, _costs.CostOf(eaten))
         : entry.MealId is { } id && _meals.GetValueOrDefault(id) is { } meal ? CalendarText.Serve(meal, _costs.CostOf(meal))
         : "";
+
+    private Meal? BatchMeal(Guid? batch) => batch is { } b && _serves.Entry(b)?.MealId is { } m ? _meals.GetValueOrDefault(m) : null;
+
+    private DateOnly? BatchDay(Guid? batch) => batch is { } b ? _serves.Entry(b)?.Day : null;
+
+    /// <summary>A batch's serves under a cooked entry, or what a leftovers entry eats; nothing for a skipped entry or any other meal.</summary>
+    private string? ServesLine(PlannedEntry entry) =>
+        entry.Skipped ? null
+        : _serves.BatchOf(entry.Id) is { } batch ? ServesText.Batch(batch)
+        : _serves.LeftoversOf(entry.Id) is { } eats ? ServesText.Leftovers(eats, BatchMeal(eats.BatchId)?.Name, BatchDay(eats.BatchId))
+        : null;
+
+    private string ServesClass(PlannedEntry entry) =>
+        _serves.LeftoversOf(entry.Id) is { Problem: not LeftoversProblem.None } || _serves.BatchOf(entry.Id) is { Short: > 0 }
+            ? "d-block cal-serves cal-serves-problem" : "d-block mud-text-secondary cal-serves";
+
+    /// <summary>
+    /// The week's serves, in calendar order: every leftovers entry with less than it needs ("Saturday's leftovers has
+    /// nothing to eat"), then every batch cooked this week with serves nobody is planned to eat ("2 serves ... will go uneaten").
+    /// </summary>
+    private List<(string Note, bool Problem)> ServesNotes()
+    {
+        Dictionary<Guid, int> slotOrder = _slots.Select((s, i) => (s.Id, i)).ToDictionary(p => p.Id, p => p.i);
+        List<PlannedEntry> week = [.. Days.SelectMany(d => _calendar.On(d)).OrderBy(e => e.Day).ThenBy(e => slotOrder.GetValueOrDefault(e.SlotId, int.MaxValue))];
+
+        List<(string, bool)> notes = [];
+        foreach (PlannedEntry entry in week)
+            if (_serves.LeftoversOf(entry.Id) is { Problem: not LeftoversProblem.None } eats)
+                notes.Add((ServesText.LeftoversNote(entry.Day, eats, BatchMeal(eats.BatchId)?.Name, BatchDay(eats.BatchId)), true));
+        foreach (PlannedEntry entry in week)
+            if (_serves.BatchOf(entry.Id) is { Cooked: true, Left: > 0 } batch)
+                notes.Add((ServesText.UneatenNote(batch, MealName(entry.MealId)), false));
+        return notes;
+    }
+
+    /// <summary>The batches a leftovers entry can be set to eat, for the sheet's "Eats from".</summary>
+    private List<PickerOption> BatchOptions(PlannedEntry entry) =>
+        [.. _serves.ChoicesFor(entry).Select(c => new PickerOption(c.Id, ServesText.Choice(MealName(c.MealId), c.Day, c.LeftBefore)))];
 
     private IReadOnlyList<Person> PeopleOf(PlannedEntry entry) =>
         entry.People is { } ids ? [.. _people.Where(p => ids.Contains(p.Id))] : [];
 
     private List<PickerOption> MealOptions() =>
         [.. _meals.Values.OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).Select(m => new PickerOption(m.Id, m.Name))];
+
+    private Dictionary<Guid, MealServesOption> MealServes() =>
+        _meals.Values.ToDictionary(m => m.Id, m => new MealServesOption(m.Kind, m.ServesPerBatch));
 
     private List<PersonOption> PersonOptions() => [.. _people.Select(p => new PersonOption(p.Id, p.Name, p.Colour))];
 
@@ -215,7 +283,7 @@
     {
         CalendarEntrySheetResult? result = await PlanDialogs.EditCalendarEntryAsync(Dialogs, Viewport,
             new CalendarEntryDraft(null, null, false, date, slot.Id), isNew: true, $"{CalendarText.LongDay(date)} · {slot.Name}", null,
-            [], MealOptions(), PersonOptions(), SlotOptions());
+            [], MealOptions(), PersonOptions(), SlotOptions(), MealServes(), []);
         if (result?.Saved is not { Meal: { } meal } draft)
             return;
 
@@ -225,6 +293,7 @@
             new OpField(CalendarEntryRules.SlotField, OpValues.FormatId(draft.Slot)),
             new OpField(CalendarEntryRules.MealField, OpValues.FormatId(meal)),
             .. CalendarPeople.Field(draft.People, null) is { } people ? [new OpField(CalendarEntryRules.PeopleField, people)] : Array.Empty<OpField>(),
+            .. draft.ServesMade is { } made ? [new OpField(CalendarEntryRules.ServesMadeField, OpValues.FormatInt(made))] : Array.Empty<OpField>(),
         ]);
     }
 
@@ -234,9 +303,10 @@
             ? $"From {t.Name}{(t.WeekCount > 1 ? $" · week {te.Week}" : "")}"
             : entry.Row.TemplateEntryId is not null ? "From a plan entry since removed" : null;
         CalendarEntrySheetResult? result = await PlanDialogs.EditCalendarEntryAsync(Dialogs, Viewport,
-            new CalendarEntryDraft(entry.MealId, entry.People, entry.Skipped, entry.Day, entry.SlotId), isNew: false,
+            new CalendarEntryDraft(entry.MealId, entry.People, entry.Skipped, entry.Day, entry.SlotId, entry.Row.EatsFrom, entry.Row.ServesMade), isNew: false,
             $"{CalendarText.LongDay(entry.Day)} · {SlotName(entry.SlotId)}", source,
-            [.. entry.Choices.Select(c => new PickerOption(c, MealName(c)))], MealOptions(), PersonOptions(), SlotOptions());
+            [.. entry.Choices.Select(c => new PickerOption(c, MealName(c)))], MealOptions(), PersonOptions(), SlotOptions(),
+            MealServes(), BatchOptions(entry));
 
         if (result is { Remove: true })
         {

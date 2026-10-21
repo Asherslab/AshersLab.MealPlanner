@@ -198,6 +198,15 @@ holding `plan-entry` (`data-id`) with `plan-entry-meals` / `plan-entry-people`, 
 desktop-sized and B phone-sized, including both filling the same week offline. Earlier runs' entries share the dates, so
 it looks only at entries whose meal carries its run id.
 
+**Serves** on the calendar: under an entry, `cal-entry-serves` (class `cal-serves-problem` when it has less than it needs);
+below the week `cal-serves` holding `cal-serves-note` (`data-problem`). In the sheet, `cal-serves-made`
+(input id; a MudNumericField with `Immediate`, so `typeInto` works) for a cooked meal, `cal-eats-from` (native select, value
+= the cooked entry's id, empty for whatever is left) for a leftovers meal. `node .claude/tools/chrome-serves-check.mjs
+<scratch>/srv` (ports 19358/19359, about 2 minutes) drives it from two profiles. **It picks the first week with no calendar
+entries on the server**: leftovers eat any batch cooked before them, so an earlier run's stew in the same week is eaten
+first and every count is off. And read ids back with its `serverHas` poll, not once after `settled` - the chip says
+"0 waiting" before a write made a moment ago is queued.
+
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
 

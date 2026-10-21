@@ -176,6 +176,31 @@ public class CalendarRulesTests
     }
 
     [Fact]
+    public void The_batch_a_lunch_eats_and_the_serves_a_batch_made_are_fields_of_their_own()
+    {
+        Assert.Null(CalendarEntryRules.OpProblem(OpKind.Update, [new("EatsFrom", OpValues.FormatId(Noodles)), new("ServesMade", "6")]));
+        Assert.Null(CalendarEntryRules.OpProblem(OpKind.Update, [new("EatsFrom", null), new("ServesMade", null)]));
+        Assert.NotNull(CalendarEntryRules.OpProblem(OpKind.Update, [new("ServesMade", "0")]));
+        Assert.NotNull(CalendarEntryRules.OpProblem(OpKind.Update, [new("ServesMade", "100")]));
+        Assert.NotNull(CalendarEntryRules.OpProblem(OpKind.Update, [new("ServesMade", "06")]));
+        Assert.NotNull(CalendarEntryRules.OpProblem(OpKind.Update, [new("EatsFrom", "monday")]));
+
+        // Either one set is the planner's change: the entry stays when the plan moves.
+        Assert.True(CalendarEntryRules.Touched(null, null, CalendarStatus.Planned, null, null, eatsFrom: Soup));
+        Assert.True(CalendarEntryRules.Touched(null, null, CalendarStatus.Planned, null, null, servesMade: 6));
+
+        // Sent only when changed, and alone.
+        Guid batch = Pizza;
+        Assert.Equal(new Dictionary<string, string?> { ["EatsFrom"] = OpValues.FormatId(batch) },
+            Fields((As(Planned) with { EatsFrom = batch }).ChangesFrom(Planned)));
+        Assert.Equal(new Dictionary<string, string?> { ["ServesMade"] = "6" },
+            Fields((As(Planned) with { ServesMade = 6 }).ChangesFrom(Planned)));
+        CalendarEntryNow set = Planned with { EatsFrom = batch, ServesMade = 6 };
+        Assert.Empty((As(Planned) with { EatsFrom = batch, ServesMade = 6 }).ChangesFrom(set));
+        Assert.Equal(new Dictionary<string, string?> { ["EatsFrom"] = null, ["ServesMade"] = null }, Fields(As(Planned).ChangesFrom(set)));
+    }
+
+    [Fact]
     public void A_plan_entry_whose_choices_are_gone_has_no_meal_until_one_is_chosen()
     {
         CalendarEntryNow orphan = Planned with { Usual = null };

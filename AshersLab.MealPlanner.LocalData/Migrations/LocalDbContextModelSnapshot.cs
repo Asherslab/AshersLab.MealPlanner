@@ -269,6 +269,9 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.Property<bool>("Deleted")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("EatsFrom")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("MealId")
                         .HasColumnType("TEXT");
 
@@ -282,6 +285,9 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.Property<string>("People")
                         .HasMaxLength(740)
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("ServesMade")
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid>("SlotId")
                         .HasColumnType("TEXT");

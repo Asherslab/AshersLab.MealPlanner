@@ -86,7 +86,7 @@ public sealed class CalendarBook
             return null;
 
         CalendarEntryNow now = new(row.TemplateEntryId is not null, choices.Count > 0 ? choices[0] : null, source?.PeopleIds(),
-            row.MealId, row.People, row.Status, row.Date, row.SlotId, row.MovedDate, row.MovedSlotId);
+            row.MealId, row.People, row.Status, row.Date, row.SlotId, row.MovedDate, row.MovedSlotId, row.EatsFrom, row.ServesMade);
         return new PlannedEntry(row, now, source, template, choices);
     }
 

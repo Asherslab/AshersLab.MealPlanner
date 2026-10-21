@@ -184,6 +184,15 @@
     font-size: 0.75rem;
 }
 
+/* A batch's serves, or what a leftovers entry eats; in the error colour when it has less than it needs. */
+.cal-serves {
+    font-size: 0.75rem;
+}
+
+.cal-serves-problem {
+    color: var(--mud-palette-error);
+}
+
 /* "Tue" over "27" on a phone's day buttons. */
 .cal-day-label {
     display: flex;
