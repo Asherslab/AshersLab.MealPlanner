@@ -10,7 +10,8 @@
 
 @*
     Where groceries come from. Woolworths and Costco are there from the start (the server seeds them); the
-    household adds the butcher or the market. A store an ingredient uses as its usual store cannot be deleted.
+    household adds the butcher or the market. A store an ingredient uses as its usual store, or that sells a product,
+    cannot be deleted.
 *@
 
 <PageTitle>Stores - Meal Planner</PageTitle>
@@ -20,7 +21,7 @@
 <LocalDataGate Start="Start">
     <NameList Items="_stores" Noun="store" TestId="store" NewLabel="New store"
               NameProblem="StoreRules.NameProblem"
-              InUseHint="Give them another usual store first."
+              InUseHint="Give the ingredients another usual store, and delete the products, first."
               OnAdd="Add" OnRename="Rename" OnDelete="Delete"/>
 </LocalDataGate>
 
@@ -36,10 +37,16 @@
                 .ToListAsync())
             .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToLookup(i => i.UsualStoreId, i => i.Name);
+        ILookup<Guid, string> sells = (await db.Products.AsNoTracking()
+                .Where(p => !p.Deleted)
+                .Select(p => new { p.StoreId, p.Name })
+                .ToListAsync())
+            .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToLookup(p => p.StoreId, p => p.Name);
 
         _stores = [.. stores
             .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Select(s => new NameListItem(s.Id, s.Name, [.. usedBy[s.Id]]))];
+            .Select(s => new NameListItem(s.Id, s.Name, [.. usedBy[s.Id]], [.. sells[s.Id]]))];
     }
 
     private Task Add(string name) =>

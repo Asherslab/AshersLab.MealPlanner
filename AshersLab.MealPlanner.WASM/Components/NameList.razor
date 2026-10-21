@@ -66,7 +66,7 @@
                 {
                     <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" ShowCloseIcon="true"
                               CloseIconClicked="() => _inUse = null" data-testid="@($"{TestId}-in-use")">
-                        @item.Name is used by @Count(item.UsedBy.Count): @string.Join(", ", item.UsedBy.Take(5))@(item.UsedBy.Count > 5 ? $" and {item.UsedBy.Count - 5} more" : "").
+                        @item.Name is used by @string.Join(", and ", new[] { Listed(item.UsedBy, "ingredient"), Listed(item.UsedByProducts ?? [], "product") }.Where(s => s is not null)).
                         @InUseHint
                     </MudAlert>
                 }
@@ -109,7 +109,12 @@
 
     private Guid?   _inUse;
 
-    private static string Count(int n) => n == 1 ? "1 ingredient" : $"{n} ingredients";
+    /// <summary>"2 ingredients: cucumber, eggs", the first five named; null when there are none.</summary>
+    private static string? Listed(IReadOnlyList<string> names, string noun) =>
+        names.Count == 0
+            ? null
+            : $"{names.Count} {noun}{(names.Count == 1 ? "" : "s")}: {string.Join(", ", names.Take(5))}"
+              + (names.Count > 5 ? $" and {names.Count - 5} more" : "");
 
     /// <summary>Null when <paramref name="name"/> is acceptable for <paramref name="id"/> (null for a new one).</summary>
     private string? Problem(string name, Guid? id) =>
@@ -156,7 +161,7 @@
 
     private async Task Delete(NameListItem item)
     {
-        if (item.UsedBy.Count > 0)
+        if (item.InUse)
         {
             _inUse = item.Id;
             return;

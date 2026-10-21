@@ -1,0 +1,157 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Products
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+
+@*
+    One product: what the store calls it, which store, which ingredient it is bought as, how much is in a pack, and
+    the store's code for it - and delete. A dialog, full screen on a phone. Like the ingredient editor it only edits a
+    draft and answers it; the page turns the answer into ops.
+
+    The pack size is typed the way the pack says it - "2kg", "8x250g", "18pk" - and read in the chosen ingredient's
+    unit (PackSize), so it is checked again whenever the ingredient changes.
+*@
+
+<MudDialog data-testid="product-editor">
+    <DialogContent>
+        <form id="product-editor-form" @onsubmit="Save" @onsubmit:preventDefault>
+            <label class="native-select">
+                <span>Ingredient</span>
+                <select @bind="_ingredientId" @bind:after="CheckPack" data-testid="product-ingredient">
+                    <option value="">None - not food</option>
+                    @foreach (IngredientOption ingredient in Ingredients)
+                    {
+                        <option value="@ingredient.Id">@ingredient.Name</option>
+                    }
+                </select>
+            </label>
+
+            <label class="native-select mt-4">
+                <span>Store</span>
+                <select @bind="_storeId" data-testid="product-store">
+                    @if (!Stores.Any(s => s.Id.ToString() == _storeId))
+                    {
+                        <option value="">Choose a store</option>
+                    }
+                    @foreach (PickerOption store in Stores)
+                    {
+                        <option value="@store.Id">@store.Name</option>
+                    }
+                </select>
+            </label>
+            @if (_storeError is not null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Error" data-testid="product-store-error">@_storeError</MudText>
+            }
+
+            <MudTextField T="string" @bind-Value="_name" Label="Name, as the store says it" Variant="Variant.Outlined"
+                          Immediate="true" MaxLength="Names.MaxLength" Class="mt-4"
+                          Error="_nameError is not null" ErrorText="@_nameError"
+                          InputId="product-edit-name" data-testid="product-edit-name"/>
+
+            <MudTextField T="string" @bind-Value="_pack" Label="@($"Pack size ({Unit.Symbol()})")" Variant="Variant.Outlined"
+                          Immediate="true" Class="mt-4" Placeholder="@PackPlaceholder"
+                          HelperText="@PackHelper" Error="_packError is not null" ErrorText="@_packError"
+                          InputId="product-edit-pack" data-testid="product-edit-pack"/>
+
+            <MudTextField T="string" @bind-Value="_storeCode" Label="Store code (optional)" Variant="Variant.Outlined"
+                          Immediate="true" MaxLength="ProductRules.MaxStoreCodeLength" Class="mt-4"
+                          HelperText="Woolworths stockcode or Costco item number - what a receipt matches on."
+                          InputId="product-edit-code" data-testid="product-edit-code"/>
+        </form>
+    </DialogContent>
+    <DialogActions>
+        @if (!IsNew)
+        {
+            <MudButton Color="Color.Error" OnClick="Delete" Class="mr-auto" data-testid="product-delete">Delete</MudButton>
+        }
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="product-cancel">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="product-editor-form" Color="Color.Primary"
+                   Variant="Variant.Filled" data-testid="product-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Inject] private IDialogService Dialogs { get; set; } = null!;
+
+    /// <summary>What it starts from. A new one carries the ingredient and store it was added under.</summary>
+    [Parameter] public ProductDraft Draft { get; set; } = new("", Guid.Empty, null, 0, null);
+
+    [Parameter] public bool IsNew { get; set; }
+
+    [Parameter] public IReadOnlyList<IngredientOption> Ingredients { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<PickerOption> Stores { get; set; } = [];
+
+    private string  _ingredientId = "";
+    private string  _storeId      = "";
+    private string? _name;
+    private string? _pack;
+    private string? _storeCode;
+
+    private string? _nameError;
+    private string? _storeError;
+    private string? _packError;
+
+    /// <summary>A product with no ingredient (a household item) is counted in packs.</summary>
+    private BaseUnit Unit => Ingredients.FirstOrDefault(i => i.Id.ToString() == _ingredientId)?.Unit ?? BaseUnit.Each;
+
+    private string PackPlaceholder => Unit switch
+    {
+        BaseUnit.Gram       => "500g, 2kg, 8x250g",
+        BaseUnit.Millilitre => "375ml, 2L, 6x375ml",
+        _                   => "12, 18pk",
+    };
+
+    /// <summary>What the typed size reads as, so "8x250g" is seen to be 2 kg before it is saved.</summary>
+    private string? PackHelper =>
+        PackSize.Parse(_pack, Unit, out _) is { } quantity ? $"= {PackSize.Format(quantity, Unit)}" : null;
+
+    protected override void OnInitialized()
+    {
+        _ingredientId = Draft.IngredientId is { } ingredient && Ingredients.Any(i => i.Id == ingredient) ? ingredient.ToString() : "";
+        _storeId      = Stores.Any(s => s.Id == Draft.StoreId) ? Draft.StoreId.ToString() : "";
+        _name         = Draft.Name;
+        _storeCode    = Draft.StoreCode;
+        _pack         = Draft.PackQuantity > 0 ? PackSize.Editable(Draft.PackQuantity, Unit) : null;
+    }
+
+    private void CheckPack()
+    {
+        if (_packError is not null)
+            PackSize.Parse(_pack, Unit, out _packError);
+    }
+
+    private void Save()
+    {
+        string name = Names.Normalise(_name);
+        _nameError  = ProductRules.NameProblem(name);
+        _storeError = Guid.TryParse(_storeId, out Guid store) ? null : "Choose the store that sells it.";
+        decimal? pack = PackSize.Parse(_pack, Unit, out _packError);
+        if (_nameError is not null || _storeError is not null || pack is null)
+            return;
+
+        Dialog.Close(DialogResult.Ok(new ProductEditorResult(
+            new ProductDraft(name, store, ProductRules.NormaliseStoreCode(_storeCode), pack.Value, Ingredient()),
+            Delete: false)));
+    }
+
+    /// <summary>The picker's choice - except that "none" over an ingredient that is gone keeps the reference.</summary>
+    private Guid? Ingredient() =>
+        Guid.TryParse(_ingredientId, out Guid id) ? id
+        : Draft.IngredientId is { } held && Ingredients.All(i => i.Id != held) ? held
+        : null;
+
+    private async Task Delete()
+    {
+        bool? confirmed = await Dialogs.ShowMessageBoxAsync(
+            title: $"Delete {Draft.Name}?",
+            message: "It goes from every device, with its price history.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+            Dialog.Close(DialogResult.Ok(new ProductEditorResult(null, Delete: true)));
+    }
+}

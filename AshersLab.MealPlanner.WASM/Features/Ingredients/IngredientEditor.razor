@@ -97,6 +97,9 @@
     /// <summary>Every other ingredient's name, to warn about a duplicate.</summary>
     [Parameter] public IReadOnlyList<string> OtherNames { get; set; } = [];
 
+    /// <summary>The products bought as this ingredient. Not empty: it cannot be deleted.</summary>
+    [Parameter] public IReadOnlyList<string> UsedByProducts { get; set; } = [];
+
     private string?   _name;
     private BaseUnit? _unit;
     private string    _categoryId = "";
@@ -147,6 +150,18 @@
 
     private async Task Delete()
     {
+        // Refused while products are bought as it, as stores and categories are (docs/modules/catalogue/catalogue.md).
+        if (UsedByProducts.Count > 0)
+        {
+            await Dialogs.ShowMessageBoxAsync(
+                title: $"{Draft.Name} is in use",
+                message: $"{Draft.Name} is used by {UsedByProducts.Count} product{(UsedByProducts.Count == 1 ? "" : "s")}: "
+                         + string.Join(", ", UsedByProducts.Take(5)) + (UsedByProducts.Count > 5 ? $" and {UsedByProducts.Count - 5} more" : "")
+                         + ". Delete them on the Prices page first.",
+                yesText: "OK");
+            return;
+        }
+
         bool? confirmed = await Dialogs.ShowMessageBoxAsync(
             title: $"Delete {Draft.Name}?",
             message: "It goes from the ingredients on every device.",

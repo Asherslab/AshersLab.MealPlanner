@@ -38,8 +38,18 @@
     outline-offset: -1px;
 }
 
-.ingredient-row {
+.ingredient-row,
+.price-product {
     cursor: pointer;
+}
+
+.price-ingredient + .price-ingredient {
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+/* A product sits under its ingredient's name (PricesPage). */
+.price-product {
+    padding-left: 32px !important;
 }
 
 /* "Grams (g)", not "GRAMS (G)": the symbol's case is the point. */

@@ -1,7 +1,9 @@
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Products;
 using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Domain;
+using AshersLab.MealPlanner.Shared.Domain.Products;
 using Microsoft.EntityFrameworkCore;
 
 namespace AshersLab.MealPlanner.Shared.Data.Sync;
@@ -30,7 +32,9 @@ public static class SyncedEntities
 
     public static readonly CategoryEntity Category = new();
 
-    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category];
+    public static readonly ProductEntity Product = new();
+
+    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store, Category, Product];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -72,6 +76,18 @@ public static class SyncedEntities
             category.HasKey(c => c.Id);
             category.Property(c => c.Id).ValueGeneratedNever();
             category.Property(c => c.Name).HasMaxLength(Names.MaxLength);
+        });
+
+        modelBuilder.Entity<Product>(product =>
+        {
+            product.ToTable("Product");
+            product.HasKey(p => p.Id);
+            product.Property(p => p.Id).ValueGeneratedNever();
+            product.Property(p => p.Name).HasMaxLength(Names.MaxLength);
+            product.Property(p => p.StoreCode).HasMaxLength(ProductRules.MaxStoreCodeLength);
+            // A product's ingredient's products, and "is this store / ingredient still used?" Not foreign keys.
+            product.HasIndex(p => p.IngredientId);
+            product.HasIndex(p => p.StoreId);
         });
     }
 }

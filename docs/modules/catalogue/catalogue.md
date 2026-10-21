@@ -152,9 +152,11 @@ and nothing is archived.
   to another category first." Two devices can still race - one deletes a category offline while the other puts an
   ingredient in it - and then the reference points at a tombstone and is shown as gone
   (`CatalogueSyncTests.An_ingredient_whose_category_was_deleted_elsewhere_survives_pointing_at_the_tombstone`).
-- **Nothing refers to an ingredient yet, so deleting one is never refused.** When meal ingredients (slice 6) and
-  products (slice 5) refer to ingredients, the ingredient editor's Delete must apply the same rule: refuse, and say
-  which meals and products use it.
+- **Products refer to stores and ingredients** ([products and prices](products-and-prices.md)). A store that sells a
+  product is refused like one an ingredient uses - the message names both ("Costco is used by 1 ingredient: cucumber,
+  and 2 products: ..."; `NameListItem.UsedByProducts`). The ingredient editor's Delete is refused while a product is
+  bought as it, naming the products. When meal ingredients (slice 6) refer to ingredients, the same refusal must
+  name the meals too.
 
 ## The pages
 

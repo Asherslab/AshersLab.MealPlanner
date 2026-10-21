@@ -112,6 +112,14 @@ but not yet pulled back). Sync calls are
 with a "Delete" button; or, when something uses it, shows `store-in-use` instead). **Categories** (`/categories`,
 `nav-categories`) is the same component with the prefix `category`, plus `category-up` / `category-down`.
 
+**Prices** (`/prices`, `nav-prices`): `price-search` (input id too), `price-new-product`, store chips
+`price-store-chip` (`data-id`, empty for "All stores"); per ingredient `price-ingredient` (`data-id`) with
+`price-ingredient-name` and `price-ingredient-add` (+); per product `price-product-row` (`data-id`; tapping it opens
+the editor), `price-product-name`, `price-product-detail` ("Costco · 2 kg · #12345"). The product editor:
+`product-ingredient` / `product-store` (native selects), `product-edit-name`, `product-edit-pack`, `product-edit-code`
+(input ids), `product-save`, `product-cancel`, `product-delete`. `node .claude/tools/chrome-prices-check.mjs <scratch>/prices`
+(ports 19345/19346) drives all of it from two profiles.
+
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
 

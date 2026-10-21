@@ -1,0 +1,210 @@
+@page "/prices"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Categories
+@using AshersLab.MealPlanner.Shared.Data.Ingredients
+@using AshersLab.MealPlanner.Shared.Data.Products
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Products
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject IDialogService Dialogs
+@inject IBrowserViewportService Viewport
+
+@*
+    Every ingredient with the products it is bought as - grouped by category in the household's order, which is
+    also the order of the planner's spreadsheet. Tap + on an ingredient to add a product under it; pick a store
+    chip to see only that store's products and to add new ones there. Products with no ingredient (household
+    items) are listed last. Reads and writes only this browser's database, like every page.
+*@
+
+<PageTitle>Prices - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Prices</MudText>
+
+<LocalDataGate Start="Start">
+    <div class="d-flex align-start gap-2 mt-4">
+        <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      InputId="price-search" data-testid="price-search"/>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-1 text-nowrap" OnClick="() => Add(null)"
+                   aria-label="New product" data-testid="price-new-product">New</MudButton>
+    </div>
+
+    <div class="d-flex flex-wrap gap-1 mt-2" role="group" aria-label="Store">
+        <MudChip T="string" Color="@(_store is null ? Color.Primary : Color.Default)" OnClick="() => _store = null"
+                 data-testid="price-store-chip" data-id="">All stores</MudChip>
+        @foreach ((Guid id, string name) in _stores)
+        {
+            <MudChip T="string" Color="@(_store == id ? Color.Primary : Color.Default)" OnClick="() => _store = id"
+                     data-testid="price-store-chip" data-id="@id">@name</MudChip>
+        }
+    </div>
+
+    @if (_ingredients.Count == 0 && _products.Count == 0)
+    {
+        <MudText Class="pa-4 mud-text-secondary" data-testid="prices-empty">
+            No ingredients yet - add them on the Ingredients page first.
+        </MudText>
+    }
+
+    @foreach ((string heading, List<Ingredient?> items) in Groups())
+    {
+        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="price-group">@heading</MudText>
+        <MudPaper Outlined="true">
+            @foreach (Ingredient? ingredient in items)
+            {
+                List<Product> products = Shown(ingredient);
+                <div class="price-ingredient" @key="@(ingredient?.Id ?? Guid.Empty)" data-testid="price-ingredient" data-id="@ingredient?.Id">
+                    @if (ingredient is not null)
+                    {
+                        <div class="d-flex align-center pl-4 pr-1">
+                            <MudText Class="flex-grow-1 py-2" Typo="Typo.subtitle1" data-testid="price-ingredient-name">@ingredient.Name</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" aria-label="@($"Add a product for {ingredient.Name}")"
+                                           OnClick="() => Add(ingredient)" data-testid="price-ingredient-add"/>
+                        </div>
+                    }
+                    @if (products.Count == 0)
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block px-4 pb-2 mud-text-secondary" data-testid="price-no-products">
+                            @(_store is { } store ? $"No {StoreName(store)} products" : "No products yet")
+                        </MudText>
+                    }
+                    @foreach (Product product in products)
+                    {
+                        <div class="price-product px-4 py-2" @key="product.Id" role="button" tabindex="0"
+                             @onclick="() => Edit(product)" data-testid="price-product-row" data-id="@product.Id">
+                            <MudText data-testid="price-product-name">@product.Name</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="price-product-detail">
+                                @Detail(product, ingredient)
+                            </MudText>
+                        </div>
+                    }
+                </div>
+            }
+        </MudPaper>
+    }
+</LocalDataGate>
+
+@code {
+    private List<Ingredient>          _ingredients = [];
+    private List<Category>            _categories  = [];
+    private Dictionary<Guid, string>  _stores      = [];
+    private List<Product>             _products    = [];
+
+    private string? _search;
+
+    /// <summary>The store chip picked: only its products are shown, and new products start at it.</summary>
+    private Guid? _store;
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _ingredients = await db.Ingredients.AsNoTracking().Where(i => !i.Deleted).ToListAsync();
+        _categories  = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
+        _stores      = (await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync())
+            .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToDictionary(s => s.Id, s => s.Name);
+        _products    = [.. (await db.Products.AsNoTracking().Where(p => !p.Deleted).ToListAsync())
+            .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)];
+
+        if (_store is { } store && !_stores.ContainsKey(store))
+            _store = null;
+    }
+
+    private string Filter => Names.Normalise(_search);
+
+    private bool Matches(string name) => Filter.Length == 0 || name.Contains(Filter, StringComparison.CurrentCultureIgnoreCase);
+
+    /// <summary>
+    /// The ingredient's products at the picked store (all of them for "All stores"); for null, the products bought as
+    /// no ingredient, or as one that has been deleted. A search that matches the ingredient shows all its products.
+    /// </summary>
+    private List<Product> Shown(Ingredient? ingredient)
+    {
+        HashSet<Guid> live = [.. _ingredients.Select(i => i.Id)];
+        bool all = ingredient is not null && Matches(ingredient.Name);
+        return [.. _products.Where(p =>
+            (ingredient is null ? p.IngredientId is not { } id || !live.Contains(id) : p.IngredientId == ingredient.Id)
+            && (_store is null || p.StoreId == _store)
+            && (all || Matches(p.Name)))];
+    }
+
+    /// <summary>
+    /// Ingredients matching the search (by their name or a product's), under their category in category order, then
+    /// "No category"; then, under "Not food", the products bought as no ingredient - as one null entry.
+    /// </summary>
+    private IEnumerable<(string Heading, List<Ingredient?> Items)> Groups()
+    {
+        List<Ingredient> shown = [.. _ingredients
+            .Where(i => Matches(i.Name) || Shown(i).Count > 0)
+            .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)];
+
+        HashSet<Guid> live = [.. _categories.Select(c => c.Id)];
+        foreach (Category category in _categories)
+        {
+            List<Ingredient?> items = [.. shown.Where(i => i.CategoryId == category.Id)];
+            if (items.Count > 0)
+                yield return (category.Name, items);
+        }
+
+        List<Ingredient?> loose = [.. shown.Where(i => i.CategoryId is not { } id || !live.Contains(id))];
+        if (loose.Count > 0)
+            yield return ("No category", loose);
+
+        if (Shown(null).Count > 0)
+            yield return ("Not food", [null]);
+    }
+
+    private string StoreName(Guid store) => _stores.GetValueOrDefault(store) ?? "store removed";
+
+    private string Detail(Product product, Ingredient? ingredient) =>
+        string.Join(" · ", new[]
+        {
+            StoreName(product.StoreId),
+            PackSize.Format(product.PackQuantity, ingredient?.BaseUnit ?? BaseUnit.Each),
+            product.StoreCode is { } code ? $"#{code}" : null,
+        }.Where(s => s is not null));
+
+    private async Task Add(Ingredient? ingredient)
+    {
+        Guid store = _store ?? ingredient?.UsualStoreId ?? Guid.Empty;
+        ProductDraft draft = new(ingredient?.Name ?? Names.Normalise(_search), store, null, 0, ingredient?.Id);
+        ProductEditorResult? result = await OpenEditor(draft, isNew: true);
+        if (result?.Saved is { } saved)
+            await WriteAsync(SyncedEntities.Product, Guid.CreateVersion7(), OpKind.Create, saved.FieldsChangedFrom(null));
+    }
+
+    private async Task Edit(Product product)
+    {
+        ProductDraft before = new(product.Name, product.StoreId, product.StoreCode, product.PackQuantity, product.IngredientId);
+        ProductEditorResult? result = await OpenEditor(before, isNew: false);
+
+        if (result is { Delete: true })
+            await WriteAsync(SyncedEntities.Product, product.Id, OpKind.Delete, []);
+        else if (result?.Saved is { } draft && draft.FieldsChangedFrom(before) is { Count: > 0 } fields)
+            await WriteAsync(SyncedEntities.Product, product.Id, OpKind.Update, fields);
+    }
+
+    private async Task<ProductEditorResult?> OpenEditor(ProductDraft draft, bool isNew)
+    {
+        bool phone = await Viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
+
+        DialogParameters<ProductEditor> parameters = new()
+        {
+            { e => e.Draft, draft },
+            { e => e.IsNew, isNew },
+            { e => e.Ingredients, [.. _ingredients.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).Select(i => new IngredientOption(i.Id, i.Name, i.BaseUnit))] },
+            { e => e.Stores, [.. _stores.Select(s => new PickerOption(s.Key, s.Value))] },
+        };
+        DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
+
+        IDialogReference dialog = await Dialogs.ShowAsync<ProductEditor>(isNew ? "New product" : "Edit product", parameters, options);
+        DialogResult? result = await dialog.Result;
+        return result is { Canceled: false, Data: ProductEditorResult answer } ? answer : null;
+    }
+}

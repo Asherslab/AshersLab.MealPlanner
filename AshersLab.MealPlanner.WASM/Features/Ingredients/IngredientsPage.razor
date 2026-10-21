@@ -72,6 +72,7 @@
     private List<Ingredient>          _ingredients = [];
     private List<Category>            _categories  = [];
     private Dictionary<Guid, string>  _stores      = [];
+    private ILookup<Guid?, string>    _products    = Array.Empty<string>().ToLookup(_ => (Guid?)null);
 
     private string? _newName;
 
@@ -82,6 +83,9 @@
         _stores      = (await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync())
             .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToDictionary(s => s.Id, s => s.Name);
+        _products    = (await db.Products.AsNoTracking().Where(p => !p.Deleted && p.IngredientId != null).ToListAsync())
+            .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToLookup(p => p.IngredientId, p => p.Name);
     }
 
     /// <summary>
@@ -148,6 +152,7 @@
             { e => e.Categories, [.. _categories.Select(c => new PickerOption(c.Id, c.Name))] },
             { e => e.Stores, [.. _stores.Select(s => new PickerOption(s.Key, s.Value))] },
             { e => e.OtherNames, [.. _ingredients.Where(i => i.Id != editing).Select(i => i.Name)] },
+            { e => e.UsedByProducts, [.. _products[editing]] },
         };
         DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
 

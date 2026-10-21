@@ -35,6 +35,8 @@ Present tense, kept current, no dates.
 - [The catalogue](modules/catalogue/catalogue.md) — stores, categories and ingredients: seeded as server ops, valid
   names, hand-set order by position, an ingredient's unit, no foreign keys, and why deleting something in use is
   refused.**
+- [Products and prices](modules/catalogue/products-and-prices.md) — what each store sells, pack sizes typed as the
+  pack says them, and why aliases are not a field.
 
 ## The other three directories
 
