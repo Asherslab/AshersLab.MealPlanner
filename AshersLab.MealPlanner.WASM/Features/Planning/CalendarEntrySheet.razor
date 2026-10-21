@@ -244,9 +244,9 @@
             _error = IsNew ? "Pick a meal." : "Pick a meal, or Remove the entry.";
             return;
         }
-        // The meal's own number is no number of the entry's: it follows the meal if that changes. Fields the chosen meal does
-        // not show are kept as they were - picking another meal for a moment loses nothing.
-        int? made = KindOf(_meal) == MealKind.Cooked ? (_servesMade == DefaultServes(_meal) ? null : _servesMade) : Draft.ServesMade;
+        // Typing the meal's own number clears the entry's, so it follows the meal - but only when the box was edited. Fields
+        // the chosen meal does not show are kept as they were - picking another meal for a moment loses nothing.
+        int? made = KindOf(_meal) == MealKind.Cooked ? CalendarEntryRules.ServesMadeToSave(Draft.ServesMade, _servesMade, DefaultServes(_meal)) : Draft.ServesMade;
         Guid? eats = KindOf(_meal) == MealKind.Leftovers ? _eatsFrom : Draft.EatsFrom;
         CalendarEntryDraft saved = new(_meal, _people?.ToList(), skipped, home ? Draft.Day : _day, home ? Draft.Slot : _slot, eats, made);
         Dialog.Close(DialogResult.Ok(new CalendarEntrySheetResult(saved, Remove: false)));

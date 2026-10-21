@@ -4,8 +4,8 @@ namespace AshersLab.MealPlanner.Shared.Domain.Sync;
 /// What an op does. On the wire as its number, so never renumber - add at the end.
 /// </summary>
 /// <remarks>
-/// <c>Increment</c> (the design's counters - serves consumed) is added with the first entity that has a
-/// counter; nothing before slice 10 needs one.
+/// There is no <c>Increment</c> and none is planned: anything counted (serves eaten, stock on hand) is counted from rows
+/// when read, so two devices adding one each add two rows and nothing merges. See docs/modules/sync/offline-sync.md.
 /// </remarks>
 public enum OpKind
 {

@@ -14,15 +14,14 @@ public sealed record BatchChoice(Guid Id, Guid? MealId, DateOnly Day, int LeftBe
 /// it cooks and eats nothing, exactly like a skipped one. Nothing here is stored.
 /// </summary>
 /// <remarks>
-/// It reads three weeks before the days asked for and one after: leftovers eat batches up to <see cref="Serves.KeepsDays"/>
-/// days old (or two weeks, chosen by hand), and a batch's serves depend on what ate from it before - so a week's numbers do
-/// not change with which week is on screen.
+/// <b>It reads the calendar from its first entry</b> to <see cref="ChoosableDays"/> after the days asked for, so a week's
+/// numbers do not change with which week is on screen. No shorter window is right: each "whatever is left" pick depends on
+/// what every earlier pick left, and those chain back without limit - a window of three weeks gave "nothing to eat" where
+/// the whole calendar gave a serve. And a lunch can be set to eat a batch up to two weeks old, so a batch's last eater can
+/// be two weeks after it. A household's calendar is a few thousand rows a year; counting them is cheap.
 /// </remarks>
 public sealed class ServesBook
 {
-    /// <summary>Days before the first day asked for that are read.</summary>
-    public const int ReadsBefore = 21;
-
     /// <summary>A leftovers entry can be set to eat a batch cooked up to this many days before it.</summary>
     public const int ChoosableDays = 14;
 
@@ -47,14 +46,16 @@ public sealed class ServesBook
 
     public static async Task<ServesBook> LoadAsync(DbContext db, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
-        CalendarBook calendar = await CalendarBook.LoadAsync(db, from.AddDays(-ReadsBefore), to.AddDays(Serves.KeepsDays), cancellationToken);
+        DateOnly first = await FirstDayAsync(db, from, cancellationToken);
+        DateOnly last  = to.AddDays(ChoosableDays);
+        CalendarBook calendar = await CalendarBook.LoadAsync(db, first, last, cancellationToken);
         Dictionary<Guid, Meal> meals = await db.Set<Meal>().AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, cancellationToken);
         Dictionary<Guid, decimal> slots = await db.Set<Slot>().AsNoTracking().Where(s => !s.Deleted).ToDictionaryAsync(s => s.Id, s => s.Position, cancellationToken);
         int household = await db.Set<Person>().AsNoTracking().CountAsync(p => !p.Deleted, cancellationToken);
 
         Dictionary<Guid, PlannedEntry> entries = [];
         Dictionary<Guid, ServesEntry>  counted = [];
-        for (DateOnly day = from.AddDays(-ReadsBefore); day <= to.AddDays(Serves.KeepsDays); day = day.AddDays(1))
+        for (DateOnly day = first; day <= last; day = day.AddDays(1))
         {
             foreach (PlannedEntry entry in calendar.On(day))
             {
@@ -73,6 +74,19 @@ public sealed class ServesBook
             }
         }
         return new ServesBook(Serves.Count(counted.Values), entries, counted);
+    }
+
+    /// <summary>The calendar's first day - where it was planned or moved to - or <paramref name="from"/> when that is earlier.</summary>
+    public static async Task<DateOnly> FirstDayAsync(DbContext db, DateOnly from, CancellationToken cancellationToken = default)
+    {
+        IQueryable<CalendarEntry> live = db.Set<CalendarEntry>().AsNoTracking().Where(e => !e.Deleted);
+        // Dates are text in the table ("2026-10-26"), so ordering them is ordering the text - the same order.
+        DateOnly? planned = await live.OrderBy(e => e.Date).Select(e => (DateOnly?)e.Date).FirstOrDefaultAsync(cancellationToken);
+        DateOnly? moved   = await live.Where(e => e.MovedDate != null).OrderBy(e => e.MovedDate).Select(e => e.MovedDate).FirstOrDefaultAsync(cancellationToken);
+        DateOnly first = from;
+        if (planned is { } p && p < first) first = p;
+        if (moved is { } m && m < first) first = m;
+        return first;
     }
 
     /// <summary>

@@ -67,7 +67,7 @@ public sealed class ServesSyncTests : IAsyncLifetime
     }
 
     private static PlannedEntry Find(CalendarBook book, Guid id) =>
-        Enumerable.Range(-7, 22).SelectMany(i => book.On(Mon.AddDays(i))).Single(e => e.Id == id);
+        Enumerable.Range(-7, 43).SelectMany(i => book.On(Mon.AddDays(i))).Single(e => e.Id == id);
 
     private static async Task<ServesBook> ServesAsync(TestBrowser browser)
     {
@@ -139,15 +139,17 @@ public sealed class ServesSyncTests : IAsyncLifetime
         await b.SyncAsync();
         await a.SyncAsync();
 
+        // Whichever orders first eats, the other has nothing - and both browsers agree on which.
+        List<LeftoversProblem[]> seen = [];
         foreach (TestBrowser browser in new[] { a, b })
         {
             ServesBook serves = await ServesAsync(browser);
             Assert.Equal(8, serves.BatchOf(w.Cook)!.Made);
             Assert.Equal(0, serves.BatchOf(w.Cook)!.Left);
-            // Whichever orders first eats; the other has nothing.
-            Assert.Equal([LeftoversProblem.None, LeftoversProblem.NothingLeft],
-                new[] { onA, onB }.Select(e => serves.LeftoversOf(e)!.Problem).Order());
+            seen.Add([.. new[] { onA, onB }.Select(e => serves.LeftoversOf(e)!.Problem)]);
         }
+        Assert.Equal(seen[0], seen[1]);
+        Assert.Equal([LeftoversProblem.None, LeftoversProblem.NothingLeft], seen[0].Order());
 
         // B skips Tuesday's lunch: its two serves go to Thursday's second lunch.
         await SaveAsync(b, w.Tue, d => d with { Skipped = true });
@@ -171,7 +173,9 @@ public sealed class ServesSyncTests : IAsyncLifetime
         // Whatever is left is the oldest first: Sunday's soup for Tuesday. B chooses Monday's stew instead.
         Assert.Equal(sunday, (await ServesAsync(b)).LeftoversOf(w.Tue)!.BatchId);
         ServesBook before = await ServesAsync(b);
-        Assert.Equal([w.Cook, sunday], before.ChoicesFor(Find(await CalendarAsync(b), w.Tue)).Select(c => c.Id));
+        // "Stew · Mon · 4 left", "Soup · Sun · 2 left": what each has before Tuesday's lunch, its own draw on the soup not counted.
+        Assert.Equal([(w.Cook, 4), (sunday, 2)],
+            before.ChoicesFor(Find(await CalendarAsync(b), w.Tue)).Select(c => (c.Id, c.LeftBefore)));
         await SaveAsync(b, w.Tue, d => d with { EatsFrom = w.Cook });
         await b.SyncAsync();
         await a.SyncAsync();
@@ -187,9 +191,81 @@ public sealed class ServesSyncTests : IAsyncLifetime
         Assert.Equal(LeftoversProblem.BatchGone, (await ServesAsync(b)).LeftoversOf(w.Tue)!.Problem);
     }
 
+    [Fact]
+    public async Task A_choice_counts_what_ate_earlier_the_same_day_and_never_offers_a_batch_cooked_later_that_day()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        var w = await WeekAsync(a);
+        Guid breakfast = await EntryAsync(a, Mon.AddDays(1), CatalogueSeed.Slot(0), w.Leftovers);
+        Guid mondayLunch = await EntryAsync(a, Mon, Lunch, w.Leftovers);
+        await a.SyncAsync();   // the seeded slots: what orders breakfast before lunch
+
+        ServesBook serves = await ServesAsync(a);
+        CalendarBook calendar = await CalendarAsync(a);
+        // Tuesday's breakfast ate 2 before lunch: 6 made, 2 at dinner, 2 at breakfast.
+        Assert.Equal(breakfast, serves.BatchOf(w.Cook)!.Leftovers.First().EntryId);
+        Assert.Equal([(w.Cook, 2)], serves.ChoicesFor(Find(calendar, w.Tue)).Select(c => (c.Id, c.LeftBefore)));
+        // Monday's lunch is before Monday's dinner: nothing to choose.
+        Assert.Empty(serves.ChoicesFor(Find(calendar, mondayLunch)));
+    }
+
+    [Fact]
+    public async Task A_weeks_serves_are_the_same_whichever_week_is_on_screen()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        var w = await WeekAsync(a);
+        // Set by hand to eat the stew two weeks on (the oldest a lunch can choose): the stew's two last serves are planned,
+        // not "uneaten" - seen from either week.
+        Guid later = await EntryAsync(a, Mon.AddDays(ServesBook.ChoosableDays), Lunch, w.Leftovers);
+        await SaveAsync(a, w.Wed, d => d with { Skipped = true });
+        await SaveAsync(a, later, d => d with { EatsFrom = w.Cook });
+
+        await using LocalDbContext db = a.CreateDbContext();
+        ServesBook thisWeek = await ServesBook.LoadAsync(db, Mon, Mon.AddDays(6), Ct);
+        ServesBook thatWeek = await ServesBook.LoadAsync(db, Mon.AddDays(14), Mon.AddDays(20), Ct);
+        Assert.Equal(0, thisWeek.BatchOf(w.Cook)!.Left);
+        Assert.Equal((LeftoversProblem.None, 0), (thatWeek.LeftoversOf(later)!.Problem, thatWeek.LeftoversOf(later)!.LeftAfter));
+    }
+
+    [Fact]
+    public async Task A_chain_of_whatever_is_left_picks_is_counted_from_the_calendars_first_day()
+    {
+        // Found by searching for the smallest calendar where three weeks of history are not enough: day 0's batch is eaten
+        // by day 7's lunch, which leaves day 5's for day 10's, and so on - each pick moving the next. Without day 0 (a
+        // window of three weeks before day 22), the last lunch gets 1 serve instead of 2.
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();   // the seeded slots: lunch before dinner on days 7 and 13
+        Guid sam = Guid.CreateVersion7(a.Now);
+        await a.WriteAsync(SyncedEntities.Person, sam, OpKind.Create, [new OpField(PersonRules.NameField, "Sam"), new OpField(PersonRules.ColourField, PersonRules.Palette[0])]);
+        await a.WriteAsync(SyncedEntities.Person, Guid.CreateVersion7(a.Now.AddMilliseconds(1)), OpKind.Create,
+            [new OpField(PersonRules.NameField, "Alex"), new OpField(PersonRules.ColourField, PersonRules.Palette[1])]);
+        Guid stew      = await MealAsync(a, "Stew", MealKind.Cooked, 6);
+        Guid leftovers = await MealAsync(a, "Leftovers", MealKind.Leftovers, 1);
+
+        // (day, cooked: serves made / leftovers: how many eat)
+        (int Day, int? Made, int Eat)[] calendar =
+        [
+            (0, 5, 2), (5, 4, 2), (7, 5, 2), (7, null, 2), (10, null, 2), (13, 4, 2), (13, null, 1), (14, null, 1),
+            (15, 6, 2), (18, null, 2), (21, null, 1), (22, null, 2),
+        ];
+        List<Guid> ids = [];
+        foreach ((int day, int? made, int eat) in calendar)
+        {
+            Guid id = await EntryAsync(a, Mon.AddDays(day), made is null ? Lunch : Dinner, made is null ? leftovers : stew);
+            await SaveAsync(a, id, d => d with { ServesMade = made, People = eat == 1 ? [sam] : null });
+            ids.Add(id);
+        }
+
+        await using LocalDbContext db = a.CreateDbContext();
+        ServesBook all  = await ServesBook.LoadAsync(db, Mon, Mon.AddDays(27), Ct);
+        ServesBook last = await ServesBook.LoadAsync(db, Mon.AddDays(22), Mon.AddDays(28), Ct);
+        Assert.Equal((2, LeftoversProblem.None), (all.LeftoversOf(ids[^1])!.Got, all.LeftoversOf(ids[^1])!.Problem));
+        Assert.Equal(all.LeftoversOf(ids[^1]), last.LeftoversOf(ids[^1]));
+    }
+
     private static async Task<CalendarBook> CalendarAsync(TestBrowser browser)
     {
         await using LocalDbContext db = browser.CreateDbContext();
-        return await CalendarBook.LoadAsync(db, Mon.AddDays(-7), Mon.AddDays(14), Ct);
+        return await CalendarBook.LoadAsync(db, Mon.AddDays(-7), Mon.AddDays(35), Ct);
     }
 }

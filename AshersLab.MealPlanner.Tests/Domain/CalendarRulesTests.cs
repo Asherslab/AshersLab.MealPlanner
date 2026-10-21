@@ -201,6 +201,23 @@ public class CalendarRulesTests
     }
 
     [Fact]
+    public void Serves_made_left_alone_is_kept_even_when_it_equals_the_meals_number()
+    {
+        // Phone A set 6 explicitly; the meal also says 6. B opens the entry to change who eats it: the box is untouched,
+        // so nothing about serves made is sent - a null here would erase A's 6 with a newer clock.
+        Assert.Equal(6, CalendarEntryRules.ServesMadeToSave(held: 6, typed: 6, mealServes: 6));
+        Assert.Empty((As(Planned with { ServesMade = 6 }) with { ServesMade = CalendarEntryRules.ServesMadeToSave(6, 6, 6) })
+            .ChangesFrom(Planned with { ServesMade = 6 }));
+
+        // Typed: the meal's own number clears it, anything else is the entry's.
+        Assert.Null(CalendarEntryRules.ServesMadeToSave(held: 8, typed: 6, mealServes: 6));
+        Assert.Equal(8, CalendarEntryRules.ServesMadeToSave(held: null, typed: 8, mealServes: 6));
+        Assert.Null(CalendarEntryRules.ServesMadeToSave(held: null, typed: 6, mealServes: 6));
+        Assert.Null(CalendarEntryRules.ServesMadeToSave(held: 8, typed: null, mealServes: 6));
+        Assert.Null(CalendarEntryRules.ServesMadeToSave(held: null, typed: null, mealServes: 6));
+    }
+
+    [Fact]
     public void A_plan_entry_whose_choices_are_gone_has_no_meal_until_one_is_chosen()
     {
         CalendarEntryNow orphan = Planned with { Usual = null };

@@ -92,12 +92,14 @@ public class ServesTests
     [Fact]
     public void Leftovers_eating_whatever_is_left_move_to_another_batch_when_one_is_skipped()
     {
-        ServesEntry sunday = Cook(Mon.AddDays(-1), made: 4);
-        ServesEntry monday = Cook(Mon, made: 6, skipped: true);
+        // Oldest first would eat Sunday's; it was skipped, so Monday's.
+        ServesEntry sunday = Cook(Mon.AddDays(-1), made: 6, skipped: true);
+        ServesEntry monday = Cook(Mon, made: 4);
         ServesEntry tue    = Eat(Mon.AddDays(1));
         ServesLedger ledger = Serves.Count([sunday, monday, tue]);
 
-        Assert.Equal((sunday.Id, LeftoversProblem.None), (ledger.Leftovers[tue.Id].BatchId, ledger.Leftovers[tue.Id].Problem));
+        Assert.Equal((monday.Id, LeftoversProblem.None), (ledger.Leftovers[tue.Id].BatchId, ledger.Leftovers[tue.Id].Problem));
+        Assert.Equal(0, ledger.Batches[monday.Id].Left);
     }
 
     [Fact]
@@ -150,7 +152,35 @@ public class ServesTests
     }
 
     [Fact]
-    public void A_batch_cooked_on_Sunday_is_eaten_across_the_week_boundary()
+    public void Two_entries_in_one_slot_on_one_day_eat_in_id_order_whatever_order_they_arrive()
+    {
+        // Two phones each added Tuesday's lunch: same day, same slot. The lower id eats first, on every device.
+        ServesEntry cook = Cook(Mon, made: 4);
+        ServesEntry low  = Eat(Mon.AddDays(1));
+        ServesEntry high = Eat(Mon.AddDays(1));
+        Assert.True(low.Id.CompareTo(high.Id) < 0);
+
+        foreach (ServesEntry[] order in new[] { new[] { cook, low, high }, [high, cook, low], [cook, high, low] })
+        {
+            ServesLedger ledger = Serves.Count(order);
+            Assert.Equal(LeftoversProblem.None, ledger.Leftovers[low.Id].Problem);
+            Assert.Equal(LeftoversProblem.NothingLeft, ledger.Leftovers[high.Id].Problem);
+        }
+    }
+
+    [Fact]
+    public void Whatever_is_left_reaches_back_exactly_seven_days()
+    {
+        ServesEntry week  = Cook(Mon.AddDays(-7), made: 4);
+        ServesEntry eaten = Eat(Mon);
+        Assert.Equal(week.Id, Serves.Count([week, eaten]).Leftovers[eaten.Id].BatchId);
+
+        ServesEntry eight = Eat(Mon.AddDays(1));
+        Assert.Equal(LeftoversProblem.NothingLeft, Serves.Count([week, eight]).Leftovers[eight.Id].Problem);
+    }
+
+    [Fact]
+    public void A_batch_cooked_on_Sunday_is_eaten_on_the_next_days()
     {
         DateOnly sunday = Mon.AddDays(6);
         ServesEntry cook = Cook(sunday, made: 6);

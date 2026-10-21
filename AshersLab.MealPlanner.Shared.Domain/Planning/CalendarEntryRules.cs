@@ -122,6 +122,15 @@ public static class CalendarEntryRules
         meal is not null || people is not null || status != CalendarStatus.Planned || movedDate is not null || movedSlot is not null
         || eatsFrom is not null || servesMade is not null;
 
+    /// <summary>
+    /// What the entry sheet saves as a cooked entry's serves made. Typing the meal's own number clears it - it follows the
+    /// meal again - but <b>only when the box was edited</b>: an untouched box keeps what the entry held, even when that
+    /// equals the meal's number. Otherwise saving anything else on the entry would send a <c>ServesMade = null</c> nobody
+    /// made, and its newer clock would erase a number set on another phone.
+    /// </summary>
+    public static int? ServesMadeToSave(int? held, int? typed, int mealServes) =>
+        typed == held ? held : typed == mealServes ? null : typed;
+
     public static string? ServesMadeProblem(int made) => made switch
     {
         < 1         => "A batch makes at least one serve.",

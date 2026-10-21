@@ -37,9 +37,14 @@ leftovers after it, and what a skip does to them. Read before touching anything 
   is right for them.
 - **Everything is read through `CalendarBook`** (`ServesBook.LoadAsync`). An entry the calendar does not show - removed,
   or an untouched one its plan no longer puts there - cooks and eats nothing, exactly like a skipped one.
-- **A week's numbers must not depend on which week is on screen.** `ServesBook` reads three weeks before the days asked
-  for and one after: leftovers eat batches up to 7 days old (14 when chosen by hand), and what a batch has left depends on
-  what ate from it before. A batch older than that window is not seen.
+- **A week's numbers must not depend on which week is on screen**, so `ServesBook` reads the calendar **from its first
+  entry** (`ServesBook.FirstDayAsync`) to two weeks after the days asked for. No shorter window is right: each "whatever is
+  left" pick depends on what every earlier pick left, and the picks chain back without limit - a three-week window once gave
+  a lunch 1 serve where the whole calendar gave 2 (`ServesSyncTests.A_chain_of_whatever_is_left_picks_*`). The two weeks
+  after are a batch's last possible eater: a lunch can be set to eat a batch up to 14 days old.
+- **Saving the entry sheet clears serves made only when the box was edited** (`CalendarEntryRules.ServesMadeToSave`). An
+  untouched box equal to the meal's number would otherwise send `ServesMade = null` with a newer clock and erase a number
+  another phone had set.
 
 ## The rules
 
@@ -101,8 +106,11 @@ profiles', outboxes empty. Screenshots of the desktop week and the phone day.
 
 The in-process tests: `Tests/Domain/ServesTests.cs` (the cooking night first then leftovers in order, a serve per person,
 nothing left and not enough, a skipped batch flagging chosen and automatic leftovers, falling back to another batch, a skipped
-lunch giving its serves back, slot order within a day, moves and a replanned cooking, a batch eaten across a week boundary,
-oldest-first and the week limit, a chosen batch, gone and cooked-later batches, short at the table, two phones' lunches in
-either order) and `Tests/Planning/ServesSyncTests.cs` (through the real host: the same counts on another browser, a skip of
-the cooking flagging both lunches and a replan onto another day, serves made, two offline lunches and a skipped one, a chosen
-batch and a removed one). Breaking the skipped-leftovers rule, oldest-first, or the not-cooked flag fails both files' tests.
+lunch giving its serves back, slot order within a day and the id within a slot, moves and a replanned cooking, oldest-first
+and the week limit at exactly 7 days, a chosen batch, gone and cooked-later batches, short at the table, two phones' lunches
+in either order) and `Tests/Planning/ServesSyncTests.cs` (through the real host: the same counts on another browser - and the
+same lunch eating on both - a skip of the cooking flagging both lunches and a replan onto another day, serves made, two
+offline lunches and a skipped one, a chosen batch and a removed one, the picker's "N left" with an earlier eater the same
+day, and the same numbers whichever week is loaded). Breaking the skipped-leftovers rule, oldest-first, or the not-cooked
+flag fails both files' tests; so does, since the 2026-10-22 review fixes, dropping the id tie-break, the 7-day `>=`, the
+same-day slot order of the picker, the edited-only clear of serves made, or going back to a three-week window.
