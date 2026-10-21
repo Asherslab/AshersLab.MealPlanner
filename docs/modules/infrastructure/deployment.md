@@ -188,12 +188,20 @@ tell the two apart. Two things rest on the operator:
   outposts set it from the session; an nginx `auth_request` setup needs `proxy_set_header`. A header that still arrives
   twice is believed as nobody.
 - **In a cluster `Auth__TrustedProxies` is usually the whole pod network** - the ingress controller's pod address moves -
-  and then any pod could claim to be the proxy. The chart's NetworkPolicy (`networkPolicy.enabled`) admits only the
-  ingress controller's namespace. Kept off by default only because it needs a CNI that enforces it.
+  and then any pod could claim to be the proxy. The chart's NetworkPolicy (`networkPolicy.enabled`, **on by default**)
+  admits only the ingress controller's namespace (`fromNamespaceLabels`), narrowed to its pods by `fromPodLabels` -
+  needed on k3s, whose Traefik lives in `kube-system` beside everything else. `helm template` refuses TrustedHeader with
+  the policy off while `auth.trustedProxies` holds a network (`/`); single addresses are allowed. **The policy cannot
+  stop traffic from the nodes themselves** - NetworkPolicy does not apply to it, and on flannel a node reaches pods from an
+  address inside the pod network - so a `hostNetwork` pod, or anything with a shell on a node, can still pass as the proxy.
+  On a cluster where that matters, name the ingress controller's pod addresses instead of the network.
+- **The display-name header is believed whenever it arrives once**, so it must be one the proxy sets on every request;
+  one it does not set, a browser can fill in. It is only the name on the Server card.
 
 `Auth__TrustedProxies` is comma-separated addresses or networks, IPv4 written out in full as for the Supervisor. **.NET's
 `IPNetwork.TryParse` quietly masks bits past the prefix** - `10.42.1.0/16` parses as `10.42.0.0/16` - so such an entry is
-refused rather than guessed (meant /16 or /24?). Served at the host's root only; there is no sub-path support outside
+refused rather than guessed (meant /16 or /24?). A `/0` (`0.0.0.0/0`, `::/0`) is refused too: it trusts everyone, which
+is `Auth__Mode=None` without its warning. Served at the host's root only; there is no sub-path support outside
 ingress.
 
 ### The chart
@@ -208,7 +216,7 @@ each optional and each several lines. Not published anywhere; install it from a 
 | Runs as 1654 (the aspnet image's `app`), `fsGroup` 1654, read-only root, all capabilities dropped, `/tmp` an `emptyDir` | The image runs as root only for Home Assistant's root-owned `/data`; the PVC is made the app's own instead. |
 | startup / liveness `/healthz`, readiness `/healthz/ready` (the database opens) | Migration runs before the host listens, so startup allows two minutes. |
 | requests 25m CPU, 96 MiB; limit 256 MiB; `DOTNET_gcServer=0` | Measured in Docker on 2026-10-22: 76 MiB after serving the app and a two-browser sync. Workstation GC: the server GC's heap per core is memory a Pi-class node lacks, for throughput a household never needs. |
-| `helm template` refuses a missing `auth.trustedProxies`, an unknown `auth.mode`, Litestream without `bucket` or `existingSecret` | The same refusals the app makes at start - a crash-looping pod says less. |
+| `helm template` refuses a missing `auth.trustedProxies`, an unknown `auth.mode`, a trusted network with the NetworkPolicy off, Litestream without `bucket` or `existingSecret` | The same refusals the app makes at start - a crash-looping pod says less. |
 
 ### Litestream
 
@@ -247,12 +255,16 @@ Nothing here has been run against any real cluster, registry setting or secret.
 1. **The sign-in proxy first.** oauth2-proxy or Authentik in front of the ingress, set to **replace** the user header on
    every request. Note its header name and the ingress controller's namespace.
 2. **The pod network** for `auth.trustedProxies` (k3s: `10.42.0.0/16`; `kubectl get nodes -o
-   jsonpath='{.items[*].spec.podCIDR}'`), and `networkPolicy.enabled: true` with `fromNamespaceLabels` naming the ingress
-   controller's namespace. Without the policy any pod in the cluster can sign in as anyone.
-3. **For Litestream**, a bucket and a key limited to it, then the Secret - never in values:
-   `kubectl -n <ns> create secret generic mealplanner-s3 --from-literal=LITESTREAM_ACCESS_KEY_ID=… --from-literal=LITESTREAM_SECRET_ACCESS_KEY=…`
+   jsonpath='{.items[*].spec.podCIDR}'`), and the ingress controller's namespace label for
+   `networkPolicy.fromNamespaceLabels` (the policy is on by default). On k3s's Traefik that namespace is `kube-system`:
+   also set `networkPolicy.fromPodLabels` to `app.kubernetes.io/name: traefik`. Without the policy any pod in the cluster
+   can sign in as anyone; even with it, anything on a node can (above).
+3. **For Litestream**, a bucket and a key limited to it, then the Secret - never in values, and never on a command line
+   (shell history, the process list): write the two lines `LITESTREAM_ACCESS_KEY_ID=…` and `LITESTREAM_SECRET_ACCESS_KEY=…`
+   to a file only you can read, `kubectl -n <ns> create secret generic mealplanner-s3 --from-env-file=<file>`, delete it.
 4. Install from a checkout, pinning the version: `helm upgrade --install mealplanner Charts/mealplanner -n <ns>
    --set image.tag=<version> --set auth.trustedProxies=<pod network> --set auth.userHeader=<header> --set
+   networkPolicy.fromNamespaceLabels."kubernetes\.io/metadata\.name"=<ingress namespace> --set
    ingress.enabled=true --set ingress.host=<host> …` plus the proxy's annotations under `ingress.annotations` (the values
    file has an ingress-nginx + oauth2-proxy example). Keep proxy buffering off and the read timeout long: the change
    stream is one long response.

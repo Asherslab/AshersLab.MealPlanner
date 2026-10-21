@@ -46,14 +46,14 @@ app_up() {
     docker run -d --name mealplanner-standalone-app --network "$NET" --ip 172.31.40.10 --network-alias mealplanner \
         -e Auth__Mode=TrustedHeader -e Auth__TrustedProxies=172.31.40.2 \
         -e Auth__DisplayNameHeader=X-Forwarded-Preferred-Username -e DOTNET_gcServer=0 \
-        -v "$DATA:/data" -p 18397:8099 "$IMAGE" >/dev/null
+        -v "$DATA:/data" -p 127.0.0.1:18397:8099 "$IMAGE" >/dev/null
 
     docker run -d --name mealplanner-standalone-litestream --network "$NET" --ip 172.31.40.11 $S3_ENV \
         -v "$DATA:/data" -v "$DIR/litestream.yml:/etc/litestream.yml:ro" \
         "$LITESTREAM" replicate -config /etc/litestream.yml >/dev/null
 
     docker run -d --name mealplanner-standalone-proxy --network "$NET" --ip 172.31.40.2 \
-        -v "$DIR/nginx.conf:/etc/nginx/nginx.conf:ro" -p 18396:8080 nginx:stable-alpine >/dev/null
+        -v "$DIR/nginx.conf:/etc/nginx/nginx.conf:ro" -p 127.0.0.1:18396:8080 nginx:stable-alpine >/dev/null
 }
 
 case "${1:-}" in
@@ -81,7 +81,7 @@ docker network create --subnet 172.31.40.0/24 --gateway 172.31.40.1 "$NET" >/dev
 # identity from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY; preallocation off, or each volume file is 1 GB of disk.
 docker run -d --name mealplanner-standalone-s3 --network "$NET" --ip 172.31.40.20 --network-alias s3 \
     -e AWS_ACCESS_KEY_ID=$S3_KEY -e AWS_SECRET_ACCESS_KEY=$S3_SECRET \
-    -p 18398:8333 "$SEAWEEDFS" server -dir=/data -s3 -s3.port=8333 \
+    -p 127.0.0.1:18398:8333 "$SEAWEEDFS" server -dir=/data -s3 -s3.port=8333 \
     -master.volumeSizeLimitMB=64 -master.volumePreallocate=false -volume.max=8 >/dev/null
 # Litestream does not create its bucket.
 for _ in $(seq 1 60); do

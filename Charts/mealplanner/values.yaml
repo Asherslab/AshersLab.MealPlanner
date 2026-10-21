@@ -18,7 +18,10 @@ auth:
   trustedProxies: ""
   # oauth2-proxy's; Authentik's is X-authentik-username. The proxy must REPLACE the browser's own copy of it.
   userHeader: X-Forwarded-User
-  # Optional: a header with the name to show (oauth2-proxy: X-Forwarded-Preferred-Username; Authentik: X-authentik-name).
+  # Optional: a header with the name to show - exactly the one the proxy SETS on every request, or a browser can send
+  # its own (it is only a label on the Server card, but still). oauth2-proxy behind ingress-nginx's auth-url, as in the
+  # example below: X-Auth-Request-Preferred-Username; oauth2-proxy as the reverse proxy: X-Forwarded-Preferred-Username;
+  # Authentik: X-authentik-name.
   displayNameHeader: ""
 
 # SQLite is one file with one writer: one replica, ever, and Recreate rather than a rolling update - two pods on the
@@ -63,13 +66,18 @@ ingress:
   #   hosts: [meals.example.com]
   tls: []
 
-# Only the namespaces named here may open the app's port - the ingress controller's. Without it, trustedProxies set to
-# the pod network trusts every pod in the cluster. Needs a CNI that enforces NetworkPolicy (k3s's default does).
+# Only the ingress controller may open the app's port. Without it, trustedProxies set to the pod network trusts every
+# pod in the cluster - so with TrustedHeader the chart refuses to install with this off unless trustedProxies names
+# single addresses only. Needs a CNI that enforces NetworkPolicy (k3s's default does). It cannot stop traffic from the
+# nodes themselves (hostNetwork pods, anything on a node): see deployment.md.
 networkPolicy:
-  enabled: false
-  # Namespaces allowed in, by label: the ingress controller's.
+  enabled: true
+  # The ingress controller's namespace, by label. k3s's Traefik is in kube-system: then also set fromPodLabels, or every
+  # pod in kube-system is let in.
   fromNamespaceLabels:
     kubernetes.io/metadata.name: ingress-nginx
+  # Optional: narrow it to the controller's own pods in that namespace (k3s Traefik: app.kubernetes.io/name: traefik).
+  fromPodLabels: {}
 
 # Optional: Litestream replicating the SQLite file to S3-compatible storage, continuously, as a sidecar - and, on a pod
 # whose PVC is empty, restoring it before the app starts. SQLite cannot live ON S3; this is how S3 gets involved.

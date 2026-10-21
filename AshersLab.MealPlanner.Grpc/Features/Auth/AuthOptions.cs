@@ -98,8 +98,9 @@ public sealed class AuthOptions
                 continue;
             }
             // Bits past the prefix (10.42.1.0/16) are refused: meant /16 or /24? .NET's IPNetwork.TryParse quietly masks them off.
+            // A /0 is every address: Auth:Mode=None without its warning, so it is refused - say None if that is meant.
             if (!int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int prefix)
-                || prefix > full || !IPNetwork.TryParse(entry, out IPNetwork network) || !network.BaseAddress.Equals(address))
+                || prefix == 0 || prefix > full || !IPNetwork.TryParse(entry, out IPNetwork network) || !network.BaseAddress.Equals(address))
             {
                 bad = entry;
                 return null;

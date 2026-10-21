@@ -61,9 +61,15 @@ spec:
     # Only the ingress controller's namespace may open the port; the kubelet's probes come from the node and are not
     # subject to NetworkPolicy.
     - from:
+        # One entry, so both must match: these pods in that namespace.
         - namespaceSelector:
             matchLabels:
               {{- toYaml .Values.networkPolicy.fromNamespaceLabels | nindent 14 }}
+          {{- with .Values.networkPolicy.fromPodLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
       ports:
         - port: http
 {{- end }}

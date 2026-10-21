@@ -95,6 +95,8 @@ public class AuthTests
     [InlineData("10.42.0.0/33")]
     [InlineData("10.42.0.0/-1")]
     [InlineData("10.42.0.0/16/2")]
+    [InlineData("0.0.0.0/0")]         // everyone: Auth:Mode=None without its warning
+    [InlineData("::/0")]
     [InlineData("proxy.local")]
     [InlineData(",")]
     public void Anything_else_is_not_a_proxy(string configured)
