@@ -1,6 +1,8 @@
 @page "/meals/{Id:guid}"
 @using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Categories
 @using AshersLab.MealPlanner.Shared.Data.Ingredients
+@using AshersLab.MealPlanner.Shared.Data.Stores
 @using AshersLab.MealPlanner.Shared.Data.Meals
 @using AshersLab.MealPlanner.Shared.Data.Planning
 @using AshersLab.MealPlanner.Shared.Data.Sync
@@ -130,6 +132,8 @@
     private MealCostBook    _costs      = null!;
     private PlanBook        _plans      = null!;
     private List<CalendarEntry> _coming = [];
+    private List<Category>  _categories = [];
+    private List<Store>     _stores     = [];
 
     // The same page instance shows another meal when only the id in the address changes.
     protected override async Task OnParametersSetAsync()
@@ -146,6 +150,9 @@
         _costs      = await MealCostBook.LoadAsync(db);
         _plans      = await PlanBook.LoadAsync(db);
         _coming     = await CalendarBook.ComingAsync(db, DateOnly.FromDateTime(DateTime.Now));
+        _categories = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
+        _stores     = [.. (await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync())
+            .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)];
     }
 
     /// <summary>The plans that use the meal, and the calendar when a coming entry names it.</summary>
@@ -185,10 +192,32 @@
 
     private async Task AddLine()
     {
-        MealIngredientSheetResult? result = await MealDialogs.EditLineAsync(Dialogs, Viewport,
-            new MealIngredientDraft(Id, Guid.Empty, null, null), isNew: true, IngredientOptions());
-        if (result?.Saved is { } draft)
-            await WriteAsync(SyncedEntities.MealIngredient, Guid.CreateVersion7(), OpKind.Create, draft.FieldsChangedFrom(null));
+        MealIngredientDraft line = new(Id, Guid.Empty, null, null);
+        while (true)
+        {
+            MealIngredientSheetResult? result = await MealDialogs.EditLineAsync(Dialogs, Viewport, line, isNew: true, IngredientOptions());
+            if (result?.Saved is { } draft)
+            {
+                await WriteAsync(SyncedEntities.MealIngredient, Guid.CreateVersion7(), OpKind.Create, draft.FieldsChangedFrom(null));
+                return;
+            }
+            if (result?.NewIngredient is not { } name)
+                return;
+
+            // The ingredient editor, as on the Ingredients page; saved, the sheet opens again with it chosen and the
+            // amount box focused. Cancelled, back to the search.
+            IngredientEditorResult? made = await IngredientDialogs.EditAsync(Dialogs, Viewport,
+                new IngredientDraft(name, null, null, null, false), isNew: true,
+                [.. _categories.Select(c => new PickerOption(c.Id, c.Name))],
+                [.. _stores.Select(s => new PickerOption(s.Id, s.Name))],
+                [.. _costs.Ingredients.Select(i => i.Name)]);
+            if (made?.Saved is { } ingredient)
+            {
+                Guid ingredientId = Guid.CreateVersion7();
+                await WriteAsync(SyncedEntities.Ingredient, ingredientId, OpKind.Create, ingredient.FieldsChangedFrom(null));
+                line = line with { IngredientId = ingredientId };
+            }
+        }
     }
 
     private async Task EditLine(MealIngredient line)

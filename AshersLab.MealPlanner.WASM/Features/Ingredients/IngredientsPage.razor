@@ -155,24 +155,10 @@
             await WriteAsync(SyncedEntities.Ingredient, ingredient.Id, OpKind.Update, fields);
     }
 
-    private async Task<IngredientEditorResult?> OpenEditor(IngredientDraft draft, bool isNew, Guid? editing)
-    {
-        bool phone = await Viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
-
-        DialogParameters<IngredientEditor> parameters = new()
-        {
-            { e => e.Draft, draft },
-            { e => e.IsNew, isNew },
-            { e => e.Categories, [.. _categories.Select(c => new PickerOption(c.Id, c.Name))] },
-            { e => e.Stores, [.. _stores.Select(s => new PickerOption(s.Key, s.Value))] },
-            { e => e.OtherNames, [.. _ingredients.Where(i => i.Id != editing).Select(i => i.Name)] },
-            { e => e.UsedByProducts, [.. _products[editing]] },
-            { e => e.UsedByMeals, [.. _meals[editing]] },
-        };
-        DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
-
-        IDialogReference dialog = await Dialogs.ShowAsync<IngredientEditor>(isNew ? "New ingredient" : "Edit ingredient", parameters, options);
-        DialogResult? result = await dialog.Result;
-        return result is { Canceled: false, Data: IngredientEditorResult answer } ? answer : null;
-    }
+    private Task<IngredientEditorResult?> OpenEditor(IngredientDraft draft, bool isNew, Guid? editing) =>
+        IngredientDialogs.EditAsync(Dialogs, Viewport, draft, isNew,
+            [.. _categories.Select(c => new PickerOption(c.Id, c.Name))],
+            [.. _stores.Select(s => new PickerOption(s.Key, s.Value))],
+            [.. _ingredients.Where(i => i.Id != editing).Select(i => i.Name)],
+            [.. _products[editing]], [.. _meals[editing]]);
 }

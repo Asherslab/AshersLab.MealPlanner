@@ -9,8 +9,11 @@ namespace AshersLab.MealPlanner.WASM.Features.Meals;
 /// <summary>What the meal editor answers: the edited meal, or a confirmed delete.</summary>
 public sealed record MealEditorResult(MealDraft? Saved, bool Delete);
 
-/// <summary>What the ingredient sheet answers: the line as saved, or "remove it".</summary>
-public sealed record MealIngredientSheetResult(MealIngredientDraft? Saved, bool Remove);
+/// <summary>
+/// What the ingredient sheet answers: the line as saved, or "remove it", or "make a new ingredient with this name" -
+/// for the page to open the ingredient editor and then the sheet again with it chosen.
+/// </summary>
+public sealed record MealIngredientSheetResult(MealIngredientDraft? Saved, bool Remove, string? NewIngredient = null);
 
 public static class MealDialogs
 {

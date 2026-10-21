@@ -31,9 +31,16 @@
                 {
                     <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2" data-testid="meal-ingredient-no-match">
                         @(string.IsNullOrWhiteSpace(_search)
-                            ? "No ingredients yet - add them on the Ingredients page first."
-                            : $"No ingredient called \"{Names.Normalise(_search)}\" - add it on the Ingredients page first.")
+                            ? "No ingredients yet - type a name to add one."
+                            : $"No ingredient called \"{Names.Normalise(_search)}\" yet.")
                     </MudText>
+                }
+                @* A new meal often needs one new ingredient: make it here rather than on the Ingredients page and back. *@
+                @if (NewName() is { } newName)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-1"
+                               OnClick="() => Dialog.Close(DialogResult.Ok(new MealIngredientSheetResult(null, Remove: false, NewIngredient: newName)))"
+                               data-testid="meal-ingredient-new">New ingredient "@newName"</MudButton>
                 }
             </div>
         }
@@ -129,6 +136,13 @@
         return Ingredients.Where(i => filter.Length == 0 || i.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase))
             .OrderBy(i => !i.Name.StartsWith(filter, StringComparison.CurrentCultureIgnoreCase))
             .ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+    }
+
+    /// <summary>The typed name, when no ingredient is called exactly that - offered as a new one.</summary>
+    private string? NewName()
+    {
+        string name = Names.Normalise(_search);
+        return name.Length > 0 && !Ingredients.Any(i => string.Equals(i.Name, name, StringComparison.CurrentCultureIgnoreCase)) ? name : null;
     }
 
     private void Choose(IngredientOption option)

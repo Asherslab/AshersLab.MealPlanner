@@ -122,7 +122,8 @@ database in one read per table, so the meals list costs fifty meals without fift
 synced: each device computes it from its own data.
 
 **Trap: an incomplete cost is never a smaller number.** Any line with no quantity, or whose ingredient is unpriced or
-gone, makes the cost incomplete: `Cost(Cents, Missing)` is shown as "from $6.25 + 1 unpriced", never "$6.25". A meal
+gone, makes the cost incomplete: `Cost(Cents, Missing)` is shown as "from $6.25 + 1 unpriced", never "$6.25" - and with
+nothing known yet as "4 unpriced", not "from $0.00 + 4 unpriced", which on a phone read as a price. A meal
 made from ingredients that has none yet has no cost at all ("No ingredients yet"), never $0.
 
 | Kind | A batch | A serve |
@@ -151,7 +152,10 @@ ingredient", and per line the name, "500 g · browned · $12.50/kg" (or "no quan
 **Adding an ingredient** (`MealIngredientSheet`, full screen on a phone): tap "Add ingredient" - the search box is
 focused with the keyboard up; type a few letters, tap the ingredient - the "How much a batch uses (g)" box takes focus,
 showing what it read ("= 1.5 kg") as it is typed; Enter saves. Leaving it empty is allowed and says so. An ingredient
-not in the catalogue yet is added on the Ingredients page first (the sheet says so). Tapping a line opens the same
+not in the catalogue yet: the sheet offers **New ingredient "Chicken thigh"** under the search, which closes it and opens
+the ingredient editor (`IngredientDialogs.EditAsync`, the Ingredients page's own) with the name filled in; saved, the
+sheet opens again with it chosen and the amount box focused - so a new meal's new ingredient is never a trip to another
+page and back. Cancelled, the sheet opens again on the search. Tapping a line opens the same
 sheet to change the amount or note, or Remove it (no confirmation: re-adding is as quick). Both boxes focus themselves
 after the dialog opens, as the price sheet's does, because the dialog's focus trap overrides `AutoFocus`.
 
