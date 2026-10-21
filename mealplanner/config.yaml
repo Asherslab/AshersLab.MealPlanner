@@ -8,7 +8,7 @@ url: https://github.com/Asherslab/AshersLab.MealPlanner
 
 # Written by CI (.github/workflows/docker-publish.yml) AFTER the image with this tag is pushed - that commit is
 # what makes Home Assistant offer the update. Never edit by hand: a version with no image fails to install.
-version: "0.0.7"
+version: "0.0.8"
 
 # One multi-arch manifest, pulled by platform; no {arch} in the name.
 image: ghcr.io/asherslab/asherslab-mealplanner
