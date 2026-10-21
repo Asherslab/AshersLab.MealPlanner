@@ -67,10 +67,81 @@ export const typeInto = (id, text) => `(() => { const i = document.getElementByI
 
 export const click = (b, selector) => b.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); e?.click(); return !!e; })()`);
 
-/** Clicks a MudBlazor message box's button by its text ("Delete", "Cancel"). */
+/** Clicks a button by its text ("Delete", "Cancel") in the topmost MudBlazor dialog - a message box over an editor. */
 export const clickDialogButton = (b, text) => b.evaluate(`(() => {
-  const btn = [...document.querySelectorAll('.mud-dialog button')].find(x => x.textContent.trim().toLowerCase() === ${JSON.stringify(text.toLowerCase())});
+  const top = [...document.querySelectorAll('.mud-dialog')].at(-1);
+  const btn = [...(top?.querySelectorAll('button') ?? [])].find(x => x.textContent.trim().toLowerCase() === ${JSON.stringify(text.toLowerCase())});
   btn?.click(); return !!btn; })()`);
+
+/**
+ * The ingredients page: the "New ingredient, or search" box opens the editor (IngredientEditor), a row opens it for
+ * that ingredient. Options: { name, unit: 'Gram'|'Millilitre'|'Each', category: name or '' for none, store: name or '',
+ * staple: bool }.
+ */
+export function ingredients(b) {
+  const sel = 'ingredient';
+  const has = (name, ms) => until(b, `[...document.querySelectorAll('[data-testid=${sel}-name]')].some(e => e.textContent.trim() === ${JSON.stringify(name)})`, ms);
+  const gone = (name, ms) => until(b, `![...document.querySelectorAll('[data-testid=${sel}-name]')].some(e => e.textContent.trim() === ${JSON.stringify(name)})`, ms);
+  const row = name => `[...document.querySelectorAll('[data-testid=${sel}-row]')]
+    .find(r => r.querySelector('[data-testid=${sel}-name]')?.textContent.trim() === ${JSON.stringify(name)})`;
+  const editorOpen = () => until(b, `!!document.getElementById('ingredient-edit-name')`, 10_000);
+  const editorClosed = () => until(b, `!document.getElementById('ingredient-edit-name')`, 10_000);
+  const pick = (testid, text) => b.evaluate(`(() => { const s = document.querySelector('[data-testid=${testid}]');
+    const o = [...s.options].find(o => (${JSON.stringify(text)} === '' ? o.value === '' : o.textContent.trim() === ${JSON.stringify(text)}));
+    if (!o) return false; s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+
+  async function fill(o) {
+    if (o.name !== undefined) { await b.evaluate(typeInto('ingredient-edit-name', o.name)); await sleep(100); }
+    if (o.unit) { await click(b, `[data-testid=ingredient-unit-${o.unit}]`); await sleep(100); }
+    if (o.category !== undefined) await pick('ingredient-category', o.category);
+    if (o.store !== undefined) await pick('ingredient-store', o.store);
+    if (o.staple !== undefined) await b.evaluate(`(() => { const e = document.querySelector('[data-testid=ingredient-staple]');
+      const i = e.matches('input') ? e : e.querySelector('input'); if (i.checked !== ${!!o.staple}) i.click(); })()`);
+    await sleep(100);
+  }
+
+  return {
+    has, gone,
+    names: () => b.evaluate(`[...document.querySelectorAll('[data-testid=${sel}-name]')].map(e => e.textContent.trim())`),
+    id: name => b.evaluate(`${row(name)}?.dataset.id`),
+    detail: name => b.evaluate(`${row(name)}?.querySelector('[data-testid=${sel}-detail]')?.textContent.trim()`),
+    /** The heading of the group the ingredient is listed under. */
+    group: name => b.evaluate(`(() => { const r = ${row(name)}; if (!r) return null;
+      let h = r.closest('.mud-paper')?.previousElementSibling; return h?.textContent.trim(); })()`),
+    /** Types the name in the box and taps Add; fills the editor (unit defaults to Gram) and saves. */
+    async add(name, o = {}) {
+      // The box appears only once the page has opened the browser database.
+      if (!await until(b, `!!document.getElementById('${sel}-new-name')`, 30_000)) return false;
+      await b.evaluate(typeInto(`${sel}-new-name`, name)); await sleep(100);
+      await click(b, `[data-testid=${sel}-add]`);
+      if (!await editorOpen()) return false;
+      await fill({ unit: 'Gram', ...o });
+      await click(b, `[data-testid=ingredient-save]`);
+      return (await editorClosed()) && has(o.name ?? name);
+    },
+    /** Opens the editor without saving: for checking what it refuses. Close with cancel(). */
+    async open(name) { await b.evaluate(`${row(name)}?.click()`); return editorOpen(); },
+    fill,
+    save: async () => { await click(b, `[data-testid=ingredient-save]`); return editorClosed(); },
+    cancel: async () => { await click(b, `[data-testid=ingredient-cancel]`); return editorClosed(); },
+    async edit(name, o) {
+      await b.evaluate(`${row(name)}?.click()`);
+      if (!await editorOpen()) return false;
+      await fill(o);
+      await click(b, `[data-testid=ingredient-save]`);
+      return (await editorClosed()) && has(o.name ?? name);
+    },
+    async rename(from, to) { return this.edit(from, { name: to }); },
+    async remove(name) {
+      await b.evaluate(`${row(name)}?.click()`);
+      if (!await editorOpen()) return false;
+      await click(b, `[data-testid=ingredient-delete]`);
+      await until(b, `document.querySelectorAll('.mud-dialog').length > 1`, 5000);
+      await clickDialogButton(b, 'Delete');
+      return (await editorClosed()) && gone(name);
+    },
+  };
+}
 
 /** A phone-sized viewport (iPhone 14-ish), and a PNG of the page saved under scratch. */
 export async function phone(b, on = true) {
@@ -121,6 +192,7 @@ export function nameList(b, prefix) {
     id: name => b.evaluate(`[...document.querySelectorAll('[data-testid=${prefix}-row]')]
       .find(r => r.querySelector('[data-testid=${prefix}-name]')?.textContent.trim() === ${JSON.stringify(name)})?.dataset.id`),
     async add(name) {
+      if (!await until(b, `!!document.getElementById('${prefix}-new-name')`, 30_000)) return false;
       await b.evaluate(typeInto(`${prefix}-new-name`, name)); await sleep(100);
       await click(b, `[data-testid=${prefix}-add]`);
       return has(name);
@@ -132,14 +204,18 @@ export function nameList(b, prefix) {
       await click(b, `[data-testid=${prefix}-rename-save]`);
       return has(to);
     },
-    /** Clicks delete; confirms the dialog if one opens. Returns 'deleted', or 'in-use' when the page refused. */
+    /** Clicks delete; confirms the dialog if one opens. Returns 'deleted', 'in-use' when the page refused, or what went wrong. */
     async remove(name) {
+      if (!await has(name, 30_000)) return 'no such row';
       await rowAction(name, 'delete');
       await until(b, `!!document.querySelector('.mud-dialog, [data-testid=${prefix}-in-use]')`, 5000);
-      if (!(await b.evaluate(`!!document.querySelector('.mud-dialog')`))) return 'in-use';
+      if (await b.evaluate(`!!document.querySelector('[data-testid=${prefix}-in-use]')`)) return 'in-use';
+      if (!(await b.evaluate(`!!document.querySelector('.mud-dialog')`))) return 'nothing happened';
       await clickDialogButton(b, 'Delete');
       return (await gone(name)) ? 'deleted' : 'still there';
     },
     move: (name, dir) => rowAction(name, dir),
+    /** Clicks one of a row's buttons ('rename', 'delete', 'up', 'down') and nothing more. */
+    press: async (name, action) => (await has(name, 30_000)) && rowAction(name, action),
   };
 }

@@ -9,6 +9,45 @@
     border-top: 1px solid var(--mud-palette-lines-default);
 }
 
+/* A plain <select> dressed as an outlined field: on a phone it opens the phone's own picker (IngredientEditor). */
+.native-select {
+    display: block;
+}
+
+.native-select > span {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 4px;
+}
+
+.native-select > select {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 1rem;
+    color: var(--mud-palette-text-primary);
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: var(--mud-default-borderradius);
+}
+
+.native-select > select:focus {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: -1px;
+}
+
+.ingredient-row {
+    cursor: pointer;
+}
+
+/* "Grams (g)", not "GRAMS (G)": the symbol's case is the point. */
+.unit-toggle,
+.unit-toggle * {
+    text-transform: none;
+}
+
 #blazor-error-ui {
     background: lightyellow;
     bottom: 0;

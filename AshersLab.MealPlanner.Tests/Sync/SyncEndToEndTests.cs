@@ -419,8 +419,17 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
     /// valid clock, straight to the server - and the two must agree.
     /// </summary>
     [Theory]
-    [InlineData(OpKind.Create, "Name", "beef mince", false)]
+    [InlineData(OpKind.Create, "Name", "beef mince", true)]      // a create needs a unit too
     [InlineData(OpKind.Create, "Name", "", true)]
+    [InlineData(OpKind.Update, "BaseUnit", "Each", false)]
+    [InlineData(OpKind.Update, "BaseUnit", "Cup", true)]
+    [InlineData(OpKind.Update, "BaseUnit", "2", true)]
+    [InlineData(OpKind.Update, "CategoryId", null, false)]
+    [InlineData(OpKind.Update, "CategoryId", "01a15c49-5a60-7767-bd13-be44ce13c39d", false)]
+    [InlineData(OpKind.Update, "CategoryId", "01A15C49-5A60-7767-BD13-BE44CE13C39D", true)]
+    [InlineData(OpKind.Update, "UsualStoreId", "costco", true)]
+    [InlineData(OpKind.Update, "IsStaple", "true", false)]
+    [InlineData(OpKind.Update, "IsStaple", "yes", true)]
     [InlineData(OpKind.Create, "Name", " untrimmed ", true)]
     [InlineData(OpKind.Create, "Colour", "red", true)]
     [InlineData(OpKind.Update, "Name", "x", false)]

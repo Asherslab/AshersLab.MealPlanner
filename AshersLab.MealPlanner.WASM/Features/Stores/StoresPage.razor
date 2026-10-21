@@ -30,10 +30,16 @@
     protected override async Task LoadAsync(LocalDbContext db)
     {
         List<Store> stores = await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync();
+        ILookup<Guid?, string> usedBy = (await db.Ingredients.AsNoTracking()
+                .Where(i => !i.Deleted && i.UsualStoreId != null)
+                .Select(i => new { i.UsualStoreId, i.Name })
+                .ToListAsync())
+            .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToLookup(i => i.UsualStoreId, i => i.Name);
 
         _stores = [.. stores
             .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Select(s => new NameListItem(s.Id, s.Name, []))];
+            .Select(s => new NameListItem(s.Id, s.Name, [.. usedBy[s.Id]]))];
     }
 
     private Task Add(string name) =>

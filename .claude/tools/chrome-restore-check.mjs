@@ -15,6 +15,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { ingredients } from './lib/profiles.mjs';
 
 const [scratch] = process.argv.slice(2);
 if (!scratch) { console.error('usage: chrome-restore-check.mjs <scratchDir>'); process.exit(2); }
@@ -73,27 +74,9 @@ const chip = b => b.evaluate(`(() => { const s = document.querySelector('[data-t
 const settled = (b, ms = 60_000) => until(b, `(() => { const s = document.querySelector('[data-testid=sync-status]');
   return s?.dataset.state === 'online' && s?.dataset.pending === '0'; })()`, ms);
 
-const typeInto = (id, text) => `(() => { const i = document.getElementById(${JSON.stringify(id)});
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(text)});
-  i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`;
-
-async function add(b, name) {
-  await b.evaluate(typeInto('ingredient-new-name', name));
-  await sleep(100);
-  await b.evaluate(`document.querySelector('[data-testid=ingredient-add]').click()`);
-  return has(b, name);
-}
-
-async function rename(b, from, to) {
-  await b.evaluate(`[...document.querySelectorAll('[data-testid=ingredient-row]')]
-    .find(r => r.querySelector('[data-testid=ingredient-name]')?.textContent.trim() === ${JSON.stringify(from)})
-    .querySelector('[data-testid=ingredient-rename]').click()`);
-  await until(b, `!!document.getElementById('ingredient-rename-input')`);
-  await b.evaluate(typeInto('ingredient-rename-input', to));
-  await sleep(100);
-  await b.evaluate(`document.querySelector('[data-testid=ingredient-rename-save]').click()`);
-  return has(b, to);
-}
+// Adding and renaming go through the ingredient editor, driven by the shared harness.
+const add = (b, name) => ingredients(b).add(name);
+const rename = (b, from, to) => ingredients(b).rename(from, to);
 
 const server = sql => execFileSync('sqlite3', ['-readonly', SERVER_DB, sql], { encoding: 'utf8' }).trim();
 const serverNames = () => server(`select Name from Ingredient where Deleted = 0 and Name like '%${RUN}' order by Name`).split('\n').filter(Boolean);

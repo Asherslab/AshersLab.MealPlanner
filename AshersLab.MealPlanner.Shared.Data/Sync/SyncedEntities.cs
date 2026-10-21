@@ -51,6 +51,11 @@ public static class SyncedEntities
             // Minted by the device that created it, never by the database.
             ingredient.Property(i => i.Id).ValueGeneratedNever();
             ingredient.Property(i => i.Name).HasMaxLength(Names.MaxLength);
+            // By name, as the op carries it, so the table reads the same as the log.
+            ingredient.Property(i => i.BaseUnit).HasConversion<string>().HasMaxLength(20);
+            // Indexed for "is this category / store still used?", the check before a delete. Not foreign keys.
+            ingredient.HasIndex(i => i.CategoryId);
+            ingredient.HasIndex(i => i.UsualStoreId);
         });
 
         modelBuilder.Entity<Store>(store =>

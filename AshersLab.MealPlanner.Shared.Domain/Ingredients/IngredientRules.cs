@@ -14,14 +14,33 @@ public static class IngredientRules
 
     public const string NameField = "Name";
 
+    /// <summary>A <see cref="Ingredients.BaseUnit"/> by name.</summary>
+    public const string BaseUnitField = "BaseUnit";
+
+    /// <summary>A category's id (<see cref="OpValues.FormatId"/>), or null for none.</summary>
+    public const string CategoryField = "CategoryId";
+
+    /// <summary>A store's id, or null for none: where it goes on the shopping list.</summary>
+    public const string UsualStoreField = "UsualStoreId";
+
+    /// <summary>"true" or "false". Staples are used in small amounts and left off the shopping list.</summary>
+    public const string IsStapleField = "IsStaple";
+
     public const int MaxNameLength = Names.MaxLength;
 
     private const string Noun = "An ingredient";
 
     /// <summary>Every field an ingredient op may carry. Anything else is refused.</summary>
-    public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal) { NameField };
+    public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal)
+    {
+        NameField, BaseUnitField, CategoryField, UsualStoreField, IsStapleField,
+    };
 
-    private static readonly string[] RequiredOnCreate = [NameField];
+    /// <summary>
+    /// A new ingredient needs a name and a unit - the unit because every quantity of it, in every recipe and pack,
+    /// is counted in it. Category, store and staple may come later.
+    /// </summary>
+    private static readonly string[] RequiredOnCreate = [NameField, BaseUnitField];
 
     /// <summary>Trims and collapses inner runs of whitespace: " beef  mince " is "beef mince".</summary>
     public static string NormaliseName(string? name) => Names.Normalise(name);
@@ -31,12 +50,17 @@ public static class IngredientRules
 
     /// <summary>
     /// Null when an op's fields are acceptable for <paramref name="kind"/>; otherwise why not. A create must
-    /// name the ingredient; an update may carry only known fields, each valid.
+    /// name the ingredient and give its unit; an update may carry only known fields, each valid. Whether a
+    /// referenced category or store exists is not checked - it may not have arrived yet, or been deleted elsewhere.
     /// </summary>
     public static string? OpProblem(OpKind kind, IReadOnlyList<OpField> fields) =>
         OpRules.Problem(kind, fields, Noun, Fields, RequiredOnCreate, field => field.Name switch
         {
-            NameField => Names.FieldProblem(field.Value, Noun),
-            _         => null,
+            NameField       => Names.FieldProblem(field.Value, Noun),
+            BaseUnitField   => BaseUnits.TryParse(field.Value, out _) ? null : "The unit is not grams, millilitres or each.",
+            CategoryField   => OpValues.TryParseId(field.Value, out _) ? null : "The category is not an id.",
+            UsualStoreField => OpValues.TryParseId(field.Value, out _) ? null : "The store is not an id.",
+            IsStapleField   => OpValues.TryParseBool(field.Value, out _) ? null : "Staple is not true or false.",
+            _               => null,
         });
 }

@@ -11,6 +11,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { ingredients } from './lib/profiles.mjs';
 
 const [scratch] = process.argv.slice(2);
 if (!scratch) { console.error('usage: chrome-sync-check.mjs <scratchDir>'); process.exit(2); }
@@ -64,28 +65,9 @@ const names = b => b.evaluate(`[...document.querySelectorAll('[data-testid=ingre
 const status = b => b.evaluate(`(() => { const s = document.querySelector('[data-testid=sync-status]'); return s && { state: s.dataset.state, pending: s.dataset.pending, text: s.textContent.trim() }; })()`);
 const has = (b, name) => until(b, `[...document.querySelectorAll('[data-testid=ingredient-name]')].some(e => e.textContent.trim() === ${JSON.stringify(name)})`, name);
 
-// MudTextField with Immediate binds on 'input'; the native setter is needed so Blazor sees the change.
-const typeInto = (id, text) => `(() => { const i = document.getElementById(${JSON.stringify(id)});
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(text)});
-  i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`;
-
-async function add(b, name) {
-  await b.evaluate(typeInto('ingredient-new-name', name));
-  await sleep(100);
-  await b.evaluate(`document.querySelector('[data-testid=ingredient-add]').click()`);
-  return has(b, name);
-}
-
-async function rename(b, from, to) {
-  await b.evaluate(`[...document.querySelectorAll('[data-testid=ingredient-row]')]
-    .find(r => r.querySelector('[data-testid=ingredient-name]')?.textContent.trim() === ${JSON.stringify(from)})
-    .querySelector('[data-testid=ingredient-rename]').click()`);
-  await until(b, `!!document.getElementById('ingredient-rename-input')`, 'rename box');
-  await b.evaluate(typeInto('ingredient-rename-input', to));
-  await sleep(100);
-  await b.evaluate(`document.querySelector('[data-testid=ingredient-rename-save]').click()`);
-  return has(b, to);
-}
+// Adding and renaming go through the ingredient editor, driven by the shared harness.
+const add = (b, name) => ingredients(b).add(name);
+const rename = (b, from, to) => ingredients(b).rename(from, to);
 
 const server = sql => execFileSync('sqlite3', ['-readonly', SERVER_DB, sql], { encoding: 'utf8' }).trim();
 const serverName = id => server(`select Name from Ingredient where Id = '${id.toUpperCase()}'`);

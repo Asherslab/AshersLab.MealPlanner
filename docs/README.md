@@ -32,8 +32,9 @@ Present tense, kept current, no dates.
 - [Offline sync](modules/sync/offline-sync.md) — every edit is an op: the clock and merge rules, push, pull
   and the change stream, the protocol version check, and where offline does and does not work. **Read before
   any write path.
-- [The catalogue](modules/catalogue/catalogue.md) — stores, categories (and soon ingredients): seeded as server
-  ops, valid names, hand-set order by position, no foreign keys, and why deleting something in use is refused.**
+- [The catalogue](modules/catalogue/catalogue.md) — stores, categories and ingredients: seeded as server ops, valid
+  names, hand-set order by position, an ingredient's unit, no foreign keys, and why deleting something in use is
+  refused.**
 
 ## The other three directories
 

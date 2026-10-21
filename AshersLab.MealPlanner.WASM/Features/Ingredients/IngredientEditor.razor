@@ -1,0 +1,158 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+
+@*
+    One ingredient: name, unit, category, usual store, staple - and delete. A dialog, full screen on a phone. It
+    only edits a draft and answers it; the page turns the answer into an op, so nothing here touches the database
+    (and no context is held while the planner thinks).
+
+    The pickers are native <select>s, not MudSelect: on a phone they open the phone's own picker, which is
+    bigger and easier one-handed than a popover list.
+*@
+
+<MudDialog data-testid="ingredient-editor">
+    <DialogContent>
+        <form id="ingredient-editor-form" @onsubmit="Save" @onsubmit:preventDefault>
+            <MudTextField T="string" @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Immediate="true"
+                          MaxLength="Names.MaxLength" AutoFocus="@IsNew"
+                          Error="_nameError is not null" ErrorText="@_nameError"
+                          InputId="ingredient-edit-name" data-testid="ingredient-edit-name"/>
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Counted in</MudText>
+            <MudToggleGroup T="BaseUnit?" @bind-Value="_unit" Color="Color.Primary" Outlined="true" Class="unit-toggle"
+                            SelectionMode="SelectionMode.SingleSelection" data-testid="ingredient-unit">
+                @foreach (BaseUnit unit in Enum.GetValues<BaseUnit>())
+                {
+                    <MudToggleItem T="BaseUnit?" Value="unit" data-testid="@($"ingredient-unit-{unit}")">
+                        @UnitLabel(unit)
+                    </MudToggleItem>
+                }
+            </MudToggleGroup>
+            @if (_unitError is not null && _unit is null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Error" data-testid="ingredient-unit-error">@_unitError</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Every quantity of it - in a recipe or a pack - is counted this way. "Each" is for whole things:
+                    eggs, a cucumber.
+                </MudText>
+            }
+
+            <label class="native-select mt-4">
+                <span>Category</span>
+                <select @bind="_categoryId" data-testid="ingredient-category">
+                    <option value="">No category</option>
+                    @foreach (PickerOption category in Categories)
+                    {
+                        <option value="@category.Id">@category.Name</option>
+                    }
+                </select>
+            </label>
+
+            <label class="native-select mt-4">
+                <span>Usual store</span>
+                <select @bind="_storeId" data-testid="ingredient-store">
+                    <option value="">No usual store</option>
+                    @foreach (PickerOption store in Stores)
+                    {
+                        <option value="@store.Id">@store.Name</option>
+                    }
+                </select>
+            </label>
+
+            <MudSwitch T="bool" @bind-Value="_isStaple" Color="Color.Primary" Class="mt-4"
+                       Label="Staple" data-testid="ingredient-staple"/>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                Used a little at a time - oil, soy sauce, spices. Left off the shopping list until it runs low.
+            </MudText>
+        </form>
+    </DialogContent>
+    <DialogActions>
+        @if (!IsNew)
+        {
+            <MudButton Color="Color.Error" OnClick="Delete" Class="mr-auto" data-testid="ingredient-delete">Delete</MudButton>
+        }
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="ingredient-cancel">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="ingredient-editor-form" Color="Color.Primary"
+                   Variant="Variant.Filled" data-testid="ingredient-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Inject] private IDialogService Dialogs { get; set; } = null!;
+
+    /// <summary>What it starts from. For a new ingredient, just the name typed so far.</summary>
+    [Parameter] public IngredientDraft Draft { get; set; } = new("", null, null, null, false);
+
+    [Parameter] public bool IsNew { get; set; }
+
+    [Parameter] public IReadOnlyList<PickerOption> Categories { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<PickerOption> Stores { get; set; } = [];
+
+    /// <summary>Every other ingredient's name, to warn about a duplicate.</summary>
+    [Parameter] public IReadOnlyList<string> OtherNames { get; set; } = [];
+
+    private string?   _name;
+    private BaseUnit? _unit;
+    private string    _categoryId = "";
+    private string    _storeId    = "";
+    private bool      _isStaple;
+
+    private string? _nameError;
+    private string? _unitError;
+
+    protected override void OnInitialized()
+    {
+        _name     = Draft.Name;
+        _unit     = Draft.Unit;
+        _isStaple = Draft.IsStaple;
+        // A reference to a category or store that is gone (deleted elsewhere) shows as none, and saving keeps it
+        // unless the planner picks something: the draft is compared with what it started from.
+        _categoryId = Categories.Any(c => c.Id == Draft.CategoryId) ? Draft.CategoryId.ToString()! : "";
+        _storeId    = Stores.Any(s => s.Id == Draft.UsualStoreId) ? Draft.UsualStoreId.ToString()! : "";
+    }
+
+    private static string UnitLabel(BaseUnit unit) => unit switch
+    {
+        BaseUnit.Gram       => "Grams (g)",
+        BaseUnit.Millilitre => "Millilitres (ml)",
+        _                   => "Each",
+    };
+
+    private void Save()
+    {
+        string name = Names.Normalise(_name);
+        _nameError = IngredientRules.NameProblem(name)
+                     ?? (OtherNames.Any(n => Names.Same(n, name)) ? $"There is already an ingredient called {name}." : null);
+        _unitError = _unit is null ? "Choose what it is counted in." : null;
+        if (_nameError is not null || _unitError is not null)
+            return;
+
+        Dialog.Close(DialogResult.Ok(new IngredientEditorResult(
+            new IngredientDraft(name, _unit, Pick(_categoryId, Draft.CategoryId, Categories),
+                Pick(_storeId, Draft.UsualStoreId, Stores), _isStaple),
+            Delete: false)));
+    }
+
+    /// <summary>The picker's choice - except that "none" over a reference to something gone keeps the reference.</summary>
+    private static Guid? Pick(string chosen, Guid? before, IReadOnlyList<PickerOption> options) =>
+        Guid.TryParse(chosen, out Guid id) ? id
+        : before is { } held && options.All(o => o.Id != held) ? before
+        : null;
+
+    private async Task Delete()
+    {
+        bool? confirmed = await Dialogs.ShowMessageBoxAsync(
+            title: $"Delete {Draft.Name}?",
+            message: "It goes from the ingredients on every device.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+            Dialog.Close(DialogResult.Ok(new IngredientEditorResult(null, Delete: true)));
+    }
+}

@@ -79,11 +79,20 @@ public sealed class TestBrowser : IDbContextFactory<LocalDbContext>, IAsyncDispo
         }
     }
 
-    public async Task<Guid> CreateIngredientAsync(string name)
+    /// <summary>A new ingredient as the page creates one: a name and a unit (grams, unless the test says).</summary>
+    public async Task<Guid> CreateIngredientAsync(string name, BaseUnit unit = BaseUnit.Gram, params OpField[] more)
     {
         Guid id = Guid.CreateVersion7(Now);
-        await WriteAsync(id, OpKind.Create, name);
+        await WriteAsync(id, OpKind.Create,
+            [new OpField(IngredientRules.NameField, name), new OpField(IngredientRules.BaseUnitField, BaseUnits.Format(unit)), .. more]);
         return id;
+    }
+
+    /// <summary>Live ingredient rows, every field.</summary>
+    public async Task<Dictionary<Guid, Ingredient>> IngredientRowsAsync()
+    {
+        await using LocalDbContext db = CreateDbContext();
+        return await db.Ingredients.AsNoTracking().Where(i => !i.Deleted).ToDictionaryAsync(i => i.Id);
     }
 
     public Task RenameAsync(Guid id, string name) => WriteAsync(id, OpKind.Update, [new OpField(IngredientRules.NameField, name)]);
@@ -113,8 +122,6 @@ public sealed class TestBrowser : IDbContextFactory<LocalDbContext>, IAsyncDispo
         await using LocalDbContext db = CreateDbContext();
         return await db.Stores.Where(s => !s.Deleted).ToDictionaryAsync(s => s.Id, s => s.Name);
     }
-
-    private Task WriteAsync(Guid id, OpKind kind, string name) => WriteAsync(id, kind, [new OpField(IngredientRules.NameField, name)]);
 
     public Task<SyncRoundResult> SyncAsync(int pullBatch = SyncRound.PullBatch) =>
         SyncRound.RunAsync(Contexts, Server, DeviceId, pullBatch: pullBatch);

@@ -1,178 +1,158 @@
 @page "/ingredients"
 @using AshersLab.MealPlanner.LocalData
-@using AshersLab.MealPlanner.LocalData.Sync
+@using AshersLab.MealPlanner.Shared.Data.Categories
 @using AshersLab.MealPlanner.Shared.Data.Ingredients
+@using AshersLab.MealPlanner.Shared.Data.Stores
 @using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
 @using AshersLab.MealPlanner.Shared.Domain.Ingredients
 @using AshersLab.MealPlanner.Shared.Domain.Sync
 @using AshersLab.MealPlanner.WASM.Data
 @using Microsoft.EntityFrameworkCore
-@using SqliteWasmBlazor
-@implements IDisposable
-@inject LocalDatabase Database
-@inject SyncLoop Sync
+@inherits LocalDataPage
+@inject IDialogService Dialogs
+@inject IBrowserViewportService Viewport
 
 @*
-    The op log's first page: add an ingredient, rename one. Reads and writes only this browser's database -
-    every edit is an op (LocalOps.WriteAsync), and the sync loop carries it to the server and to every other
-    device. Works the same offline. Full ingredient editing (unit, category, store) is slice 4.
+    Every ingredient, grouped by category in the household's order. Type a name and tap Add (or Enter) to open the
+    editor with it filled in; tap a row to edit or delete it. Reads and writes only this browser's database - every
+    edit is an op, synced by the sync loop, and works the same offline.
 *@
 
 <PageTitle>Ingredients - Meal Planner</PageTitle>
 
 <MudText Typo="Typo.h5" Component="h1">Ingredients</MudText>
 
-@if (_start is null)
-{
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4"/>
-}
-else if (_start.State != DbInitState.READY)
-{
-    <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="local-db-state">
-        This browser could not open its copy of the data (@_start.State): @_start.Failure
-    </MudAlert>
-}
-else
-{
+<LocalDataGate Start="Start">
     <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
-        <MudTextField T="string" @bind-Value="_newName" Label="New ingredient" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Immediate="true" MaxLength="IngredientRules.MaxNameLength"
-                      Error="_addError is not null" ErrorText="@_addError"
+        <MudTextField T="string" @bind-Value="_newName" Label="New ingredient, or search" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                       InputId="ingredient-new-name" data-testid="ingredient-new-name"/>
         <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
                    data-testid="ingredient-add">Add</MudButton>
     </form>
 
-    <MudPaper Outlined="true" Class="mt-4">
-        @if (_ingredients.Count == 0)
-        {
-            <MudText Class="pa-4" Color="Color.Secondary" data-testid="ingredients-empty">No ingredients yet.</MudText>
-        }
-        @* Plain rows, not MudList: a MudListItem takes Space and Enter for its own selection, so a text box inside
-           one loses every space typed and never submits. *@
-        <div>
-            @foreach (Ingredient ingredient in _ingredients)
+    @if (_ingredients.Count == 0)
+    {
+        <MudText Class="pa-4 mud-text-secondary" data-testid="ingredients-empty">No ingredients yet.</MudText>
+    }
+    else if (!Groups().Any())
+    {
+        <MudText Class="pa-4 mud-text-secondary" data-testid="ingredients-none-match">
+            None match "@Names.Normalise(_newName)". Tap Add to add it.
+        </MudText>
+    }
+
+    @foreach ((string heading, List<Ingredient> items) in Groups())
+    {
+        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="ingredient-group">@heading</MudText>
+        <MudPaper Outlined="true">
+            @foreach (Ingredient ingredient in items)
             {
-                <div class="ingredient-row px-4 py-2" @key="ingredient.Id" data-testid="ingredient-row" data-id="@ingredient.Id">
-                    @if (_renaming == ingredient.Id)
-                    {
-                        <form class="d-flex align-start gap-2" @onsubmit="SaveRename" @onsubmit:preventDefault>
-                            <MudTextField T="string" @bind-Value="_renameTo" Label="Name" Variant="Variant.Outlined"
-                                          Margin="Margin.Dense" Immediate="true" AutoFocus="true"
-                                          MaxLength="IngredientRules.MaxNameLength"
-                                          Error="_renameError is not null" ErrorText="@_renameError"
-                                          InputId="ingredient-rename-input" data-testid="ingredient-rename-input"/>
-                            <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="Variant.Filled"
-                                       Class="mt-1" data-testid="ingredient-rename-save">Save</MudButton>
-                            <MudButton OnClick="CancelRename" Class="mt-1">Cancel</MudButton>
-                        </form>
-                    }
-                    else
-                    {
-                        <div class="d-flex align-center">
-                            <MudText Class="flex-grow-1" data-testid="ingredient-name">@ingredient.Name</MudText>
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                           aria-label="@($"Rename {ingredient.Name}")"
-                                           OnClick="() => StartRename(ingredient)" data-testid="ingredient-rename"/>
-                        </div>
-                    }
+                <div class="ingredient-row px-4 py-2" @key="ingredient.Id" role="button" tabindex="0"
+                     @onclick="() => Edit(ingredient)" data-testid="ingredient-row" data-id="@ingredient.Id">
+                    <div class="d-flex align-center gap-2">
+                        <MudText Class="flex-grow-1" data-testid="ingredient-name">@ingredient.Name</MudText>
+                        @if (ingredient.IsStaple)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" data-testid="ingredient-staple-chip">Staple</MudChip>
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="ingredient-detail">
+                        @Detail(ingredient)
+                    </MudText>
                 </div>
             }
-        </div>
-    </MudPaper>
-}
+        </MudPaper>
+    }
+</LocalDataGate>
 
 @code {
-    private LocalDatabaseStart? _start;
-    private List<Ingredient>    _ingredients = [];
+    private List<Ingredient>          _ingredients = [];
+    private List<Category>            _categories  = [];
+    private Dictionary<Guid, string>  _stores      = [];
 
     private string? _newName;
-    private string? _addError;
 
-    private Guid?   _renaming;
-    private string? _renameTo;
-    private string? _renameError;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task LoadAsync(LocalDbContext db)
     {
-        if (!firstRender)
-            return;
+        _ingredients = await db.Ingredients.AsNoTracking().Where(i => !i.Deleted).ToListAsync();
+        _categories  = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
+        _stores      = (await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync())
+            .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToDictionary(s => s.Id, s => s.Name);
+    }
 
-        _start = await Database.StartAsync();
-        if (_start.State == DbInitState.READY)
+    /// <summary>
+    /// The ingredients matching the box, under their category's heading in category order; those with no category,
+    /// or one that has been deleted, last under "No category".
+    /// </summary>
+    private IEnumerable<(string Heading, List<Ingredient> Items)> Groups()
+    {
+        string filter = Names.Normalise(_newName);
+        List<Ingredient> shown = [.. _ingredients
+            .Where(i => filter.Length == 0 || i.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase))
+            .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)];
+
+        HashSet<Guid> live = [.. _categories.Select(c => c.Id)];
+        foreach (Category category in _categories)
         {
-            Database.ChangedElsewhere += Reload;
-            Sync.DataChanged          += Reload;
-            await Reload();
+            List<Ingredient> items = [.. shown.Where(i => i.CategoryId == category.Id)];
+            if (items.Count > 0)
+                yield return (category.Name, items);
         }
-        StateHasChanged();
+
+        List<Ingredient> loose = [.. shown.Where(i => i.CategoryId is not { } id || !live.Contains(id))];
+        if (loose.Count > 0)
+            yield return ("No category", loose);
     }
 
-    private async Task Reload()
-    {
-        await using LocalDbContext db = await Database.Contexts.CreateDbContextAsync();
-
-        _ingredients = await db.Ingredients.AsNoTracking()
-            .Where(i => !i.Deleted)
-            .OrderBy(i => i.Name)
-            .ToListAsync();
-
-        await InvokeAsync(StateHasChanged);
-    }
+    private string Detail(Ingredient ingredient) =>
+        string.Join(" · ", new[]
+        {
+            $"counted in {ingredient.BaseUnit.Symbol()}",
+            ingredient.UsualStoreId is { } store ? _stores.GetValueOrDefault(store) ?? "store removed" : null,
+        }.Where(s => s is not null));
 
     private async Task Add()
     {
-        string name = IngredientRules.NormaliseName(_newName);
-        _addError = IngredientRules.NameProblem(name);
-        if (_addError is not null)
+        string name = Names.Normalise(_newName);
+        IngredientEditorResult? result = await OpenEditor(new IngredientDraft(name, null, null, null, false), isNew: true, editing: null);
+        if (result?.Saved is not { } draft)
             return;
 
-        // Cleared before the write, not after: on a slow phone the next name is often typed while this one is
-        // saving, and must go into an empty box rather than be appended to - or wiped with - this one.
         _newName = null;
-        await Write(Guid.CreateVersion7(), OpKind.Create, name);
+        await WriteAsync(SyncedEntities.Ingredient, Guid.CreateVersion7(), OpKind.Create, draft.FieldsChangedFrom(null));
     }
 
-    private void StartRename(Ingredient ingredient)
+    private async Task Edit(Ingredient ingredient)
     {
-        _renaming    = ingredient.Id;
-        _renameTo    = ingredient.Name;
-        _renameError = null;
+        IngredientDraft before = new(ingredient.Name, ingredient.BaseUnit, ingredient.CategoryId, ingredient.UsualStoreId, ingredient.IsStaple);
+        IngredientEditorResult? result = await OpenEditor(before, isNew: false, editing: ingredient.Id);
+
+        if (result is { Delete: true })
+            await WriteAsync(SyncedEntities.Ingredient, ingredient.Id, OpKind.Delete, []);
+        else if (result?.Saved is { } draft && draft.FieldsChangedFrom(before) is { Count: > 0 } fields)
+            await WriteAsync(SyncedEntities.Ingredient, ingredient.Id, OpKind.Update, fields);
     }
 
-    private void CancelRename() => _renaming = null;
-
-    private async Task SaveRename()
+    private async Task<IngredientEditorResult?> OpenEditor(IngredientDraft draft, bool isNew, Guid? editing)
     {
-        if (_renaming is not { } id)
-            return;
+        bool phone = await Viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
 
-        string name = IngredientRules.NormaliseName(_renameTo);
-        _renameError = IngredientRules.NameProblem(name);
-        if (_renameError is not null)
-            return;
+        DialogParameters<IngredientEditor> parameters = new()
+        {
+            { e => e.Draft, draft },
+            { e => e.IsNew, isNew },
+            { e => e.Categories, [.. _categories.Select(c => new PickerOption(c.Id, c.Name))] },
+            { e => e.Stores, [.. _stores.Select(s => new PickerOption(s.Key, s.Value))] },
+            { e => e.OtherNames, [.. _ingredients.Where(i => i.Id != editing).Select(i => i.Name)] },
+        };
+        DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
 
-        _renaming = null;
-
-        // Unchanged: no op. An op that changes nothing would still win the merge against a rename made
-        // meanwhile on another device.
-        if (_ingredients.FirstOrDefault(i => i.Id == id)?.Name != name)
-            await Write(id, OpKind.Update, name);
-    }
-
-    private async Task Write(Guid id, OpKind kind, string name)
-    {
-        await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
-            await LocalOps.WriteAsync(db, _start!.Device!.Id, DateTimeOffset.UtcNow, SyncedEntities.Ingredient, id, kind,
-                [new OpField(IngredientRules.NameField, name)]);
-
-        Sync.Kick();
-        await Reload();
-    }
-
-    public void Dispose()
-    {
-        Database.ChangedElsewhere -= Reload;
-        Sync.DataChanged          -= Reload;
+        IDialogReference dialog = await Dialogs.ShowAsync<IngredientEditor>(isNew ? "New ingredient" : "Edit ingredient", parameters, options);
+        DialogResult? result = await dialog.Result;
+        return result is { Canceled: false, Data: IngredientEditorResult answer } ? answer : null;
     }
 }

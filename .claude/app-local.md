@@ -94,10 +94,14 @@ server again") repeats the call — the server time changing is the evidence tha
 
 In the network panel the call is `POST https://localhost:7283/gRPC/AshersLab.MealPlanner.ServerInfo/Get`.
 
-**Ingredients** (`/ingredients`, "Ingredients" in the app bar) is the op log's page: the "New ingredient" box
-(`InputId` `ingredient-new-name`, Enter or `data-testid` `ingredient-add`), and per row (`ingredient-row`, its
-`data-id` the ingredient id) a pencil (`ingredient-rename`) opening `ingredient-rename-input` and
-`ingredient-rename-save`. The sync chip at the right of the app bar is `data-testid` `sync-status`, with
+**Ingredients** (`/ingredients`, `nav-ingredients`): the "New ingredient, or search" box (`InputId`
+`ingredient-new-name` - it also filters the list) and `ingredient-add`, which opens the editor; per row
+`ingredient-row` (`data-id`; tapping it opens the editor), `ingredient-name`, `ingredient-detail` ("counted in each ·
+Costco"), `ingredient-staple-chip`; group headings `ingredient-group`. The editor (a MudDialog): `ingredient-edit-name`
+(input id), `ingredient-unit-Gram|Millilitre|Each` (buttons), `ingredient-category` / `ingredient-store` (native
+`<select>`s - set `.value` and dispatch `change`), `ingredient-staple` (the checkbox input itself), `ingredient-save`,
+`ingredient-cancel`, `ingredient-delete` (then a message box over the editor: click "Delete" in the *last*
+`.mud-dialog`). `ingredients(b)` in `.claude/tools/lib/profiles.mjs` drives all of it. The sync chip at the right of the app bar is `data-testid` `sync-status`, with
 `data-state` (`connecting|online|offline|failed|refused`) and `data-pending` (outbox count, including ops accepted
 but not yet pulled back). Sync calls are
 `/gRPC/AshersLab.MealPlanner.Sync/Push|Pull|Changes`; `Changes` stays open.

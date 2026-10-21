@@ -10,6 +10,10 @@ code:
   - AshersLab.MealPlanner.Shared.Domain/ListPosition.cs
   - AshersLab.MealPlanner.Shared.Domain/Stores
   - AshersLab.MealPlanner.Shared.Domain/Categories
+  - AshersLab.MealPlanner.Shared.Domain/Ingredients
+  - AshersLab.MealPlanner.Shared.Domain/Sync/OpValues.cs
+  - AshersLab.MealPlanner.Shared.Data/Ingredients
+  - AshersLab.MealPlanner.WASM/Features/Ingredients
   - AshersLab.MealPlanner.Shared.Data/Stores
   - AshersLab.MealPlanner.Shared.Data/Categories
   - AshersLab.MealPlanner.WASM/Features/Categories
@@ -25,7 +29,7 @@ code:
 
 # The catalogue
 
-The things everything else is built from: stores, and (as they land) categories and ingredients. How they are
+The things everything else is built from: stores, shopping categories and ingredients. How they are
 seeded, what a valid one is, and what deleting one does. Read before adding a field to any of them, or anything
 that refers to them. Every edit to them is an op like any other - [offline sync](../sync/offline-sync.md) is the
 mechanism; this doc is what the catalogue does with it.
@@ -102,6 +106,38 @@ earlier one. Two phones moving the *same* category: the later move wins, like an
 ingredients and the shopping list are grouped in this order."; a "New category" box; per row up and down arrows
 (one tap moves one place; the top's up and the bottom's down are greyed), a pencil and a bin.
 
+## Ingredients
+
+`Ingredient (Id, Name, BaseUnit, CategoryId, UsualStoreId, IsStaple, Deleted)`. Rules in
+`Shared.Domain/Ingredients/IngredientRules.cs`; the field formats every entity shares are `Sync/OpValues.cs`.
+
+| Field | On the wire | Notes |
+|---|---|---|
+| `Name` | normalised text | required on create |
+| `BaseUnit` | `Gram`, `Millilitre` or `Each` - the enum member's **name** | required on create; never rename a member. Shown as g / ml / each. |
+| `CategoryId`, `UsualStoreId` | lower-case hyphenated GUID, or null for none | not checked against existing rows - see the traps |
+| `IsStaple` | `true` or `false` | staples are costed by quantity like anything else and left off the shopping list |
+
+- **A create needs a unit, and the editor has no default.** Every quantity of the ingredient - in a recipe, in a
+  pack - is counted in it, so a silent "grams" on a cucumber would make every later number wrong without anyone
+  noticing. Changing the unit later converts nothing (there is nothing yet to convert; when meals and products
+  exist, that is their slices' problem).
+- **An edit sends only the fields that changed** (`IngredientDraft.FieldsChangedFrom`, tested): two phones changing
+  different fields of one ingredient offline both keep their change; the same field, the later edit wins.
+- A reference to a category or store that is gone shows as "No category" (listed last) or "store removed", and the
+  editor's picker shows none. Saving the editor without picking leaves the reference as it is.
+- Rows from before the unit existed read as `Gram` (the migrations' column default, `AddIngredientDetails`); the
+  column is text, not the enum's number, so it reads the same as the log.
+
+**What the planner sees** (`/ingredients`): one box, "New ingredient, or search". Typing filters the list as she
+types; Add (or Enter) opens the editor with the name filled in. The list is grouped under category headings in the
+categories' order, "No category" last; each row is the name, a "Staple" chip when it is one, and "counted in each ·
+Costco" beneath. Tapping a row opens the same editor. The editor (full screen on a phone): Name; "Counted in" -
+Grams (g) / Millilitres (ml) / Each, none chosen for a new one, and Save says "Choose what it is counted in." until
+one is; Category and Usual store as the phone's own pickers (native `<select>`s, not MudSelect - bigger and
+one-handed); a Staple switch with what it means. Delete is in the editor, with a confirmation. Adding a fully
+described ingredient: type the name, Add, three taps (unit, category, store), Save.
+
 ## Deleting something referenced
 
 Decided 2026-10-21. **The page refuses to delete anything still in use, and says what uses it**; nothing cascades
@@ -111,9 +147,14 @@ and nothing is archived.
   could not be made atomic with it on every device.
 - Archiving would add a state every list and picker must filter, for no gain over a tombstone - which already
   keeps the row for history.
-- The refusal is the page's (`NameList`'s `UsedBy`), from this browser's data. Two devices can still race - one
-  deletes a store offline while the other makes it an ingredient's usual store - and then the reference points
-  at a tombstone and is shown as gone.
+- The refusal is the page's (`NameList`'s `UsedBy`, filled by the stores and categories pages from live
+  ingredients), from this browser's data. It names what uses it: "Fruit is used by 1 ingredient: cucumber. Move them
+  to another category first." Two devices can still race - one deletes a category offline while the other puts an
+  ingredient in it - and then the reference points at a tombstone and is shown as gone
+  (`CatalogueSyncTests.An_ingredient_whose_category_was_deleted_elsewhere_survives_pointing_at_the_tombstone`).
+- **Nothing refers to an ingredient yet, so deleting one is never refused.** When meal ingredients (slice 6) and
+  products (slice 5) refer to ingredients, the ingredient editor's Delete must apply the same rule: refuse, and say
+  which meals and products use it.
 
 ## The pages
 
@@ -139,3 +180,13 @@ two taps of its up arrow move it above the two before it, on A and B; both profi
 category to the top while B moves the last up one - after reconnecting both moves stand, in the same order on both;
 rename and delete reach the other profile; names and positions (compared as numbers) match in both profiles' SQLite
 and the server's.
+
+Ingredients, same script: added on A as each / Vegetables / Costco, B lists it under Vegetables with "counted in each
+· Costco" and the server row holds every field; the editor refuses a duplicate name and a missing unit, saying both;
+staple and Woolworths set on A show on B (chip and detail); both offline, A changes the unit to grams while B moves it
+to Fruit - after reconnecting both profiles show Fruit and grams, and all three databases hold the same row; B cannot
+delete Fruit (told the cucumber uses it) nor Woolworths; B deletes the ingredient after the confirmation, A drops it,
+the server keeps the tombstone, and Fruit's bin then asks to confirm. Phone-sized screenshots of the list and the
+full-screen editor. By hand in Chrome desktop: the editor, the unit error, picking from both selects, the in-use
+message on Categories, and a delete. `.claude/tools/chrome-sync-check.mjs` (add and rename now through the editor)
+passes as before.

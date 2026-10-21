@@ -6,7 +6,7 @@
 //
 // Needs the app running (AppHost: https) and sqlite3 on the PATH. Fresh profiles each run (ports 19343/19344); names
 // carry the run id, so runs do not disturb each other. APP_URL / SERVER_DB as in chrome-sync-check.mjs.
-import { RUN, launch, check, finish, settled, server, dump, nameList, phone, screenshot, sleep, until } from './lib/profiles.mjs';
+import { RUN, launch, check, finish, settled, server, dump, nameList, ingredients, clickDialogButton, phone, screenshot, sleep, until } from './lib/profiles.mjs';
 
 const [scratch] = process.argv.slice(2);
 if (!scratch) { console.error('usage: chrome-catalogue-check.mjs <scratchDir>'); process.exit(2); }
@@ -116,6 +116,84 @@ const up = id => id.toUpperCase();
   await phone(a); await sleep(500);
   console.log(`  phone screenshot: ${await screenshot(a, 'categories')}`);
   await phone(a, false);
+}
+
+// --- Ingredients ----------------------------------------------------------------------------------------------
+{
+  await a.go('ingredients'); await b.go('ingredients');
+  const ia = ingredients(a), ib = ingredients(b);
+  const cucumber = `cucumber ${RUN}`;
+
+  check(await ia.add(cucumber, { unit: 'Each', category: 'Vegetables', store: 'Costco' }), 'A adds an ingredient: each, Vegetables, Costco');
+  check(await ib.has(cucumber), 'B shows it');
+  check(await ib.group(cucumber) === 'Vegetables', `B lists it under Vegetables (got ${await ib.group(cucumber)})`);
+  check(await ib.detail(cucumber) === 'counted in each · Costco', `B shows "counted in each · Costco" (got ${await ib.detail(cucumber)})`);
+  const id = await ia.id(cucumber);
+  check(server(`select Name || '|' || BaseUnit || '|' || lower(CategoryId) || '|' || lower(UsualStoreId) || '|' || IsStaple from Ingredient where Id = '${up(id)}'`)
+    === `${cucumber}|Each|00000000-5eed-7000-8000-000000000204|00000000-5eed-7000-8000-000000000102|0`, 'the server holds every field');
+
+  // The editor refuses a duplicate name and a missing unit.
+  await a.evaluate(`(() => { const i = document.getElementById('ingredient-new-name');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(cucumber.toUpperCase())});
+    i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(100);
+  await a.evaluate(`document.querySelector('[data-testid=ingredient-add]').click()`);
+  await until(a, `!!document.getElementById('ingredient-edit-name')`);
+  await ia.save();
+  check(await a.evaluate(`document.body.textContent.includes('There is already an ingredient called') && document.body.textContent.includes('Choose what it is counted in.')`),
+    'A refuses a duplicate name and a missing unit, and says why');
+  await ia.cancel();
+  await a.evaluate(`(() => { const i = document.getElementById('ingredient-new-name');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+
+  check(await ia.edit(cucumber, { staple: true, store: 'Woolworths' }), 'A marks it a staple and moves it to Woolworths');
+  check(await until(b, `!!document.querySelector('[data-testid=ingredient-row][data-id="${id}"] [data-testid=ingredient-staple-chip]')`)
+    && await until(b, `document.querySelector('[data-testid=ingredient-row][data-id="${id}"] [data-testid=ingredient-detail]')?.textContent.trim() === 'counted in each · Woolworths'`),
+    'B shows the staple chip and Woolworths');
+
+  // Different fields, both offline: both survive.
+  await a.offline(true); await b.offline(true);
+  check(await ia.edit(cucumber, { unit: 'Gram' }), 'A, offline, changes its unit to grams');
+  await sleep(300);
+  check(await ib.edit(cucumber, { category: 'Fruit' }), 'B, offline, moves it to Fruit');
+  await a.offline(false); await b.offline(false);
+  await settled(a); await settled(b); await sleep(1500);
+  for (const [p, i] of [[a, ia], [b, ib]])
+    check(await i.group(cucumber) === 'Fruit' && (await i.detail(cucumber)).startsWith('counted in g'),
+      `${p.name} ends with both edits: Fruit, counted in g (${await i.group(cucumber)}, ${await i.detail(cucumber)})`);
+
+  const serverRow = server(`select Name || '|' || BaseUnit || '|' || lower(CategoryId) || '|' || lower(UsualStoreId) || '|' || IsStaple from Ingredient where Id = '${up(id)}'`);
+  console.log(`  server Ingredient: ${serverRow}`);
+  for (const p of [a, b]) {
+    const q = await dump(p);
+    const local = q(`select Name || '|' || BaseUnit || '|' || lower(CategoryId) || '|' || lower(UsualStoreId) || '|' || IsStaple from Ingredient where Id = '${up(id)}'`);
+    check(local === serverRow && q('select count(*) from Outbox') === '0', `${p.name} SQLite holds the same row as the server, outbox empty`);
+  }
+
+  // What uses a category or a store cannot be deleted.
+  await b.go('categories');
+  check(await nameList(b, 'category').remove('Fruit') === 'in-use'
+    && await b.evaluate(`document.querySelector('[data-testid=category-in-use]')?.textContent.includes(${JSON.stringify(cucumber)})`),
+    'B cannot delete Fruit, and is told the cucumber uses it');
+  await b.go('stores');
+  check(await nameList(b, 'store').remove('Woolworths') === 'in-use', 'B cannot delete Woolworths either');
+  await b.go('ingredients');
+
+  await phone(a); await sleep(500);
+  console.log(`  phone screenshot: ${await screenshot(a, 'ingredients')}`);
+  await ia.open(cucumber); await sleep(500);
+  console.log(`  phone screenshot: ${await screenshot(a, 'ingredient-editor')}`);
+  await ia.cancel();
+  await phone(a, false);
+
+  check(await ib.remove(cucumber), 'B deletes it, after the confirmation');
+  check(await ia.gone(cucumber), 'A no longer shows it');
+  check(server(`select Deleted from Ingredient where Id = '${up(id)}'`) === '1', 'the server keeps the tombstone');
+  await b.go('categories');
+  await nameList(b, 'category').press('Fruit', 'delete');      // the bin, without confirming
+  check(await until(b, `!!document.querySelector('.mud-dialog')`, 5000) && !(await b.evaluate(`!!document.querySelector('[data-testid=category-in-use]')`)),
+    'with it gone, Fruit is no longer in use: the bin asks to confirm');
+  await clickDialogButton(b, 'Cancel');
 }
 
 finish();

@@ -124,7 +124,18 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BaseUnit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsStaple")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
@@ -132,7 +143,14 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("UsualStoreId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("UsualStoreId");
 
                     b.ToTable("Ingredient", (string)null);
                 });

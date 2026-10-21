@@ -34,7 +34,14 @@
     protected override async Task LoadAsync(LocalDbContext db)
     {
         _categories = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
-        _items      = [.. _categories.Select(c => new NameListItem(c.Id, c.Name, []))];
+        ILookup<Guid?, string> usedBy = (await db.Ingredients.AsNoTracking()
+                .Where(i => !i.Deleted && i.CategoryId != null)
+                .Select(i => new { i.CategoryId, i.Name })
+                .ToListAsync())
+            .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToLookup(i => i.CategoryId, i => i.Name);
+
+        _items = [.. _categories.Select(c => new NameListItem(c.Id, c.Name, [.. usedBy[c.Id]]))];
     }
 
     private Task Add(string name) =>

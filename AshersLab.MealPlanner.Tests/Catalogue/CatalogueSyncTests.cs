@@ -4,7 +4,9 @@ using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using AshersLab.MealPlanner.Shared.Domain;
+using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Domain.Categories;
+using AshersLab.MealPlanner.Shared.Domain.Ingredients;
 using AshersLab.MealPlanner.Shared.Domain.Stores;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 using AshersLab.MealPlanner.Tests.Grpc;
@@ -88,6 +90,88 @@ public sealed class CatalogueSyncTests : IAsyncLifetime
         foreach ((int at, decimal position) in ListPosition.Move([.. categories.Select(c => c.Position)], index, direction))
             await browser.WriteAsync(SyncedEntities.Category, categories[at].Id, OpKind.Update,
                 [new OpField(CategoryRules.PositionField, ListPosition.Format(position))]);
+    }
+
+    [Fact]
+    public async Task Every_ingredient_field_reaches_another_browser_by_op_and_by_snapshot()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();
+
+        Guid dairy = CatalogueSeed.Category(1);
+        Guid cucumber = await a.CreateIngredientAsync("cucumber", BaseUnit.Each,
+            new OpField(IngredientRules.CategoryField, OpValues.FormatId(dairy)),
+            new OpField(IngredientRules.UsualStoreField, OpValues.FormatId(CatalogueSeed.Costco)),
+            new OpField(IngredientRules.IsStapleField, "true"));
+        await a.SyncAsync();
+
+        await using TestBrowser bySnapshot = await TestBrowser.OpenAsync(_server);
+        await bySnapshot.SyncAsync();     // first load: a snapshot
+
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        await b.SyncAsync();
+        Guid oil = await a.CreateIngredientAsync("olive oil", BaseUnit.Millilitre, new OpField(IngredientRules.IsStapleField, "true"));
+        await a.SyncAsync();
+        await b.SyncAsync();         // a cursor already: ops
+
+        foreach (TestBrowser browser in new[] { bySnapshot, b })
+        {
+            Ingredient row = (await browser.IngredientRowsAsync())[cucumber];
+            Assert.Equal(("cucumber", BaseUnit.Each, dairy, CatalogueSeed.Costco, true),
+                (row.Name, row.BaseUnit, row.CategoryId, row.UsualStoreId, row.IsStaple));
+        }
+
+        Ingredient oilOnB = (await b.IngredientRowsAsync())[oil];
+        Assert.Equal((BaseUnit.Millilitre, (Guid?)null, (Guid?)null, true), (oilOnB.BaseUnit, oilOnB.CategoryId, oilOnB.UsualStoreId, oilOnB.IsStaple));
+    }
+
+    [Fact]
+    public async Task Two_browsers_editing_different_fields_of_one_ingredient_offline_both_keep_their_edit()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        Guid mayo = await a.CreateIngredientAsync("mayo", BaseUnit.Gram);
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        a.Now = a.Now.AddMinutes(1);
+        await a.WriteAsync(SyncedEntities.Ingredient, mayo, OpKind.Update, [new OpField(IngredientRules.BaseUnitField, "Millilitre")]);
+        b.Now = b.Now.AddMinutes(2);
+        await b.WriteAsync(SyncedEntities.Ingredient, mayo, OpKind.Update,
+            [new OpField(IngredientRules.CategoryField, OpValues.FormatId(CatalogueSeed.Category(6)))]);
+        await b.SyncAsync();
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { a, b })
+        {
+            Ingredient row = (await browser.IngredientRowsAsync())[mayo];
+            Assert.Equal((BaseUnit.Millilitre, (Guid?)CatalogueSeed.Category(6)), (row.BaseUnit, row.CategoryId));
+        }
+    }
+
+    [Fact]
+    public async Task An_ingredient_whose_category_was_deleted_elsewhere_survives_pointing_at_the_tombstone()
+    {
+        // The race the page's refusal cannot stop: A deletes a category nothing uses (as A sees it) while B, offline,
+        // puts an ingredient in it.
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();
+        await b.SyncAsync();
+        Guid freezer = CatalogueSeed.Category(7);
+
+        await a.WriteAsync(SyncedEntities.Category, freezer, OpKind.Delete, []);
+        Guid peas = await b.CreateIngredientAsync("frozen peas", BaseUnit.Gram, new OpField(IngredientRules.CategoryField, OpValues.FormatId(freezer)));
+        await a.SyncAsync();
+        await b.SyncAsync();
+        await a.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { a, b })
+        {
+            Assert.Equal(freezer, (await browser.IngredientRowsAsync())[peas].CategoryId);
+            Assert.DoesNotContain(await browser.CategoriesAsync(), c => c.Id == freezer);
+        }
     }
 
     [Fact]
