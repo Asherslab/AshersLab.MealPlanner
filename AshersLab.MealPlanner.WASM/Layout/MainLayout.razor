@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 
 <MudThemeProvider/>
 <MudPopoverProvider/>
@@ -23,35 +24,35 @@
                Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md">
         <MudNavMenu>
             <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home"
-                        OnClick="ClosedOnPhone" data-testid="nav-home">Home</MudNavLink>
+                        data-testid="nav-home">Home</MudNavLink>
             <MudNavLink Href="calendar" Icon="@Icons.Material.Filled.CalendarMonth"
-                        OnClick="ClosedOnPhone" data-testid="nav-calendar">Calendar</MudNavLink>
+                        data-testid="nav-calendar">Calendar</MudNavLink>
             <MudNavLink Href="plans"Icon="@Icons.Material.Filled.CalendarViewWeek"
-                        OnClick="ClosedOnPhone" data-testid="nav-plans">Plans</MudNavLink>
+                        data-testid="nav-plans">Plans</MudNavLink>
             <MudNavLink Href="shopping" Icon="@Icons.Material.Filled.ShoppingCart"
-                        OnClick="ClosedOnPhone" data-testid="nav-shopping">Shopping</MudNavLink>
+                        data-testid="nav-shopping">Shopping</MudNavLink>
             <MudNavLink Href="pantry" Icon="@Icons.Material.Filled.Kitchen"
-                        OnClick="ClosedOnPhone" data-testid="nav-pantry">Pantry</MudNavLink>
+                        data-testid="nav-pantry">Pantry</MudNavLink>
             <MudNavLink Href="receipts" Icon="@Icons.Material.Filled.Receipt"
-                        OnClick="ClosedOnPhone" data-testid="nav-receipts">Receipts</MudNavLink>
+                        data-testid="nav-receipts">Receipts</MudNavLink>
             <MudNavLink Href="meals" Icon="@Icons.Material.Filled.RestaurantMenu"
-                        OnClick="ClosedOnPhone" data-testid="nav-meals">Meals</MudNavLink>
+                        data-testid="nav-meals">Meals</MudNavLink>
             <MudNavLink Href="ingredients" Icon="@Icons.Material.Filled.Egg"
-                        OnClick="ClosedOnPhone" data-testid="nav-ingredients">Ingredients</MudNavLink>
+                        data-testid="nav-ingredients">Ingredients</MudNavLink>
             <MudNavLink Href="prices" Icon="@Icons.Material.Filled.Sell"
-                        OnClick="ClosedOnPhone" data-testid="nav-prices">Prices</MudNavLink>
+                        data-testid="nav-prices">Prices</MudNavLink>
             <MudNavLink Href="people" Icon="@Icons.Material.Filled.People"
-                        OnClick="ClosedOnPhone" data-testid="nav-people">People</MudNavLink>
+                        data-testid="nav-people">People</MudNavLink>
             <MudNavLink Href="slots" Icon="@Icons.Material.Filled.Schedule"
-                        OnClick="ClosedOnPhone" data-testid="nav-slots">Slots of the day</MudNavLink>
+                        data-testid="nav-slots">Slots of the day</MudNavLink>
             <MudNavLink Href="meal-groups" Icon="@Icons.Material.Filled.ViewList"
-                        OnClick="ClosedOnPhone" data-testid="nav-meal-groups">Meal groups</MudNavLink>
+                        data-testid="nav-meal-groups">Meal groups</MudNavLink>
             <MudNavLink Href="categories" Icon="@Icons.Material.Filled.Category"
-                        OnClick="ClosedOnPhone" data-testid="nav-categories">Categories</MudNavLink>
+                        data-testid="nav-categories">Categories</MudNavLink>
             <MudNavLink Href="stores" Icon="@Icons.Material.Filled.Storefront"
-                        OnClick="ClosedOnPhone" data-testid="nav-stores">Stores</MudNavLink>
+                        data-testid="nav-stores">Stores</MudNavLink>
             <MudNavLink Href="import" Icon="@Icons.Material.Filled.UploadFile"
-                        OnClick="ClosedOnPhone" data-testid="nav-import">Import spreadsheet</MudNavLink>
+                        data-testid="nav-import">Import spreadsheet</MudNavLink>
         </MudNavMenu>
     </MudDrawer>
     <MudMainContent Class="pt-14">
@@ -66,10 +67,19 @@
     private bool _drawerOpen = true;
 
     [Inject] private IBrowserViewportService Viewport { get; set; } = null!;
+    [Inject] private NavigationManager       Navigation { get; set; } = null!;
 
-    private async Task ClosedOnPhone()
+    // On any navigation, not on the menu link's click: MudNavLink's OnClick never reached this on a phone (seen
+    // 2026-10-22 - the menu stayed over the page it had just opened), and a link inside a page should close it too.
+    protected override void OnInitialized() => Navigation.LocationChanged += ClosedOnPhone;
+
+    private async void ClosedOnPhone(object? sender, LocationChangedEventArgs e)
     {
-        if (await Viewport.GetCurrentBreakpointAsync() < Breakpoint.Md)
-            _drawerOpen = false;
+        if (!_drawerOpen || await Viewport.GetCurrentBreakpointAsync() >= Breakpoint.Md)
+            return;
+        _drawerOpen = false;
+        await InvokeAsync(StateHasChanged);
     }
+
+    public void Dispose() => Navigation.LocationChanged -= ClosedOnPhone;
 }
