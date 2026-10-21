@@ -89,10 +89,21 @@ public sealed class TestBrowser : IDbContextFactory<LocalDbContext>, IAsyncDispo
 
     public Task DeleteAsync(Guid id) => WriteAsync(id, OpKind.Delete, []);
 
-    private async Task WriteAsync(Guid id, OpKind kind, IReadOnlyList<OpField> fields)
+    private Task WriteAsync(Guid id, OpKind kind, IReadOnlyList<OpField> fields) =>
+        WriteAsync(SyncedEntities.Ingredient, id, kind, fields);
+
+    /// <summary>Any edit, as a page makes it.</summary>
+    public async Task WriteAsync(SyncedEntity type, Guid id, OpKind kind, IReadOnlyList<OpField> fields)
     {
         await using LocalDbContext db = await Contexts.CreateDbContextAsync();
-        await LocalOps.WriteAsync(db, DeviceId, Now, SyncedEntities.Ingredient, id, kind, fields);
+        await LocalOps.WriteAsync(db, DeviceId, Now, type, id, kind, fields);
+    }
+
+    /// <summary>Live stores only, as a page shows them.</summary>
+    public async Task<Dictionary<Guid, string>> StoresAsync()
+    {
+        await using LocalDbContext db = CreateDbContext();
+        return await db.Stores.Where(s => !s.Deleted).ToDictionaryAsync(s => s.Id, s => s.Name);
     }
 
     private Task WriteAsync(Guid id, OpKind kind, string name) => WriteAsync(id, kind, [new OpField(IngredientRules.NameField, name)]);

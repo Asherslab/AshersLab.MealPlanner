@@ -1,0 +1,24 @@
+@using SqliteWasmBlazor
+
+@* What a LocalDataPage shows until the browser database has opened, or when it could not. *@
+
+@if (Start is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4"/>
+}
+else if (Start.State != DbInitState.READY)
+{
+    <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="local-db-state">
+        This browser could not open its copy of the data (@Start.State): @Start.Failure
+    </MudAlert>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter, EditorRequired] public LocalDatabaseStart? Start { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

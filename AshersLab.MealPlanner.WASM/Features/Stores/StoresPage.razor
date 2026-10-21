@@ -1,0 +1,46 @@
+@page "/stores"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Stores
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain.Stores
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+
+@*
+    Where groceries come from. Woolworths and Costco are there from the start (the server seeds them); the
+    household adds the butcher or the market. A store an ingredient uses as its usual store cannot be deleted.
+*@
+
+<PageTitle>Stores - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Stores</MudText>
+
+<LocalDataGate Start="Start">
+    <NameList Items="_stores" Noun="store" TestId="store" NewLabel="New store"
+              NameProblem="StoreRules.NameProblem"
+              InUseHint="Give them another usual store first."
+              OnAdd="Add" OnRename="Rename" OnDelete="Delete"/>
+</LocalDataGate>
+
+@code {
+    private List<NameListItem> _stores = [];
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        List<Store> stores = await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync();
+
+        _stores = [.. stores
+            .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(s => new NameListItem(s.Id, s.Name, []))];
+    }
+
+    private Task Add(string name) =>
+        WriteAsync(SyncedEntities.Store, Guid.CreateVersion7(), OpKind.Create, [new OpField(StoreRules.NameField, name)]);
+
+    private Task Rename(Guid id, string name) =>
+        WriteAsync(SyncedEntities.Store, id, OpKind.Update, [new OpField(StoreRules.NameField, name)]);
+
+    private Task Delete(Guid id) => WriteAsync(SyncedEntities.Store, id, OpKind.Delete, []);
+}

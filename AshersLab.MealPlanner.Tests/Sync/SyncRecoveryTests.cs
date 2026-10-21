@@ -33,7 +33,8 @@ public sealed class SyncRecoveryTests
 
         string backup = await before.BackupAsync();
 
-        // After the backup: a create, a rename, a delete - seqs 3 to 5 - and everyone sees them.
+        // After the backup: a create, a rename, a delete - the three seqs after the seeds and those two - and everyone
+        // sees them.
         a.Now = a.Now.AddMinutes(1);
         Guid eggs = await a.CreateIngredientAsync("eggs");
         await a.RenameAsync(flour, "plain flour");
@@ -42,9 +43,9 @@ public sealed class SyncRecoveryTests
         await b.DeleteAsync(sugar);
         await b.SyncAsync();
         await a.SyncAsync();
-        Assert.Equal(5, (await a.StateAsync()).PulledThroughSeq);
+        Assert.Equal(MealPlannerHost.SeedOps + 5, (await a.StateAsync()).PulledThroughSeq);
 
-        // The Pi is restored. Same database, same epoch, a log that ends at seq 2.
+        // The Pi is restored. Same database, same epoch, a log that ends at the two creates.
         await using MealPlannerHost restored = MealPlannerHost.RestoredFrom(backup);
         HookedServer wireA = new(restored.CreateGrpcWebClient<ISyncService>());
         a.Server = wireA;
@@ -82,7 +83,7 @@ public sealed class SyncRecoveryTests
 
         // A pushed back the create, the rename and (as a new delete) the delete. B, recovering after A, found
         // nothing missing; its copies of A's edits would have carried the same op ids anyway.
-        Assert.Equal(written.Count + 2 + 3, await OpCountAsync(restored));
+        Assert.Equal(MealPlannerHost.SeedOps + written.Count + 2 + 3, await OpCountAsync(restored));
         await c.SyncAsync();
         foreach (TestBrowser browser in new[] { a, b, c })
             Assert.Equal(await OpCountAsync(restored), (await browser.StateAsync()).PulledThroughSeq);

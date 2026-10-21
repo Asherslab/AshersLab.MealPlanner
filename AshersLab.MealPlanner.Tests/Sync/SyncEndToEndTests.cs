@@ -47,10 +47,11 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
         return [.. await db.Ingredients.Where(i => i.Deleted).Select(i => i.Id).ToListAsync(Ct)];
     }
 
+    /// <summary>Ops in the server's log after the seeds - the ones the tests' browsers wrote.</summary>
     private async Task<int> OpCountAsync()
     {
         using IServiceScope scope = _host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Ops.CountAsync(Ct);
+        return await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Ops.CountAsync(Ct) - MealPlannerHost.SeedOps;
     }
 
     [Fact]
@@ -331,7 +332,7 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
         Assert.Equal(7, (await b.IngredientsAsync()).Count);
         Assert.Equal([3, 3, 1], wire.PullAnswers.Select(p => p.Ops.Count));
         Assert.Equal([true, true, false], wire.PullAnswers.Select(p => p.HasMore));
-        Assert.Equal(7, (await b.StateAsync()).PulledThroughSeq);
+        Assert.Equal(MealPlannerHost.SeedOps + 7, (await b.StateAsync()).PulledThroughSeq);
     }
 
     [Fact]
@@ -366,8 +367,7 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
         Assert.All(response.Results, r => Assert.Equal(PushOutcome.Rejected, r.Outcome));
         Assert.All(response.Results, r => Assert.False(string.IsNullOrEmpty(r.Reason)));
 
-        using IServiceScope scope = _host.Services.CreateScope();
-        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>().Ops.CountAsync(Ct));
+        Assert.Equal(0, await OpCountAsync());
     }
 
     [Theory]
@@ -404,13 +404,13 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
             _server.Changes(new ChangesRequest { ProtocolVersion = SyncProtocol.Current }, stop.Token).GetAsyncEnumerator(stop.Token);
 
         Assert.True(await stream.MoveNextAsync());
-        Assert.Equal(0, stream.Current.LatestSeq);
+        Assert.Equal(MealPlannerHost.SeedOps, stream.Current.LatestSeq);
 
         await a.CreateIngredientAsync("tortillas");
         await a.SyncAsync();
 
         Assert.True(await stream.MoveNextAsync());
-        Assert.Equal(1, stream.Current.LatestSeq);
+        Assert.Equal(MealPlannerHost.SeedOps + 1, stream.Current.LatestSeq);
     }
 
     /// <summary>

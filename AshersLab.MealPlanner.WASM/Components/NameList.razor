@@ -1,0 +1,173 @@
+@using AshersLab.MealPlanner.Shared.Domain
+@inject IDialogService Dialogs
+
+@*
+    A list of named things the household edits by hand - stores, categories: add, rename, delete, and (when
+    OnMove is set) reorder. Only the editing; the page owns the data and turns each callback into an op.
+
+    Delete is refused while anything uses the item (UsedBy), naming what does - see
+    docs/modules/catalogue/catalogue.md for why it is refused rather than cascaded.
+*@
+
+<form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
+    <MudTextField T="string" @bind-Value="_newName" Label="@NewLabel" Variant="Variant.Outlined"
+                  Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
+                  Error="_addError is not null" ErrorText="@_addError"
+                  InputId="@($"{TestId}-new-name")" data-testid="@($"{TestId}-new-name")"/>
+    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
+               data-testid="@($"{TestId}-add")">Add</MudButton>
+</form>
+
+<MudPaper Outlined="true" Class="mt-4">
+    @if (Items.Count == 0)
+    {
+        <MudText Class="pa-4" Color="Color.Secondary" data-testid="@($"{TestId}-empty")">None yet.</MudText>
+    }
+    @* Plain rows, not MudList: a MudListItem takes Space and Enter for its own selection, so a text box inside
+       one loses every space typed and never submits. *@
+    @for (int index = 0; index < Items.Count; index++)
+    {
+        NameListItem item = Items[index];
+        int position = index;
+        <div class="list-row px-4 py-2" @key="item.Id" data-testid="@($"{TestId}-row")" data-id="@item.Id">
+            @if (_renaming == item.Id)
+            {
+                <form class="d-flex align-start gap-2" @onsubmit="SaveRename" @onsubmit:preventDefault>
+                    <MudTextField T="string" @bind-Value="_renameTo" Label="Name" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" Immediate="true" AutoFocus="true" MaxLength="Names.MaxLength"
+                                  Error="_renameError is not null" ErrorText="@_renameError"
+                                  InputId="@($"{TestId}-rename-input")" data-testid="@($"{TestId}-rename-input")"/>
+                    <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="Variant.Filled"
+                               Class="mt-1" data-testid="@($"{TestId}-rename-save")">Save</MudButton>
+                    <MudButton OnClick="() => _renaming = null" Class="mt-1">Cancel</MudButton>
+                </form>
+            }
+            else
+            {
+                <div class="d-flex align-center">
+                    <MudText Class="flex-grow-1" data-testid="@($"{TestId}-name")">@item.Name</MudText>
+                    @if (OnMove is not null)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
+                                       Disabled="position == 0" aria-label="@($"Move {item.Name} up")"
+                                       OnClick="() => OnMove(item.Id, -1)" data-testid="@($"{TestId}-up")"/>
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                                       Disabled="position == Items.Count - 1" aria-label="@($"Move {item.Name} down")"
+                                       OnClick="() => OnMove(item.Id, +1)" data-testid="@($"{TestId}-down")"/>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   aria-label="@($"Rename {item.Name}")"
+                                   OnClick="() => StartRename(item)" data-testid="@($"{TestId}-rename")"/>
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small"
+                                   aria-label="@($"Delete {item.Name}")"
+                                   OnClick="() => Delete(item)" data-testid="@($"{TestId}-delete")"/>
+                </div>
+                @if (_inUse == item.Id)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" ShowCloseIcon="true"
+                              CloseIconClicked="() => _inUse = null" data-testid="@($"{TestId}-in-use")">
+                        @item.Name is used by @Count(item.UsedBy.Count): @string.Join(", ", item.UsedBy.Take(5))@(item.UsedBy.Count > 5 ? $" and {item.UsedBy.Count - 5} more" : "").
+                        @InUseHint
+                    </MudAlert>
+                }
+            }
+        </div>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<NameListItem> Items { get; set; } = [];
+
+    /// <summary>"store" - the lower-case noun, for messages.</summary>
+    [Parameter, EditorRequired] public string Noun { get; set; } = "";
+
+    /// <summary>The prefix of every data-testid and input id: "store" gives store-row, store-new-name...</summary>
+    [Parameter, EditorRequired] public string TestId { get; set; } = "";
+
+    [Parameter, EditorRequired] public string NewLabel { get; set; } = "";
+
+    /// <summary>What to do about it, shown when a delete is refused: "Change their usual store first."</summary>
+    [Parameter] public string? InUseHint { get; set; }
+
+    [Parameter, EditorRequired] public Func<string, string?> NameProblem { get; set; } = null!;
+
+    [Parameter, EditorRequired] public Func<string, Task> OnAdd { get; set; } = null!;
+
+    [Parameter, EditorRequired] public Func<Guid, string, Task> OnRename { get; set; } = null!;
+
+    [Parameter, EditorRequired] public Func<Guid, Task> OnDelete { get; set; } = null!;
+
+    /// <summary>Set to make the list reorderable: the item, and -1 for up or +1 for down.</summary>
+    [Parameter] public Func<Guid, int, Task>? OnMove { get; set; }
+
+    private string? _newName;
+    private string? _addError;
+
+    private Guid?   _renaming;
+    private string? _renameTo;
+    private string? _renameError;
+
+    private Guid?   _inUse;
+
+    private static string Count(int n) => n == 1 ? "1 ingredient" : $"{n} ingredients";
+
+    /// <summary>Null when <paramref name="name"/> is acceptable for <paramref name="id"/> (null for a new one).</summary>
+    private string? Problem(string name, Guid? id) =>
+        NameProblem(name)
+        ?? (Items.Any(i => i.Id != id && Names.Same(i.Name, name)) ? $"There is already a {Noun} called {name}." : null);
+
+    private async Task Add()
+    {
+        string name = Names.Normalise(_newName);
+        _addError = Problem(name, null);
+        if (_addError is not null)
+            return;
+
+        // Cleared before the write, not after: on a slow phone the next name is often typed while this one is
+        // saving, and must go into an empty box rather than be appended to - or wiped with - this one.
+        _newName = null;
+        await OnAdd(name);
+    }
+
+    private void StartRename(NameListItem item)
+    {
+        _renaming    = item.Id;
+        _renameTo    = item.Name;
+        _renameError = null;
+    }
+
+    private async Task SaveRename()
+    {
+        if (_renaming is not { } id)
+            return;
+
+        string name = Names.Normalise(_renameTo);
+        _renameError = Problem(name, id);
+        if (_renameError is not null)
+            return;
+
+        _renaming = null;
+
+        // Unchanged: no op. An op that changes nothing would still win the merge against a rename made
+        // meanwhile on another device.
+        if (Items.FirstOrDefault(i => i.Id == id)?.Name != name)
+            await OnRename(id, name);
+    }
+
+    private async Task Delete(NameListItem item)
+    {
+        if (item.UsedBy.Count > 0)
+        {
+            _inUse = item.Id;
+            return;
+        }
+
+        bool? confirmed = await Dialogs.ShowMessageBoxAsync(
+            title: $"Delete {item.Name}?",
+            message: $"It goes from this list on every device.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed == true)
+            await OnDelete(item.Id);
+    }
+}

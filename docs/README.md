@@ -31,7 +31,9 @@ Present tense, kept current, no dates.
   window, local migrations, and what it costs.
 - [Offline sync](modules/sync/offline-sync.md) — every edit is an op: the clock and merge rules, push, pull
   and the change stream, the protocol version check, and where offline does and does not work. **Read before
-  any write path.**
+  any write path.
+- [The catalogue](modules/catalogue/catalogue.md) — stores (and soon categories and ingredients): seeded as server
+  ops, valid names, no foreign keys, and why deleting something in use is refused.**
 
 ## The other three directories
 

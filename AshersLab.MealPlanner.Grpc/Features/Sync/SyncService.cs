@@ -74,26 +74,8 @@ public class SyncService(
                     continue;
                 }
 
-                await OpApplier.ApplyAsync(db, type!, op.EntityId, op.Kind, clock, fields, ct);
-
-                chain = LogChain.Next(chain, op.OpId);
-
-                // Logged whether or not it won its merge: every browser must see the same ops to reach the same
-                // answer, and a losing op is how they learn it lost.
-                DbOp row = new()
-                {
-                    Chain         = chain,
-                    OpId          = op.OpId,
-                    DeviceId      = op.DeviceId,
-                    Hlc           = op.Hlc,
-                    Entity        = op.Entity,
-                    EntityId      = op.EntityId,
-                    Kind          = op.Kind,
-                    FieldsJson    = OpFieldsJson.Write(fields),
-                    ReceivedAtUtc = now,
-                };
-                db.Ops.Add(row);
-                await db.SaveChangesAsync(ct);
+                DbOp row = await AcceptAsync(db, chain, op.OpId, type!, op.EntityId, op.Kind, clock, fields, now, ct);
+                chain = row.Chain;
 
                 latest = row.Seq;
                 results.Add(new PushResult { OpId = op.OpId, Outcome = PushOutcome.Accepted, Seq = row.Seq });
@@ -202,7 +184,45 @@ public class SyncService(
                 });
     }
 
-    private static string? Problem(SyncOp op, IReadOnlyList<OpField> fields, out SyncedEntity? type, out Hlc clock)
+    /// <summary>
+    /// Applies one validated op and logs it after <paramref name="previousChain"/>. The caller holds the write
+    /// transaction. Used by <see cref="Push"/> and by the server's own ops (<c>CatalogueSeed</c>).
+    /// </summary>
+    internal static async Task<DbOp> AcceptAsync(
+        MealPlannerDbContext   db,
+        string                 previousChain,
+        Guid                   opId,
+        SyncedEntity           type,
+        Guid                   entityId,
+        OpKind                 kind,
+        Hlc                    clock,
+        IReadOnlyList<OpField> fields,
+        DateTime               now,
+        CancellationToken      ct
+    )
+    {
+        await OpApplier.ApplyAsync(db, type, entityId, kind, clock, fields, ct);
+
+        // Logged whether or not it won its merge: every browser must see the same ops to reach the same
+        // answer, and a losing op is how they learn it lost.
+        DbOp row = new()
+        {
+            Chain         = LogChain.Next(previousChain, opId),
+            OpId          = opId,
+            DeviceId      = clock.DeviceId,
+            Hlc           = clock.ToString(),
+            Entity        = type.Entity,
+            EntityId      = entityId,
+            Kind          = kind,
+            FieldsJson    = OpFieldsJson.Write(fields),
+            ReceivedAtUtc = now,
+        };
+        db.Ops.Add(row);
+        await db.SaveChangesAsync(ct);
+        return row;
+    }
+
+    private static string? Problem(SyncOp op,IReadOnlyList<OpField> fields, out SyncedEntity? type, out Hlc clock)
     {
         type  = SyncedEntities.Find(op.Entity);
         clock = default;

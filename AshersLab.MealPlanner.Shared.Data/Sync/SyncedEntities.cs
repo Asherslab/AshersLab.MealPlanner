@@ -1,4 +1,6 @@
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Stores;
+using AshersLab.MealPlanner.Shared.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace AshersLab.MealPlanner.Shared.Data.Sync;
@@ -12,12 +14,20 @@ namespace AshersLab.MealPlanner.Shared.Data.Sync;
 /// <b>A new synced entity is: its row class, its <see cref="SyncedEntity{TRow}"/>, a line in
 /// <see cref="All"/> and its table in <see cref="BuildModel"/> - then a migration on both sides.</b> An op
 /// for a type missing from <see cref="All"/> is rejected by the server and never written by the browser.
+/// <para>
+/// <b>No foreign keys between synced tables.</b> Ops arrive in any order, so an ingredient can name a store
+/// this database has not heard of yet, or one deleted on another device; a constraint would reject the op and
+/// the databases would diverge. A reference to a missing or deleted row is shown as gone
+/// (docs/modules/catalogue/catalogue.md).
+/// </para>
 /// </remarks>
 public static class SyncedEntities
 {
     public static readonly IngredientEntity Ingredient = new();
 
-    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient];
+    public static readonly StoreEntity Store = new();
+
+    public static readonly IReadOnlyList<SyncedEntity> All = [Ingredient, Store];
 
     private static readonly Dictionary<string, SyncedEntity> ByName = All.ToDictionary(e => e.Entity, StringComparer.Ordinal);
 
@@ -37,7 +47,15 @@ public static class SyncedEntities
             ingredient.HasKey(i => i.Id);
             // Minted by the device that created it, never by the database.
             ingredient.Property(i => i.Id).ValueGeneratedNever();
-            ingredient.Property(i => i.Name).HasMaxLength(Domain.Ingredients.IngredientRules.MaxNameLength);
+            ingredient.Property(i => i.Name).HasMaxLength(Names.MaxLength);
+        });
+
+        modelBuilder.Entity<Store>(store =>
+        {
+            store.ToTable("Store");
+            store.HasKey(s => s.Id);
+            store.Property(s => s.Id).ValueGeneratedNever();
+            store.Property(s => s.Name).HasMaxLength(Names.MaxLength);
         });
     }
 }

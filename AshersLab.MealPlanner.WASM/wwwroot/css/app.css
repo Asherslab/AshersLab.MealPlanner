@@ -4,7 +4,8 @@
     color: #666;
 }
 
-.ingredient-row + .ingredient-row {
+.ingredient-row + .ingredient-row,
+.list-row + .list-row {
     border-top: 1px solid var(--mud-palette-lines-default);
 }
 

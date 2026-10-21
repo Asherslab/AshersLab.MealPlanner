@@ -1,5 +1,6 @@
 using AshersLab.MealPlanner.Grpc.Data.Models.Sync;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,6 +15,8 @@ public partial class MealPlannerDbContext
 
     /// <summary>Materialised from the op log - what server-side reads use. Written only by <see cref="OpApplier"/>.</summary>
     public DbSet<Ingredient> Ingredients => Set<Ingredient>();
+
+    public DbSet<Store> Stores => Set<Store>();
 
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 

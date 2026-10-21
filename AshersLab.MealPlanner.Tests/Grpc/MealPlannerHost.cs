@@ -1,4 +1,5 @@
 using AshersLab.MealPlanner.Grpc.Data;
+using AshersLab.MealPlanner.Grpc.Features.Catalogue;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Web;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,12 @@ public sealed class MealPlannerHost : WebApplicationFactory<Program>
     public MealPlannerHost()
     {
     }
+
+    /// <summary>
+    /// How many ops a new database's log starts with: the catalogue seeds, written at startup. A browser's first op
+    /// is seq <c>SeedOps + 1</c>.
+    /// </summary>
+    public static int SeedOps => CatalogueSeed.All.Count;
 
     /// <summary>
     /// A host started on a copy of a backup taken with <see cref="BackupAsync"/> - the Pi after Home Assistant

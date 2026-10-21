@@ -5,17 +5,46 @@
 <MudDialogProvider/>
 <MudSnackbarProvider/>
 
+@*
+    The menu is a drawer, not buttons in the app bar: on a phone the bar has room for the menu button, the title
+    and the sync chip, and nothing else. Wide screens keep it open beside the page; narrow ones slide it over and
+    close it when a page is picked.
+*@
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       aria-label="Menu" OnClick="() => _drawerOpen = !_drawerOpen" data-testid="nav-menu"/>
         <MudLink Href="" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
-        <MudButton Href="ingredients" Color="Color.Inherit" Variant="Variant.Text" Class="ml-4"
-                   data-testid="nav-ingredients">Ingredients</MudButton>
         <MudSpacer/>
         <SyncStatusChip/>
     </MudAppBar>
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1"
+               Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md">
+        <MudNavMenu>
+            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home"
+                        OnClick="ClosedOnPhone" data-testid="nav-home">Home</MudNavLink>
+            <MudNavLink Href="ingredients" Icon="@Icons.Material.Filled.Egg"
+                        OnClick="ClosedOnPhone" data-testid="nav-ingredients">Ingredients</MudNavLink>
+            <MudNavLink Href="stores" Icon="@Icons.Material.Filled.Storefront"
+                        OnClick="ClosedOnPhone" data-testid="nav-stores">Stores</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
     <MudMainContent Class="pt-14">
         <MudContainer MaxWidth="MaxWidth.Medium" Class="py-4">
             @Body
         </MudContainer>
     </MudMainContent>
 </MudLayout>
+
+@code {
+    // A responsive drawer closes itself below its breakpoint, so this is open on a desktop and closed on a phone.
+    private bool _drawerOpen = true;
+
+    [Inject] private IBrowserViewportService Viewport { get; set; } = null!;
+
+    private async Task ClosedOnPhone()
+    {
+        if (await Viewport.GetCurrentBreakpointAsync() < Breakpoint.Md)
+            _drawerOpen = false;
+    }
+}

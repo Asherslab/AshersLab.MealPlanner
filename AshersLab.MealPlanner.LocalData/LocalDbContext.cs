@@ -1,5 +1,6 @@
 using AshersLab.MealPlanner.LocalData.Sync;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
+using AshersLab.MealPlanner.Shared.Data.Stores;
 using AshersLab.MealPlanner.Shared.Data.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,8 @@ public class LocalDbContext(
 
     /// <summary>Synced from the server. Read freely; write only through <see cref="LocalOps"/>.</summary>
     public DbSet<Ingredient> Ingredients => Set<Ingredient>();
+
+    public DbSet<Store> Stores => Set<Store>();
 
     public DbSet<FieldClock> FieldClocks => Set<FieldClock>();
 

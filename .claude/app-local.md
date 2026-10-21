@@ -102,6 +102,15 @@ In the network panel the call is `POST https://localhost:7283/gRPC/AshersLab.Mea
 but not yet pulled back). Sync calls are
 `/gRPC/AshersLab.MealPlanner.Sync/Push|Pull|Changes`; `Changes` stays open.
 
+**Stores** (`/stores`, "Stores" in the menu - a drawer behind `nav-menu` on a phone, `nav-stores`) is a `NameList`:
+`store-new-name` (input id too) and `store-add`; per row `store-row` (`data-id`), `store-name`, `store-rename` →
+`store-rename-input` / `store-rename-save`, `store-delete` (opens a MudBlazor message box - not a browser dialog -
+with a "Delete" button; or, when something uses it, shows `store-in-use` instead). Categories will use the same
+component with the prefix `category`, plus `category-up` / `category-down`.
+
+The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
+`Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
+
 Typing into a MudTextField from a script needs the native `value` setter and an `input` event (see
 `typeInto` in `.claude/tools/chrome-sync-check.mjs`); assigning `.value` alone is not seen by Blazor.
 
@@ -118,6 +127,17 @@ an offline rename syncing on reconnect, and two concurrent offline renames endin
 each profile's SQLite out of OPFS (directly over the DevTools protocol - no receiver needed) and prints its rows
 beside the server's. Ingredients are named with the run id, so runs pile up in the database; wipe it when that
 matters. The Chrome extension cannot do this: it has no offline switch and drives only one profile.
+
+### The catalogue pages, two profiles
+
+```bash
+node .claude/tools/chrome-catalogue-check.mjs <scratch>/cat     # about 30 s, PASS/FAIL per check
+```
+
+Ports 19343/19344. Every catalogue edit on profile A seen on B, then both profiles' SQLite and the server's read
+back; saves phone-sized screenshots (`<run>-catA-<page>.png`) under `<scratch>/cat`. Its harness -
+launching, `until`, `typeInto`, the OPFS dump, a `NameList` driver - is `.claude/tools/lib/profiles.mjs`; new checks
+should import it rather than copy it.
 
 ### A server restore, with both profiles open
 
@@ -169,8 +189,8 @@ sqlite3 "$HOME/Library/Application Support/AshersLab.MealPlanner/mealplanner.db"
 ```
 
 The host migrates at startup, so a missing table means the host has not started, not that a
-migration job is pending. Sync's tables: `Op` (the log, by `Seq`, each with its `Chain`), `Ingredient`,
-`FieldClock`, `SyncEpoch` (one row - a new value after a wipe means every browser forgets what it synced and takes a
+migration job is pending. Sync's tables: `Op` (the log, by `Seq`, each with its `Chain`; a new database's
+starts with the catalogue seeds at clock zero), `Ingredient`, `Store`, `FieldClock`, `SyncEpoch` (one row - a new value after a wipe means every browser forgets what it synced and takes a
 snapshot on its next pull). Nothing in it is worth keeping until the household uses the app — delete
 the folder to start over (stop the app first; SQLite holds `-wal`/`-shm` files beside it).
 

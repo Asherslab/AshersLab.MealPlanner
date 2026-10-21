@@ -19,6 +19,8 @@ code:
   - AshersLab.MealPlanner.WASM/Sync
   - AshersLab.MealPlanner.WASM/wwwroot/js/connectivity.js
   - AshersLab.MealPlanner.WASM/Features/Ingredients/IngredientsPage.razor
+  - AshersLab.MealPlanner.WASM/Data/LocalDataPage.cs
+  - AshersLab.MealPlanner.Grpc/Features/Catalogue/CatalogueSeed.cs
   - AshersLab.MealPlanner.Tests/Sync
   - AshersLab.MealPlanner.Tests/Domain
   - .claude/tools/chrome-sync-check.mjs
@@ -42,12 +44,15 @@ The browser's database itself - OPFS, migrations, sharing it across windows - is
 - **One local context at a time per window** - see the trap in [the browser database](browser-database.md).
   A sync round and an edit overlapping is the normal case, not a corner case.
 - **An op that changes nothing still wins.** Its clock is newer than whatever another device did meanwhile, so
-  a "rename" to the same name silently undoes a real rename made elsewhere. The page sends no op when the name
-  is unchanged (`IngredientsPage.SaveRename`); every future editor must do the same.
+  a "rename" to the same name silently undoes a real rename made elsewhere. The pages send no op when the name
+  is unchanged, and an edit carries only the fields that changed (`NameList.SaveRename`,
+  `LocalDataPage.WriteAsync`); every future editor must do the same.
 - **A new synced entity is four places and two migrations**: its row class in `Shared.Data`, its
   `SyncedEntity<TRow>`, a line in `SyncedEntities.All`, its table in `SyncedEntities.BuildModel` - then a
   migration in *both* `Grpc` and `LocalData`. An entity missing from `All` is rejected by the server. Once real
-  data exists it also needs a `SyncProtocol` bump (below).
+  data exists it also needs a `SyncProtocol` bump (below). Its rules go in `Shared.Domain`, built on `OpRules`.
+- **Seed data is ops the server writes at startup, never a migration's rows** - see
+  [the catalogue](../catalogue/catalogue.md). So a new server's log is not empty: it starts with the seeds.
 - **Never `Update` a counter** (serves eaten, stock counts). Two devices adding one each would both write
   "previous + 1" and one would be lost. Counters get an `Increment` op kind, added with the first counter
   (slice 10).
@@ -128,8 +133,8 @@ scenarios. **What the planner sees** in a conflict: both people rename "eggs" of
 online both phones show whichever rename was made later. Nothing asks; the earlier rename is in the server's
 log but shown nowhere.
 
-Delete is in the rules and tested end to end (applier, server, pull, snapshot); nothing in the UI deletes yet
-(ingredient CRUD, slice 4).
+Delete is in the rules and tested end to end (applier, server, pull, snapshot). What the pages do about deleting
+something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
 
 ## The server
 
@@ -143,8 +148,9 @@ Delete is in the rules and tested end to end (applier, server, pull, snapshot); 
 - **The log is append-only** (`Op` table): seq from SQLite's rowid, the op, its fields as JSON
   (`Shared.Data/Sync/OpFieldsJson.cs`, source-generated so trimming cannot drop it), and its **chain**
   (`Shared.Domain/Sync/LogChain.cs`): a hash of the previous op's chain and this op's id, so two logs with the same
-  chain at a seq hold the same ops up to it. The materialised tables (`Ingredient`, `FieldClock`) are what
-  server-side reads will use.
+  chain at a seq hold the same ops up to it. The materialised tables (one per entity in `SyncedEntities.All`, and
+  `FieldClock`) are what server-side reads will use. `SyncService.AcceptAsync` applies and logs one op; push and the
+  startup seeding both go through it.
 - **Pull** returns ops after the browser's seq, ascending, at most 500 (200 by default), with `HasMore`, each with
   its chain. It returns a **snapshot** instead - every synced row with each field's clock, as of the newest seq and
   its chain, read in one transaction - when the cursor means nothing here, and says why (`SnapshotReason`):
