@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ProtoBuf.Grpc.Client;
 
@@ -129,8 +130,11 @@ public sealed class MealPlannerHost : WebApplicationFactory<Program>
     {
         base.Dispose(disposing);
 
-        // SQLite pools connections, which keeps the file open on some platforms; clear before deleting.
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        // SQLite pools connections, which keeps the file open on some platforms; clear before deleting. Only this host's
+        // pool: ClearAllPools would close the connections of the other hosts running in parallel, mid-request.
+        using (Microsoft.Data.Sqlite.SqliteConnection own = new(DataDirectory.ConnectionString(new ConfigurationBuilder()
+                   .AddInMemoryCollection([new(DataDirectory.ConfigKey, _dataDirectory)]).Build())))
+            Microsoft.Data.Sqlite.SqliteConnection.ClearPool(own);
 
         if (Directory.Exists(_dataDirectory))
             Directory.Delete(_dataDirectory, recursive: true);

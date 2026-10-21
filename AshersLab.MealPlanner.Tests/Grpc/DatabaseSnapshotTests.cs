@@ -82,7 +82,6 @@ public sealed class DatabaseSnapshotTests : IDisposable
         await using (SqliteConnection db = Open(Db))
             await ExecAsync(db, "PRAGMA journal_mode = WAL; CREATE TABLE T (V TEXT); INSERT INTO T VALUES ('before the backup');");
         await DatabaseSnapshot.TakeAsync(Db, Ct);
-        SqliteConnection.ClearAllPools();
 
         // What a Home Assistant restore leaves: /data as backed up, the live files excluded. A stray -wal must not be
         // replayed onto the snapshot.
@@ -148,9 +147,10 @@ public sealed class DatabaseSnapshotTests : IDisposable
         return (string)(await cmd.ExecuteScalarAsync())!;
     }
 
+    // Every connection here is unpooled (Open, and DatabaseSnapshot's own), so there is no pool to clear - and clearing all
+    // of them would close the connections of the gRPC hosts other test classes run in parallel.
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         Directory.Delete(_dir, recursive: true);
     }
 }
