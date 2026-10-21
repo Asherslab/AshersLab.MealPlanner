@@ -8,8 +8,9 @@
 //    receipt, its lines with their item numbers, products carrying them, prices, stock and no aliases; A's pantry counts the
 //    mince once.
 // 2. B picks the same file: refused.
-// 3. A picks a second synthetic receipt whose apples amount is "misread" (8.39 printed for 8.99): flagged, not importable;
-//    A corrects the amount on the line, it adds up, and every product line matches by its item number.
+// 3. A picks a second synthetic receipt whose apples amount and item number are "misread" (8.39 printed for 8.99, a code
+//    no product has): flagged, not importable, the apples matching nothing; A corrects both on the line, it adds up, and
+//    the line is matched afresh by its item number rather than keeping the misread's "not matched".
 // 4. Each real Costco receipt given on the command line is read by A - it must add up and match its items sold with no
 //    correction - and imported. Only counts and timings are printed, never what a receipt says.
 // Then every receipt row is read back from both profiles' SQLite and the server's.
@@ -98,7 +99,8 @@ const now = new Date();
 const stampOf = (d, t) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} 0${t}:15:00 PM ${txn}`;
 const items = misread => [
   { name: 'GRASSFED BEEF MINCE', detail: '6X500G MP6 P200 SL300', code: code(1), qty: 1, unit: '21.49', amount: '21.49' },
-  { name: 'PINK LADY APPLES 2KG', detail: 'SL12', code: code(2), qty: 1, unit: '8.99', amount: misread ? '8.39' : '8.99' },
+  // Misread: its amount, and its item number - a code no product has, until the planner corrects it.
+  { name: 'PINK LADY APPLES 2KG', detail: 'SL12', code: misread ? String(base + 27) : code(2), qty: 1, unit: '8.99', amount: misread ? '8.39' : '8.99' },
   { name: 'SOURDOUGH LOAF 800G', detail: 'SL4', code: code(3), qty: 1, unit: '6.99', amount: '6.99' },
   { name: 'SOURDOUGH LOAF 800G', detail: 'SL4', code: code(3), qty: 1, unit: '6.99', amount: '6.99' },
   { name: 'TPD -BUY 2 SAVE', code: code(4), qty: 1, unit: '3.00', amount: '3.00', discount: true },
@@ -182,13 +184,18 @@ check(read2.ok && await until(a, `!!document.querySelector('[data-testid=receipt
   `A picks a receipt whose apples read $8.39: flagged, not importable - "${await text(a, 'receipt-totals-problem')}"`);
 got = await lines(a);
 check(got[1]?.check && !got[0].check && await a.evaluate(`!!${rline(1)}.querySelector('[data-testid=receipt-line-problem]')`), 'the apples line is marked to check, the others not');
-check(got.map(l => l.match).join(',') === 'StoreCode,StoreCode,None,StoreCode', `matched by item number: ${got.map(l => l.match).join(', ')}`);
+check(got[0].match === 'StoreCode' && got[1].match !== 'StoreCode' && got[3].match === 'StoreCode',
+  `the misread item number matches nothing, the others by item number: ${got.map(l => l.match).join(', ')}`);
 await a.evaluate(`${rline(1)}.querySelector('[data-testid=receipt-line-edit]').click()`);
 await until(a, `!!document.getElementById('receipt-edit-amount')`);
+await a.evaluate(typeInto('receipt-edit-code', code(2))); await sleep(200);
 await a.evaluate(typeInto('receipt-edit-amount', '8.99')); await sleep(200);
 await click(a, '[data-testid=receipt-line-save]');
 check(await until(a, `!!document.querySelector('[data-testid=receipt-totals-ok]')`) && await until(a, `!document.querySelector('[data-testid=receipt-import]').disabled`),
-  'A corrects the amount to $8.99: it adds up, and can be imported');
+  'A corrects the item number and the amount to $8.99: it adds up, and can be imported');
+// The choice made for the misread ("not matched") is not kept for what is now another item (ReviewChoice.Survives).
+got = await lines(a);
+check(got[1]?.match === 'StoreCode' && /apples/i.test(got[1].will), `the corrected line is matched afresh, by its item number: "${got[1]?.will}"`);
 await click(a, '[data-testid=receipt-import]');
 check(await until(a, `!!document.querySelector('[data-testid=receipt-done]')`), `A imports it: "${await text(a, 'receipt-done')}"`);
 await settled(a, 30_000);
@@ -224,8 +231,15 @@ const q = {
 const rows = Object.fromEntries(Object.entries(q).map(([k, sql]) => [k, server(sql)]));
 console.log(`  server: ${Object.entries(rows).map(([k, v]) => `${k} ${v ? v.split('\n').length : 0}`).join(', ')}`);
 for (const p of [a, b]) {
-  const local = await dump(p);
-  const same = Object.entries(q).every(([k, sql]) => local(sql).replaceAll('.0|', '|').replace(/\.0$/gm, '') === rows[k].replaceAll('.0|', '|').replace(/\.0$/gm, ''));
-  check(same && local('select count(*) from Outbox') === '0', `${p.name} SQLite holds the same receipts, lines, products, prices and stock as the server, outbox empty`);
+  // settled() says only that a profile's own outbox is empty, not that it has pulled the other's last import - and B runs
+  // with its CPU slowed 4x. So read it again until it agrees, for up to 30 s; a profile still behind after that is a bug.
+  let same = false, outbox = '', waited = 0;
+  for (const start = Date.now(); !same && Date.now() - start < 30_000; await sleep(1000)) {
+    const local = await dump(p);
+    same = Object.entries(q).every(([k, sql]) => local(sql).replaceAll('.0|', '|').replace(/\.0$/gm, '') === rows[k].replaceAll('.0|', '|').replace(/\.0$/gm, ''));
+    outbox = local('select count(*) from Outbox');
+    waited = Date.now() - start;
+  }
+  check(same && outbox === '0', `${p.name} SQLite holds the same receipts, lines, products, prices and stock as the server, outbox empty (read after ${waited} ms)`);
 }
 finish();
