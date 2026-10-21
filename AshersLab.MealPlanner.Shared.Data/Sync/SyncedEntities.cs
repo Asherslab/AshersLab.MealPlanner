@@ -1,6 +1,7 @@
 using AshersLab.MealPlanner.Shared.Data.Categories;
 using AshersLab.MealPlanner.Shared.Data.Ingredients;
 using AshersLab.MealPlanner.Shared.Data.Meals;
+using AshersLab.MealPlanner.Shared.Data.Pantry;
 using AshersLab.MealPlanner.Shared.Data.Planning;
 using AshersLab.MealPlanner.Shared.Data.Prices;
 using AshersLab.MealPlanner.Shared.Data.Products;
@@ -62,10 +63,12 @@ public static class SyncedEntities
 
     public static readonly CalendarEntryEntity CalendarEntry = new();
 
+    public static readonly StockMovementEntity StockMovement = new();
+
     public static readonly IReadOnlyList<SyncedEntity> All =
     [
         Ingredient, Store, Category, Product, PriceObservation, MealGroup, Meal, MealIngredient,
-        Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice, CalendarEntry,
+        Person, Slot, PlanTemplate, TemplateEntry, TemplateChoice, CalendarEntry, StockMovement,
     ];
 
     // Text in the op's own format, converted here rather than by the provider: see PriceObservation.ObservedOn.
@@ -93,6 +96,7 @@ public static class SyncedEntities
             ingredient.Property(i => i.Name).HasMaxLength(Names.MaxLength);
             // By name, as the op carries it, so the table reads the same as the log.
             ingredient.Property(i => i.BaseUnit).HasConversion<string>().HasMaxLength(20);
+            ingredient.Property(i => i.StapleStock).HasConversion<string>().HasMaxLength(20);
             // Indexed for "is this category / store still used?", the check before a delete. Not foreign keys.
             ingredient.HasIndex(i => i.CategoryId);
             ingredient.HasIndex(i => i.UsualStoreId);
@@ -239,6 +243,18 @@ public static class SyncedEntities
             entry.HasIndex(e => e.Date);
             entry.HasIndex(e => e.MovedDate);
             entry.HasIndex(e => e.TemplateEntryId);
+        });
+
+        modelBuilder.Entity<StockMovement>(movement =>
+        {
+            movement.ToTable("StockMovement");
+            movement.HasKey(m => m.Id);
+            movement.Property(m => m.Id).ValueGeneratedNever();
+            // By name, as the op carries it.
+            movement.Property(m => m.Reason).HasConversion<string>().HasMaxLength(20);
+            movement.Property(m => m.OccurredOn).HasConversion(DateText).HasMaxLength(10);
+            // An ingredient's ledger. Not a foreign key.
+            movement.HasIndex(m => m.IngredientId);
         });
     }
 }

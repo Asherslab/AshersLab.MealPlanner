@@ -49,6 +49,9 @@ Present tense, kept current, no dates.
   replanning, and what a serve costs on each day.
 - [Batches and serves](modules/planning/batches-and-serves.md) — a cooked entry's batch, leftovers eating it oldest first
   or by choice, what a skip does, and why serves are counted from the calendar instead of stored (no counter op).
+- [The pantry](modules/pantry/pantry.md) — stock on hand: a ledger of bought / adjusted / counted movements, what the
+  calendar's meals use read rather than stored, never below zero, a count setting the level, staples as Have / Running low
+  / Out, and the stock at a date the shopping list subtracts.
 - [Meals](modules/meals/meals.md) — meal groups, meals and their five kinds, a meal's ingredients, and its batch and
   per-serve cost (incomplete, never lower, when anything is unpriced).
 

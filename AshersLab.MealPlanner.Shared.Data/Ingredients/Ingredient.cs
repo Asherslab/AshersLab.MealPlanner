@@ -31,6 +31,9 @@ public class Ingredient : ISyncedRow
     /// <summary>Used in small amounts (oil, soy sauce): costed like anything else, left off the shopping list.</summary>
     public bool IsStaple { get; set; }
 
+    /// <summary>A staple's stock as the planner last said it - staples are never drawn down. Have until someone says otherwise.</summary>
+    public StapleStock StapleStock { get; set; }
+
     /// <summary>The unit is the spreadsheet import's guess, not yet confirmed: the page asks the planner to check it.</summary>
     public bool UnitGuessed { get; set; }
 

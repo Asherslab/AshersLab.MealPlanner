@@ -32,6 +32,12 @@ public static class IngredientRules
     /// </summary>
     public const string UnitGuessedField = "UnitGuessed";
 
+    /// <summary>
+    /// A staple's <see cref="Ingredients.StapleStock"/> by name - have, running low or out. Set from the pantry, one
+    /// field to an op, so a tap on one phone never undoes another field edited elsewhere.
+    /// </summary>
+    public const string StapleStockField = "StapleStock";
+
     public const int MaxNameLength = Names.MaxLength;
 
     private const string Noun = "An ingredient";
@@ -39,7 +45,7 @@ public static class IngredientRules
     /// <summary>Every field an ingredient op may carry. Anything else is refused.</summary>
     public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal)
     {
-        NameField, BaseUnitField, CategoryField, UsualStoreField, IsStapleField, UnitGuessedField,
+        NameField, BaseUnitField, CategoryField, UsualStoreField, IsStapleField, UnitGuessedField, StapleStockField,
     };
 
     /// <summary>
@@ -68,6 +74,7 @@ public static class IngredientRules
             UsualStoreField => OpValues.TryParseId(field.Value, out _) ? null : "The store is not an id.",
             IsStapleField   => OpValues.TryParseBool(field.Value, out _) ? null : "Staple is not true or false.",
             UnitGuessedField => OpValues.TryParseBool(field.Value, out _) ? null : "Unit guessed is not true or false.",
+            StapleStockField => StapleStocks.TryParse(field.Value, out _) ? null : "The staple's stock is not have, running low or out.",
             _               => null,
         });
 }

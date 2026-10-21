@@ -56,7 +56,8 @@ The browser's database itself - OPFS, migrations, sharing it across windows - is
   [the catalogue](../catalogue/catalogue.md). So a new server's log is not empty: it starts with the seeds.
 - **Never `Update` a counter.** Two devices adding one each would both write "previous + 1" and one would be lost.
   Count rows instead: serves eaten are the calendar's leftovers entries, counted when read
-  ([batches and serves](../planning/batches-and-serves.md)); stock on hand will be a ledger of movements, one row each.
+  ([batches and serves](../planning/batches-and-serves.md)); stock on hand is a ledger of movements, one row each
+  ([the pantry](../pantry/pantry.md)).
   Two devices adding one each add two rows, and nothing merges. There is no `Increment` op kind and none is planned. A
   number the planner states ("we made 8") is not a counter - it is an ordinary field, and the later edit wins.
 - **`Seq` order relies on SQLite having one writer** (`Grpc/Data/Models/Sync/DbOp.cs`). A push numbers and

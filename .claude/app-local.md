@@ -207,6 +207,22 @@ entries on the server**: leftovers eat any batch cooked before them, so an earli
 first and every count is off. And read ids back with its `serverHas` poll, not once after `settled` - the chip says
 "0 waiting" before a write made a moment ago is queued.
 
+**Pantry** (`/pantry`, `nav-pantry`): `pantry-search` (input id too); group headings `pantry-group`; per ingredient with stock
+`pantry-row` (`data-id`; tapping it opens the sheet) with `pantry-name`, `pantry-detail` ("runs out Sun 25 Oct") and
+`pantry-level` ("about 1 kg", `data-state` = `InStock|Out|ProbablyOut`); while searching, `pantry-untracked` (`data-id`) for
+ingredients with no stock yet; staples `pantry-staple` (`data-id`) with `pantry-staple-name` and three chips
+`pantry-staple-state` (`data-state` = `Have|RunningLow|Out`, `data-chosen`). The sheet (`pantry-sheet`): `pantry-sheet-now`,
+`pantry-out`, `pantry-quarter`, `pantry-half`, `pantry-pack`, `pantry-bought-1`, `pantry-bought-2` (pack buttons only when a
+product gives a pack), `pantry-amount` (input id) with `pantry-amount-count` / `-bought` / `-threw`, `pantry-sheet-use`,
+`pantry-history-row` (`data-id`) with `pantry-history-delete`, `pantry-cancel`. `node .claude/tools/chrome-pantry-check.mjs
+<scratch>/pantry` (ports 19360/19361, about a minute) drives all of it from two profiles. **Stock is "now"**: it plans its
+meals on tomorrow and the day after next, and expects nothing else on the server to use its run-named mince. Compare
+`StockMovement.Quantity` with `cast(Quantity as real)` - decimal as text is "1000.0" on the server and "1000" in a browser.
+
+**`build_solution` after a source edit sometimes needs running twice** before the test project's copies of `Shared.*.dll`
+are newer than the source (seen repeatedly on 2026-10-22, also with `get_file_problems` first). Check `[ dll -nt source ]`
+before trusting a test run, above all a mutation run - a stale one passes.
+
 The Chrome extension cannot resize a full-screen window, so phone-width checks use headless Chrome's
 `Emulation.setDeviceMetricsOverride` (`phone()` in `.claude/tools/lib/profiles.mjs`).
 

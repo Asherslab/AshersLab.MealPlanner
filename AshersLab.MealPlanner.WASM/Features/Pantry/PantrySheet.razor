@@ -1,0 +1,128 @@
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Pantry
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+
+@*
+    One ingredient's stock. The estimate drifts - recipes are approximate and nobody weighs the mayo - so putting it right
+    is two taps: the ingredient, then what is there ("Out", "½ pack"). Each of those is a count, which sets the level
+    rather than adding to it. Bought adds whole packs. For anything else, type an amount and say what it is. Beneath, what
+    the plan takes from it next, and its history, where a mistaken entry can be deleted. Like the other sheets it only
+    answers; the page writes the ops.
+*@
+
+<MudDialog data-testid="pantry-sheet">
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" data-testid="pantry-sheet-now">@NowText</MudText>
+
+        <MudText Typo="Typo.overline" Class="d-block mt-3">What's left?</MudText>
+        <div class="d-flex flex-wrap gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="() => Count(0)" data-testid="pantry-out">Out</MudButton>
+            @if (Pack is { } pack)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="() => Count(PantryText.Of(pack, 0.25m))" data-testid="pantry-quarter">¼ pack</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="() => Count(PantryText.Of(pack, 0.5m))" data-testid="pantry-half">½ pack</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="() => Count(pack)" data-testid="pantry-pack">1 pack</MudButton>
+            }
+        </div>
+        @if (Pack is { } size)
+        {
+            <MudText Typo="Typo.overline" Class="d-block mt-3">Bought</MudText>
+            <div class="d-flex flex-wrap gap-2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(StockReason.Bought, size)"
+                           data-testid="pantry-bought-1">+1 pack (@Quantity.Format(size, Unit))</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(StockReason.Bought, size * 2)"
+                           data-testid="pantry-bought-2">+2 packs</MudButton>
+            </div>
+        }
+
+        <MudText Typo="Typo.overline" Class="d-block mt-3">An amount</MudText>
+        <MudTextField T="string" @bind-Value="_amount" Label="@($"How much? {Quantity.Example(Unit)}")" Variant="Variant.Outlined"
+                      Immediate="true" InputMode="@(InputMode.@decimal)" Error="_error is not null" ErrorText="@_error"
+                      InputId="pantry-amount" data-testid="pantry-amount"/>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Typed(StockReason.Counted)"
+                       data-testid="pantry-amount-count">That's what's left</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="() => Typed(StockReason.Bought)" data-testid="pantry-amount-bought">Bought this</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="() => Typed(StockReason.Adjusted)" data-testid="pantry-amount-threw">Threw this out</MudButton>
+        </div>
+
+        @if (Coming.Count > 0)
+        {
+            <MudText Typo="Typo.overline" Class="d-block mt-4">Coming up</MudText>
+            @foreach (string use in Coming)
+            {
+                <MudText Typo="Typo.body2" Class="list-row" data-testid="pantry-sheet-use">@use</MudText>
+            }
+        }
+
+        <MudText Typo="Typo.overline" Class="d-block mt-4">History</MudText>
+        @if (History.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="pantry-history-empty">Nothing yet.</MudText>
+        }
+        @foreach (PickerOption movement in History)
+        {
+            <div class="d-flex align-center list-row" @key="movement.Id" data-testid="pantry-history-row" data-id="@movement.Id">
+                <MudText Class="flex-grow-1" Typo="Typo.body2">@movement.Name</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" aria-label="@($"Delete: {movement.Name}")"
+                               OnClick="() => Dialog.Close(DialogResult.Ok(new PantrySheetResult(null, movement.Id)))"
+                               data-testid="pantry-history-delete"/>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()" data-testid="pantry-cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public Guid IngredientId { get; set; }
+
+    [Parameter] public BaseUnit Unit { get; set; }
+
+    /// <summary>"About 1.5 kg now", "Probably out".</summary>
+    [Parameter] public string NowText { get; set; } = "";
+
+    /// <summary>The pack it is usually bought in, when a product says; null hides the pack buttons.</summary>
+    [Parameter] public decimal? Pack { get; set; }
+
+    /// <summary>The day the browser thinks it is: every movement is written for it.</summary>
+    [Parameter] public DateOnly Today { get; set; }
+
+    /// <summary>"Thu 29 Oct · Stew · 500 g", in day order.</summary>
+    [Parameter] public IReadOnlyList<string> Coming { get; set; } = [];
+
+    /// <summary>Its movements, newest first, as "Wed 28 Oct · counted 250 g".</summary>
+    [Parameter] public IReadOnlyList<PickerOption> History { get; set; } = [];
+
+    private string? _amount;
+    private string? _error;
+
+    private void Count(decimal level) => Close(StockReason.Counted, level);
+
+    private void Typed(StockReason reason)
+    {
+        decimal? amount = Quantity.Read(_amount, Unit, out _error);
+        if (_error is not null)
+            return;
+        if (amount is not { } typed)
+        {
+            _error = "Type how much.";
+            return;
+        }
+        // "Threw this out" types what went, and takes it off.
+        Close(reason, reason == StockReason.Adjusted ? -typed : typed);
+    }
+
+    private void Close(StockReason reason, decimal quantity)
+    {
+        if (StockRules.QuantityProblem(reason, quantity) is { } problem)
+        {
+            _error = problem;
+            return;
+        }
+        Dialog.Close(DialogResult.Ok(new PantrySheetResult(new StockEntry(IngredientId, quantity, Today, reason), null)));
+    }
+}

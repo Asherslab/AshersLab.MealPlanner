@@ -3,7 +3,7 @@ title: The catalogue
 kind: reference
 status: current
 module: catalogue
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.Shared.Domain/Names.cs
   - AshersLab.MealPlanner.Shared.Domain/Sync/OpRules.cs
@@ -109,7 +109,7 @@ ingredients and the shopping list are grouped in this order."; a "New category" 
 
 ## Ingredients
 
-`Ingredient (Id, Name, BaseUnit, CategoryId, UsualStoreId, IsStaple, Deleted)`. Rules in
+`Ingredient (Id, Name, BaseUnit, CategoryId, UsualStoreId, IsStaple, UnitGuessed, StapleStock, Deleted)`. Rules in
 `Shared.Domain/Ingredients/IngredientRules.cs`; the field formats every entity shares are `Sync/OpValues.cs`.
 
 | Field | On the wire | Notes |
@@ -119,6 +119,7 @@ ingredients and the shopping list are grouped in this order."; a "New category" 
 | `CategoryId`, `UsualStoreId` | lower-case hyphenated GUID, or null for none | not checked against existing rows - see the traps |
 | `IsStaple` | `true` or `false` | staples are costed by quantity like anything else and left off the shopping list |
 | `UnitGuessed` | `true` or `false` | `true` only from the [spreadsheet import](../import/spreadsheet-import.md); saving the editor sends `false` |
+| `StapleStock` | `Have`, `RunningLow` or `Out` - by name | a staple's stock, set one tap at a time on [the pantry](../pantry/pantry.md), alone in its op; `Have` until someone says otherwise. The editor never sends it |
 
 - **A create needs a unit, and the editor has no default.** Every quantity of the ingredient - in a recipe, in a
   pack - is counted in it, so a silent "grams" on a cucumber would make every later number wrong without anyone

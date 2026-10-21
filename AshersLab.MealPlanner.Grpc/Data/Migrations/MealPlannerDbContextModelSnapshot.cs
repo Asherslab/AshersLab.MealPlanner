@@ -123,6 +123,11 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("StapleStock")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("UnitGuessed")
                         .HasColumnType("INTEGER");
 
@@ -225,6 +230,37 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                     b.HasIndex("MealId");
 
                     b.ToTable("MealIngredient", (string)null);
+                });
+
+            modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Pantry.StockMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("IngredientId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OccurredOn")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IngredientId");
+
+                    b.ToTable("StockMovement", (string)null);
                 });
 
             modelBuilder.Entity("AshersLab.MealPlanner.Shared.Data.Planning.CalendarEntry", b =>

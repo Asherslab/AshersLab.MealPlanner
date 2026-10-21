@@ -1,0 +1,217 @@
+@page "/pantry"
+@using AshersLab.MealPlanner.LocalData
+@using AshersLab.MealPlanner.Shared.Data.Categories
+@using AshersLab.MealPlanner.Shared.Data.Ingredients
+@using AshersLab.MealPlanner.Shared.Data.Meals
+@using AshersLab.MealPlanner.Shared.Data.Pantry
+@using AshersLab.MealPlanner.Shared.Data.Products
+@using AshersLab.MealPlanner.Shared.Data.Sync
+@using AshersLab.MealPlanner.Shared.Domain
+@using AshersLab.MealPlanner.Shared.Domain.Ingredients
+@using AshersLab.MealPlanner.Shared.Domain.Pantry
+@using AshersLab.MealPlanner.Shared.Domain.Sync
+@using AshersLab.MealPlanner.WASM.Data
+@using AshersLab.MealPlanner.WASM.Features.Ingredients
+@using Microsoft.EntityFrameworkCore
+@inherits LocalDataPage
+@inject IDialogService Dialogs
+@inject IBrowserViewportService Viewport
+
+@*
+    What is in the kitchen: every ingredient with stock, by category, with about how much there is now and when the plan
+    uses the last of it; then the staples, each one tap from Have / Running low / Out. Tap an ingredient to put its stock
+    right (PantrySheet). Search for one that is not here yet to add what you have. Stock is counted from the movements and
+    the calendar (PantryBook) - nothing on this page is stored but the movements and the staples' state.
+*@
+
+<PageTitle>Pantry - Meal Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Component="h1">Pantry</MudText>
+
+<LocalDataGate Start="Start">
+    <MudTextField T="string" @bind-Value="_search" Label="Find an ingredient" Variant="Variant.Outlined" Class="mt-4"
+                  Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  InputId="pantry-search" data-testid="pantry-search"/>
+
+    @if (_pantry is not null && !Groups().Any() && Staples().Count == 0 && Filter.Length == 0)
+    {
+        <MudText Class="pa-4 mud-text-secondary" data-testid="pantry-empty">
+            Nothing counted yet - find an ingredient above and say how much you have.
+        </MudText>
+    }
+
+    @foreach ((string heading, List<Ingredient> items) in Groups())
+    {
+        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="pantry-group">@heading</MudText>
+        <MudPaper Outlined="true">
+            @foreach (Ingredient ingredient in items)
+            {
+                StockLevel now = _pantry!.At(ingredient.Id, Today);
+                <div class="list-row d-flex align-center gap-2 px-4 py-2" @key="ingredient.Id" role="button" tabindex="0"
+                     @onclick="() => Open(ingredient)" data-testid="pantry-row" data-id="@ingredient.Id">
+                    <div class="flex-grow-1">
+                        <MudText data-testid="pantry-name">@ingredient.Name</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="pantry-detail">@Detail(ingredient)</MudText>
+                    </div>
+                    <MudText Class="@($"text-nowrap {(now.State is StockState.InStock ? "" : "mud-warning-text")}")"
+                             data-testid="pantry-level" data-state="@now.State">@PantryText.Level(now, ingredient.BaseUnit)</MudText>
+                </div>
+            }
+        </MudPaper>
+    }
+
+    @if (Untracked() is { Count: > 0 } untracked)
+    {
+        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block">Not counted yet</MudText>
+        <MudPaper Outlined="true">
+            @foreach (Ingredient ingredient in untracked)
+            {
+                <div class="list-row d-flex align-center px-4 py-2" @key="ingredient.Id" role="button" tabindex="0"
+                     @onclick="() => Open(ingredient)" data-testid="pantry-untracked" data-id="@ingredient.Id">
+                    <MudText Class="flex-grow-1">@ingredient.Name</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/>
+                </div>
+            }
+        </MudPaper>
+    }
+
+    @if (Staples() is { Count: > 0 } staples)
+    {
+        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="pantry-staples">Staples</MudText>
+        <MudPaper Outlined="true">
+            @foreach (Ingredient staple in staples)
+            {
+                <div class="list-row d-flex flex-wrap align-center gap-2 px-4 py-2" @key="staple.Id" data-testid="pantry-staple" data-id="@staple.Id">
+                    <MudText Class="flex-grow-1" data-testid="pantry-staple-name">@staple.Name</MudText>
+                    <div class="d-flex gap-1" role="group" aria-label="@($"{staple.Name}: have, running low or out")">
+                        @foreach (StapleStock state in Enum.GetValues<StapleStock>())
+                        {
+                            bool chosen = staple.StapleStock == state;
+                            <MudChip T="string" Size="Size.Small" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                                     Color="@(chosen ? state == StapleStock.Have ? Color.Success : Color.Warning : Color.Default)"
+                                     OnClick="() => SetStaple(staple, state)"
+                                     data-testid="pantry-staple-state" data-state="@state" data-chosen="@(chosen ? "true" : "false")">@state.Label()</MudChip>
+                        }
+                    </div>
+                </div>
+            }
+        </MudPaper>
+    }
+</LocalDataGate>
+
+@code {
+    /// <summary>How far ahead the plan is drawn down: "runs out" looks a week ahead, the sheet's "coming up" two.</summary>
+    private const int AheadDays = 14;
+
+    private PantryBook?               _pantry;
+    private List<Category>            _categories = [];
+    private ILookup<Guid?, Product>   _products   = Array.Empty<Product>().ToLookup(p => p.IngredientId);
+    private Dictionary<Guid, string>  _meals      = [];
+
+    private string? _search;
+
+    /// <summary>The day it is where the planner is: "now".</summary>
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+
+    protected override async Task LoadAsync(LocalDbContext db)
+    {
+        _pantry     = await PantryBook.LoadAsync(db, Today, Today.AddDays(AheadDays));
+        _categories = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
+        _products   = (await db.Products.AsNoTracking().Where(p => !p.Deleted && p.IngredientId != null).ToListAsync()).ToLookup(p => p.IngredientId);
+        _meals      = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, m => m.Name);
+    }
+
+    private string Filter => Names.Normalise(_search);
+
+    private bool Matches(Ingredient ingredient) => Filter.Length == 0 || ingredient.Name.Contains(Filter, StringComparison.CurrentCultureIgnoreCase);
+
+    private IEnumerable<Ingredient> Live =>
+        _pantry?.Ingredients.Values.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase) ?? Enumerable.Empty<Ingredient>();
+
+    /// <summary>Ingredients with stock to show - anything counted or bought - under their category, then "No category".</summary>
+    private IEnumerable<(string Heading, List<Ingredient> Items)> Groups()
+    {
+        if (_pantry is null)
+            yield break;
+        HashSet<Guid> tracked = [.. _pantry.Ledger.Tracked];
+        List<Ingredient> shown = [.. Live.Where(i => !i.IsStaple && tracked.Contains(i.Id) && Matches(i))];
+
+        HashSet<Guid> live = [.. _categories.Select(c => c.Id)];
+        foreach (Category category in _categories)
+            if (shown.Where(i => i.CategoryId == category.Id).ToList() is { Count: > 0 } items)
+                yield return (category.Name, items);
+        if (shown.Where(i => i.CategoryId is not { } id || !live.Contains(id)).ToList() is { Count: > 0 } loose)
+            yield return ("No category", loose);
+    }
+
+    /// <summary>While searching: the ingredients that match and have no stock yet, to add some.</summary>
+    private List<Ingredient> Untracked()
+    {
+        if (_pantry is null || Filter.Length == 0)
+            return [];
+        HashSet<Guid> tracked = [.. _pantry.Ledger.Tracked];
+        return [.. Live.Where(i => !i.IsStaple && !tracked.Contains(i.Id) && Matches(i)).Take(10)];
+    }
+
+    private List<Ingredient> Staples() => [.. Live.Where(i => i.IsStaple && Matches(i))];
+
+    /// <summary>"runs out Thu 29 Oct", "1 kg left after Sun 1 Nov", or nothing when the week's plan does not use it.</summary>
+    private string Detail(Ingredient ingredient)
+    {
+        DateOnly weekOut = Today.AddDays(6);
+        if (_pantry!.Ledger.RunsOut(ingredient.Id, Today, weekOut) is { } runsOut)
+            return $"runs out {PantryText.Day(runsOut.Day)}";
+        if (_pantry.UsesOf(ingredient.Id).LastOrDefault(u => u.Day >= Today && u.Day <= weekOut) is { } last
+            && _pantry.Ledger.After(ingredient.Id, last.Day) is { State: StockState.InStock } after)
+            return $"{Quantity.Format(after.Quantity, ingredient.BaseUnit)} left after {PantryText.Day(last.Day)}";
+        return "";
+    }
+
+    /// <summary>The pack it is usually bought in: the smallest at its usual store, else the smallest anywhere.</summary>
+    private decimal? PackOf(Ingredient ingredient)
+    {
+        List<Product> products = [.. _products[ingredient.Id].Where(p => p.PackQuantity > 0)];
+        List<Product> usual = [.. products.Where(p => p.StoreId == ingredient.UsualStoreId)];
+        return (usual.Count > 0 ? usual : products).Select(p => (decimal?)p.PackQuantity).Min();
+    }
+
+    private async Task Open(Ingredient ingredient)
+    {
+        bool phone = await Viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
+        StockLevel now = _pantry!.At(ingredient.Id, Today);
+        string nowText = PantryText.Level(now, ingredient.BaseUnit);
+
+        DialogParameters<PantrySheet> parameters = new()
+        {
+            { s => s.IngredientId, ingredient.Id },
+            { s => s.Unit, ingredient.BaseUnit },
+            { s => s.NowText, char.ToUpperInvariant(nowText[0]) + nowText[1..] + (now.State == StockState.InStock ? " now" : "") },
+            { s => s.Pack, PackOf(ingredient) },
+            { s => s.Today, Today },
+            { s => s.Coming, (IReadOnlyList<string>)[.. _pantry.UsesOf(ingredient.Id).Where(u => u.Day >= Today)
+                .Select(u => $"{PantryText.Day(u.Day)} · {_meals.GetValueOrDefault(u.MealId) ?? "meal removed"} · {Quantity.Format(u.Quantity, ingredient.BaseUnit)}")] },
+            { s => s.History, (IReadOnlyList<PickerOption>)[.. _pantry.MovementsOf(ingredient.Id).Take(10)
+                .Select(m => new PickerOption(m.Id, $"{PantryText.Day(m.OccurredOn)} · {PantryText.Movement(m.Reason, m.Quantity, ingredient.BaseUnit)}"))] },
+        };
+        DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, FullScreen = phone, CloseOnEscapeKey = true };
+
+        IDialogReference dialog = await Dialogs.ShowAsync<PantrySheet>(ingredient.Name, parameters, options);
+        if (await dialog.Result is not { Canceled: false, Data: PantrySheetResult result })
+            return;
+
+        if (result.Entry is { } entry)
+            await WriteAsync(SyncedEntities.StockMovement, Guid.CreateVersion7(), OpKind.Create, entry.Fields());
+        else if (result.DeleteId is { } id)
+            await WriteAsync(SyncedEntities.StockMovement, id, OpKind.Delete, []);
+    }
+
+    /// <summary>One tap: the staple's state, alone in its op. Tapping the state it already has sends nothing.</summary>
+    private async Task SetStaple(Ingredient staple, StapleStock state)
+    {
+        if (staple.StapleStock == state)
+            return;
+        await WriteAsync(SyncedEntities.Ingredient, staple.Id, OpKind.Update,
+            [new OpField(IngredientRules.StapleStockField, StapleStocks.Format(state))]);
+    }
+}
