@@ -13,8 +13,7 @@ namespace AshersLab.MealPlanner.Grpc.Features.Ingress;
 /// <c>X-Ingress-Path</c>, and taking the user from <c>X-Remote-User-*</c>. They are one switch on purpose -
 /// a header is only worth believing when the connection it arrived on could only have come from the proxy.
 /// <para>
-/// Standalone (Kubernetes) auth behind some other proxy is slice 14; until then the image run outside Home
-/// Assistant has no auth at all.
+/// Behind any other proxy (Docker, Kubernetes) it is <see cref="Auth.AuthOptions"/> instead; the two are never both set.
 /// </para>
 /// </remarks>
 public sealed class IngressOptions
@@ -39,7 +38,7 @@ public sealed class IngressOptions
     /// numbers are accepted too - so a dropped or padded octet would quietly trust some other machine and refuse the
     /// Supervisor, instead of stopping the host. Written out in full, an IPv4 address reads back as itself.
     /// </summary>
-    private static IPAddress? Address(string configured) =>
+    internal static IPAddress? Address(string configured) =>
         IPAddress.TryParse(configured, out IPAddress? address)
         && (address.AddressFamily == AddressFamily.InterNetworkV6 || address.ToString() == configured)
             ? address

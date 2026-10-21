@@ -25,7 +25,8 @@ Present tense, kept current, no dates.
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
 - [How the app is deployed](modules/infrastructure/deployment.md) — the one image, the Home Assistant add-on,
   ingress (base path, the gRPC-Web prefix trap, who may connect, the HA user), CI to GHCR, and the owner's
-  install steps.
+  install steps; standalone on Kubernetes or Docker: refusing to start with no auth, a sign-in proxy's header believed
+  only from the proxy, the chart, Litestream to S3, and what the owner must do to deploy it.
 - [The browser database](modules/sync/browser-database.md) — EF Core SQLite in OPFS, the `wasm-tools`
   workload trap, starting it after the first render, sharing it across windows, one context at a time per
   window, local migrations, and what it costs.
@@ -75,8 +76,6 @@ Present tense, kept current, no dates.
 
 - [Version 1 scope](work/2026-10-v1-scope.md) — what the app is, every decision already made, the
   domain model, how costs are computed, and the build order. **Start here.**
-- [Deployment design](work/2026-10-deployment.md) — why one image and no YARP; the add-on and CI parts
-  have landed in [deployment](modules/infrastructure/deployment.md). Left: standalone k8s, slice 14.
 - [Version 2 integrations](work/2026-10-version-2-integrations.md) — Actual Budget and Woolworths live
   prices. Not to be built yet.
 

@@ -1,0 +1,134 @@
+{{- include "mealplanner.check" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mealplanner.name" . }}
+  labels:
+    {{- include "mealplanner.labels" . | nindent 4 }}
+spec:
+  # SQLite: one writer. Never more than one pod on the file, so never a rolling update either.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "mealplanner.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mealplanner.selector" . | nindent 8 }}
+      annotations:
+        {{- if .Values.litestream.enabled }}
+        checksum/litestream: {{ include (print $.Template.BasePath "/litestream.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      # The image runs as root for Home Assistant, whose /data is root-owned. Here the PVC is made the app user's
+      # (1654, the aspnet image's "app") by fsGroup, and nothing runs as root.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- if .Values.litestream.enabled }}
+      initContainers:
+        # A pod on an empty PVC - a new node, a lost volume - starts from the replica. A PVC with a database keeps it:
+        # the replica is never restored over live data.
+        - name: litestream-restore
+          image: {{ .Values.litestream.image }}
+          args: ["restore", "-if-db-not-exists", "-if-replica-exists", "-config", "/etc/litestream.yml", "/data/mealplanner.db"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.litestream.existingSecret }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: litestream, mountPath: /etc/litestream.yml, subPath: litestream.yml }
+          securityContext:
+            {{- include "mealplanner.restricted" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.litestream.resources | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: mealplanner
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - { name: Auth__Mode, value: {{ .Values.auth.mode | quote }} }
+            {{- if eq .Values.auth.mode "TrustedHeader" }}
+            - { name: Auth__TrustedProxies, value: {{ .Values.auth.trustedProxies | quote }} }
+            - { name: Auth__UserHeader, value: {{ .Values.auth.userHeader | quote }} }
+            {{- with .Values.auth.displayNameHeader }}
+            - { name: Auth__DisplayNameHeader, value: {{ . | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- range $name, $value := .Values.env }}
+            - { name: {{ $name }}, value: {{ $value | quote }} }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 8099, protocol: TCP }
+          # Ahead of the sign-in gate (Features/Auth/HealthProbes.cs): the kubelet does not come through the proxy.
+          # Startup covers migrating the database before the host listens.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet: { path: /healthz/ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
+          securityContext:
+            {{- include "mealplanner.restricted" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.litestream.enabled }}
+        - name: litestream
+          image: {{ .Values.litestream.image }}
+          args: ["replicate", "-config", "/etc/litestream.yml"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.litestream.existingSecret }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: litestream, mountPath: /etc/litestream.yml, subPath: litestream.yml }
+          securityContext:
+            {{- include "mealplanner.restricted" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.litestream.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "mealplanner.claim" . }}
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+        {{- if .Values.litestream.enabled }}
+        - name: litestream
+          configMap:
+            name: {{ include "mealplanner.name" . }}-litestream
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

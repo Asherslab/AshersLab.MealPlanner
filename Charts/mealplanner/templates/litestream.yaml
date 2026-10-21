@@ -1,0 +1,28 @@
+{{- if .Values.litestream.enabled }}
+# Litestream's configuration. No credentials here: they come from the Secret as LITESTREAM_ACCESS_KEY_ID and
+# LITESTREAM_SECRET_ACCESS_KEY.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mealplanner.name" . }}-litestream
+  labels:
+    {{- include "mealplanner.labels" . | nindent 4 }}
+data:
+  litestream.yml: |
+    dbs:
+      - path: /data/mealplanner.db
+        replicas:
+          - type: s3
+            bucket: {{ .Values.litestream.bucket | quote }}
+            path: {{ .Values.litestream.path | quote }}
+            {{- with .Values.litestream.region }}
+            region: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.litestream.endpoint }}
+            endpoint: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.litestream.forcePathStyle }}
+            force-path-style: true
+            {{- end }}
+            retention: {{ .Values.litestream.retention | quote }}
+{{- end }}

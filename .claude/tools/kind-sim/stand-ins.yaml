@@ -1,0 +1,91 @@
+# What the chart expects to find in a real cluster, stood in for in a throwaway kind cluster (run.sh):
+# - namespace "proxy": nginx as the sign-in proxy (oauth2-proxy / Authentik), every request a signed-in user;
+# - in the app's namespace "mp": SeaweedFS as S3, and the Secret holding Litestream's credentials.
+apiVersion: v1
+kind: Namespace
+metadata: { name: proxy }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: mp }
+---
+apiVersion: v1
+kind: Secret
+metadata: { name: mealplanner-s3, namespace: mp }
+stringData:
+  # Throwaway credentials for a throwaway store; also SeaweedFS's one identity below.
+  LITESTREAM_ACCESS_KEY_ID: mealplanner-sim
+  LITESTREAM_SECRET_ACCESS_KEY: mealplannersimsecret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: s3, namespace: mp }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: s3 } }
+  template:
+    metadata: { labels: { app: s3 } }
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:3.98
+          imagePullPolicy: IfNotPresent
+          args: [server, -dir=/data, -s3, -s3.port=8333, -master.volumeSizeLimitMB=64, -master.volumePreallocate=false, -volume.max=8]
+          env:
+            - { name: AWS_ACCESS_KEY_ID, valueFrom: { secretKeyRef: { name: mealplanner-s3, key: LITESTREAM_ACCESS_KEY_ID } } }
+            - { name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: mealplanner-s3, key: LITESTREAM_SECRET_ACCESS_KEY } } }
+          ports: [{ containerPort: 8333 }]
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes: [{ name: data, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: s3, namespace: mp }
+spec:
+  selector: { app: s3 }
+  ports: [{ port: 8333, targetPort: 8333 }]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: proxy, namespace: proxy }
+data:
+  nginx.conf: |
+    events {}
+    http {
+      server {
+        listen 8080;
+        location / {
+          proxy_pass http://mealplanner.mp.svc.cluster.local;
+          proxy_http_version 1.1;
+          proxy_buffering off;
+          proxy_read_timeout 1h;
+          # REPLACES the browser's own copies, as a real sign-in proxy must.
+          proxy_set_header X-Forwarded-User                planner@example.com;
+          proxy_set_header X-Forwarded-Preferred-Username  "The Planner";
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: proxy, namespace: proxy }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: proxy } }
+  template:
+    metadata: { labels: { app: proxy } }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:stable-alpine
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080 }]
+          volumeMounts: [{ name: conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf }]
+      volumes: [{ name: conf, configMap: { name: proxy } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: proxy, namespace: proxy }
+spec:
+  selector: { app: proxy }
+  ports: [{ port: 8080, targetPort: 8080 }]

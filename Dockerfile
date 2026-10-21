@@ -1,5 +1,5 @@
 # The one image: the gRPC host, serving gRPC-Web AND the Blazor WASM app, with SQLite under /data. Runs as a
-# Home Assistant add-on (mealplanner/config.yaml) and, later, as a plain container. See
+# Home Assistant add-on (mealplanner/config.yaml) and as a plain container (Charts/mealplanner). See
 # docs/modules/infrastructure/deployment.md.
 #
 # Built for linux/amd64 and linux/arm64 WITHOUT emulation. The build stage runs on the builder's own platform
@@ -52,13 +52,14 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
 # Root, not the image's default `app` user: the Home Assistant Supervisor mounts /data owned by root and offers
-# no way to change that, so as `app` the first migration fails with "unable to open database file". Revisit for
-# Kubernetes (fsGroup) in slice 14.
+# no way to change that, so as `app` the first migration fails with "unable to open database file". The Kubernetes chart
+# (Charts/mealplanner) runs it as `app` (1654) instead, with fsGroup making the PVC its own.
 USER root
 
 # 8099 is the add-on's ingress_port. DataDirectory is where the SQLite file lives; /data is the add-on's
 # persistent, backed-up volume. Ingress trust is NOT set here - the add-on's config.yaml sets it, so the same
-# image run anywhere else does not believe headers from an address that means nothing there.
+# image run anywhere else does not believe headers from an address that means nothing there. Nor is Auth: run
+# anywhere with neither, the image refuses to start (Features/Auth/AuthOptions.cs) rather than serve everyone.
 ENV ASPNETCORE_HTTP_PORTS=8099 \
     DataDirectory=/data
 EXPOSE 8099

@@ -20,7 +20,13 @@ nothing here is to be built before version 1 is in use.
   `private/LOCAL-NOTES.md`). One category, **Groceries**, covers both stores.
 - Actual has no REST API of its own; its official client is the Node library `@actual-app/api`.
   The owner chose **`actual-http-api`** (community REST wrapper around that library) so the .NET
-  server can call it over HTTP. Bundling: see [deployment](2026-10-deployment.md).
+  server can call it over HTTP. Bundling, as planned in the [deployment design](../archive/2026-10-deployment.md):
+  it is a separate Node service. In the add-on it runs **inside the same image** as a second process (s6-overlay, as
+  Home Assistant base images use), listening on localhost only; on Kubernetes it is a sidecar in
+  `Charts/mealplanner`, beside Litestream. Either way the app reads `ActualHttpApi:BaseUrl`, so pointing it at an
+  existing instance also works. Image size and RAM on the Pi matter — measure the bundled image before committing to
+  it. **Watch the PID-1 trap** ([deployment](../modules/infrastructure/deployment.md)): with a supervisor as PID 1 the
+  app is no longer PID 1, which changes how its failures surface.
 - Needed config: actual-http-api base URL + its API key; behind it, the Actual server URL, server
   password and the budget's sync id. All secrets — add-on options / k8s Secret, never committed.
 - What to read: for the current month, the Groceries category's budgeted, spent and balance. Later,

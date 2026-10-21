@@ -3,7 +3,7 @@ title: How the app is hosted
 kind: reference
 status: current
 module: infrastructure
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.AppHost/AppHost.cs
   - AshersLab.MealPlanner.Grpc/Program.cs
@@ -13,6 +13,7 @@ code:
   - AshersLab.MealPlanner.WASM/Extensions/GrpcServiceExtensions.cs
   - AshersLab.MealPlanner.WASM/wwwroot/index.html
   - AshersLab.MealPlanner.Grpc/Features/Ingress
+  - AshersLab.MealPlanner.Grpc/Features/Auth
 ---
 
 # How the app is hosted
@@ -20,7 +21,7 @@ code:
 One process serves everything: the gRPC-Web API, the Blazor WebAssembly app, and the SQLite database it
 owns. Read this before adding a project, a route, a client registration or anything that touches a URL.
 How to *run* it locally is in `.claude/app-local.md`; why it is one image is in the
-[deployment design](../../work/2026-10-deployment.md).
+[deployment design](../../archive/2026-10-deployment.md).
 
 ## Traps first
 
@@ -66,13 +67,18 @@ files gives it for free, so there is no CORS and no service-discovery address in
 
 `Grpc/Program.cs`:
 
+0. **Who to believe is checked first**, before the database is touched: outside Development, no authentication
+   configured stops the host (`Features/Auth/AuthOptions.cs`). Any startup failure exits 1 rather than hanging as
+   PID 1 (the `UnhandledException` handler at the top) — see [deployment](deployment.md).
 1. **Migrate**, before the host listens. SQLite and one process, so there is no job to wait for; a
    migration that fails stops startup rather than serving a half-migrated database. Then the sync epoch is
    minted on a new database and the newest op seq read (`Features/Sync/SyncStartup.cs`).
-2. `UseHomeAssistantIngress` (`Features/Ingress/IngressRequest.cs`) — first, so it covers files and services
-   alike. Inert unless `Ingress:TrustedProxy` is set; the add-on sets it. Then it refuses any other peer
-   with 403, and takes the base path and the user from the Supervisor's headers — see
-   [deployment](deployment.md).
+2. `UseHealthProbes` (`Features/Auth/HealthProbes.cs`) — `/healthz` and `/healthz/ready`, ahead of the gates: the
+   kubelet does not come through the proxy. Then `UseHomeAssistantIngress` (`Features/Ingress/IngressRequest.cs`), so it
+   covers files and services alike. Inert unless `Ingress:TrustedProxy` is set; the add-on sets it. Then it refuses any
+   other peer with 403, and takes the base path and the user from the Supervisor's headers. Then `UseTrustedHeaderAuth`
+   (`Features/Auth/TrustedHeaderRequest.cs`), the same for a standalone sign-in proxy, inert unless `Auth:Mode` is
+   `TrustedHeader` — both in [deployment](deployment.md).
 3. `UseBlazorFrameworkFiles` — `_framework/` in its own branch, plus the `Blazor-Environment` header the
    client reads its environment from (`Development` locally).
 4. `/index.html` by name → the app shell. A middleware: an endpoint ordered ahead of `MapStaticAssets`'
@@ -92,7 +98,7 @@ One setting, `DataDirectory` (`Grpc/Data/DataDirectory.cs`); the database is
 |---|---|
 | Local, via the AppHost | `~/Library/Application Support/AshersLab.MealPlanner` — outside the repo |
 | The image (Home Assistant add-on) | `/data` — the image's `ENV`; in HA backups |
-| Kubernetes | a PVC mount — slice 14 |
+| Kubernetes | `/data` too, a PVC (`Charts/mealplanner`); optionally replicated to S3 by Litestream — see [deployment](deployment.md) |
 | Unset (bare `dotnet ef`, a project-only launch) | `app-data/` under the working directory, git-ignored |
 
 The fallback is `app-data`, not `data`: macOS is case-insensitive, and `data` is the host project's

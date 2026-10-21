@@ -1,10 +1,22 @@
 using AshersLab.MealPlanner.Grpc.Data;
+using AshersLab.MealPlanner.Grpc.Features.Auth;
 using AshersLab.MealPlanner.Grpc.Features.Ingress;
 using AshersLab.MealPlanner.Grpc.Features.Server;
 using AshersLab.MealPlanner.Grpc.Features.Sync;
 using AshersLab.MealPlanner.ServiceDefaults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ProtoBuf.Grpc.Server;
+
+// A host that fails to start must EXIT. Unhandled, an exception makes .NET abort(), and as a container's PID 1 - plain
+// Docker, Kubernetes; not Home Assistant, which starts add-ons under an init - the kernel ignores that SIGABRT: the
+// error is printed and the container sits "running", serving nothing, forever. Exiting is an ordinary exit. The test
+// host never gets here: WebApplicationFactory catches what Program throws.
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    Console.Error.WriteLine($"Unhandled exception. {e.ExceptionObject}");
+    Environment.Exit(1);
+};
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,7 +46,15 @@ builder.Services.AddOptions<IngressOptions>()
     .Validate(o => o.IsValid, $"{IngressOptions.Section}:TrustedProxy is not an IP address.")
     .ValidateOnStart();
 
+// Who is asking, outside Home Assistant (Features/Auth/AuthOptions.cs). Outside Development, nothing configured is a
+// host that will not start - the same image with no setting would otherwise serve everything to anyone.
+builder.Services.AddOptions<AuthOptions>().Bind(builder.Configuration.GetSection(AuthOptions.Section)).ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsCheck>();
+
 var app = builder.Build();
+
+// Checked here, before the database is touched: a host that will not serve anyone has no business migrating it.
+_ = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
 
 // After a Home Assistant restore /data holds only the backup snapshot (the live file is excluded from backups).
 DatabaseSnapshot.RestoreIfMissing(DataDirectory.DatabasePath(app.Configuration), app.Logger);
@@ -48,9 +68,15 @@ using (IServiceScope scope = app.Services.CreateScope())
     await SyncStartup.InitialiseAsync(db, app.Services.GetRequiredService<SyncSignal>());
 }
 
+// Kubernetes' probes, ahead of the gates below: the kubelet does not come through the proxy. "ok" and nothing else.
+app.UseHealthProbes();
+
 // First, so a request from anywhere but the Supervisor is refused before it reaches a file or a service.
 // Does nothing unless Ingress:TrustedProxy is set, which only the Home Assistant add-on does.
 app.UseHomeAssistantIngress();
+
+// The same for a standalone image behind a sign-in proxy: does nothing unless Auth:Mode is TrustedHeader.
+app.UseTrustedHeaderAuth();
 
 if (app.Environment.IsDevelopment())
     app.UseWebAssemblyDebugging();

@@ -15,7 +15,7 @@ differs from the skill" below before following it.
 | `{{APPHOST_PROJECT}}` | `AshersLab.MealPlanner.AppHost` |
 | `{{API_PROJECT}}` | `AshersLab.MealPlanner.Grpc` — also serves the WASM app |
 | `{{WASM_PROJECT}}` | `AshersLab.MealPlanner.WASM` — never run on its own |
-| `{{YARP_PROJECT}}` | none — there is no YARP (see `docs/work/2026-10-deployment.md`) |
+| `{{YARP_PROJECT}}` | none — there is no YARP (see `docs/archive/2026-10-deployment.md`) |
 | `{{TESTS_PROJECT}}` | `AshersLab.MealPlanner.Tests` |
 | `{{RUN_CONFIG}}` | `AshersLab.MealPlanner.AppHost: https` |
 | `{{APP_PORT}}` | `7283` (https) / `5280` (http) — the gRPC host, and the only port to open in a browser |
@@ -23,7 +23,7 @@ differs from the skill" below before following it.
 | `{{ASPIRE_MCP_NAME}}` | none yet — no `.mcp.json` entry exists for this stack |
 | `{{POSTGRES_PORT}}` | none — SQLite, see Database |
 | `{{DB_NAME}}` | none — the database is one file, see Database |
-| `{{AUTHED_PAGE}}` | none — no auth yet; every page is open locally |
+| `{{AUTHED_PAGE}}` | none — the AppHost runs in Development, where no auth is configured and every page is open; the image refuses to start that way (see the standalone sim below) |
 
 The run configurations are **shared files** in `.run/` (committed), so Rider lists them as soon as the
 solution is open: `AshersLab.MealPlanner.AppHost: https` and `: http`. Rider also offers per-project
@@ -344,6 +344,36 @@ DATA_DIR=<scratch>/sim-data sh .claude/tools/ingress-sim/run.sh               # 
 The server database is `<scratch>/sim-data/mealplanner.db`. The two-profile check runs against it with
 `APP_URL=http://localhost:18299/api/hassio_ingress/sImUlAtEdToKeN/ SERVER_DB=<scratch>/sim-data/mealplanner.db`.
 After a rebuild, `--down` and start again; a page left open on the old container logs 503s/404s until reloaded.
+
+## The image standalone: behind a sign-in proxy, with Litestream
+
+What the Kubernetes chart runs, in Docker (why: `docs/modules/infrastructure/deployment.md`, "Standalone"). nginx plays
+the sign-in proxy (every request is `planner@example.com`, "The Planner"), SeaweedFS plays S3, Litestream replicates:
+
+```bash
+DATA_DIR=<scratch>/sa-data sh .claude/tools/standalone-sim/run.sh     # --down to stop and wipe
+DATA_DIR=<scratch>/sa-data sh .claude/tools/standalone-sim/run.sh --restore-drill   # wipe /data, restart, restored from S3
+```
+
+| Port | What |
+|---|---|
+| 18396 | the sign-in proxy — open `http://localhost:18396/` |
+| 18397 | the app's own port — must answer 403 (`/healthz` and `/healthz/ready` answer 200) |
+| 18398 | SeaweedFS's S3 API |
+
+The two-profile check: `APP_URL=http://localhost:18396/ SERVER_DB=<scratch>/sa-data/mealplanner.db`.
+
+**The chart in a throwaway kind cluster:** `KC=<scratch>/kind-kubeconfig sh .claude/tools/kind-sim/run.sh up` (and
+`down`). **Always a kubeconfig file of its own** — the default kubectl context on this machine is a real cluster, and
+every `kubectl`/`helm` call must name `--kubeconfig "$KC" --context kind-mealplanner-sim`. Port-forward the proxy to
+18399: `kubectl --kubeconfig "$KC" --context kind-mealplanner-sim -n proxy port-forward svc/proxy 18399:8080`. The pod has
+no `sqlite3`; read its database with the app's own `snapshot` verb (`kubectl exec … -- dotnet
+/app/AshersLab.MealPlanner.Grpc.dll snapshot`), `kubectl cp` the snapshot out, and delete it from `/data` afterwards.
+
+**If `docker pull` hangs** (seen 2026-10-22: every daemon pull, Docker Hub and MCR alike, stalled while containers and the
+host reached the registries fine), the sims' images can be fetched with `curl` from the registry API on the host and
+`docker load`ed; restarting Docker Desktop is the real fix. MinIO is not an option either way: it no longer publishes
+to Docker Hub.
 
 ## Database
 

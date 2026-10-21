@@ -1,0 +1,12 @@
+# The chart's Litestream configuration (Charts/mealplanner/templates/litestream.yaml), pointed at the simulation's SeaweedFS.
+# Credentials come from the environment (LITESTREAM_ACCESS_KEY_ID / LITESTREAM_SECRET_ACCESS_KEY), as from the chart's Secret.
+dbs:
+  - path: /data/mealplanner.db
+    replicas:
+      - type: s3
+        bucket: mealplanner
+        path: mealplanner
+        endpoint: http://s3:8333
+        region: us-east-1
+        force-path-style: true
+        retention: 168h

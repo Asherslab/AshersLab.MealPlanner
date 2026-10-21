@@ -92,6 +92,6 @@ public static class IngressRequest
     }
 
     // Kestrel reports an IPv4 peer on a dual-stack socket as ::ffff:172.30.32.2.
-    private static IPAddress Normalise(IPAddress address) =>
+    internal static IPAddress Normalise(IPAddress address) =>
         address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
 }

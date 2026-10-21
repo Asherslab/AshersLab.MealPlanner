@@ -1,7 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 // One resource, because production is one process: the gRPC host serves both the API and the WASM app
-// (docs/work/2026-10-deployment.md). No YARP, no separate WASM dev server, no migrations worker, no
+// (docs/archive/2026-10-deployment.md). No YARP, no separate WASM dev server, no migrations worker, no
 // database container - SQLite is a file the host opens itself.
 //
 // The database lives outside the repo, under the user's Application Support folder, so a `git clean` never

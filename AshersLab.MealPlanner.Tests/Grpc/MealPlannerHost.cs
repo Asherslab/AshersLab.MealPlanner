@@ -70,8 +70,29 @@ public sealed class MealPlannerHost : WebApplicationFactory<Program>
         return this;
     }
 
+    private string? _environment;
+
+    /// <summary>A configuration setting, as the image's environment would give it (<c>Auth:Mode</c> for <c>Auth__Mode</c>).</summary>
+    public MealPlannerHost With(string key, string value)
+    {
+        _settings[key] = value;
+        return this;
+    }
+
+    /// <summary>
+    /// As the image runs: Production, where a host with no authentication configured will not start. The test host is
+    /// otherwise Development. No static web assets in Production here - call gRPC services, not the shell.
+    /// </summary>
+    public MealPlannerHost InProduction()
+    {
+        _environment = "Production";
+        return this;
+    }
+
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
+        if (_environment is not null)
+            builder.UseEnvironment(_environment);
         builder.UseSetting("DataDirectory", _dataDirectory);
         // Every test starts a host; at Information each one prints its migrations and lifetime, burying failures.
         builder.UseSetting("Logging:LogLevel:Default", "Warning");

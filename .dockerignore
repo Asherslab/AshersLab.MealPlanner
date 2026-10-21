@@ -27,6 +27,7 @@ private/
 
 # Nothing in the image needs these, and the WASM build context is the whole repo.
 .github/
+Charts/
 .run/
 mealplanner/
 AshersLab.MealPlanner.Tests/

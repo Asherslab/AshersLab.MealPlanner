@@ -24,7 +24,8 @@ public class ServerInfoService(
         // prove this call reached the database, so the answer has to come out of it.
         IEnumerable<string> applied = await db.Database.GetAppliedMigrationsAsync(context.CancellationToken);
 
-        // Set by UseHomeAssistantIngress from the Supervisor's X-Remote-User-* headers, and only from them.
+        // Set by UseHomeAssistantIngress from the Supervisor's X-Remote-User-* headers, or by UseTrustedHeaderAuth from a
+        // sign-in proxy's - each only on a connection from that proxy.
         ClaimsPrincipal? user = context.ServerCallContext?.GetHttpContext().User;
 
         return new ServerInfo

@@ -1,10 +1,15 @@
 ---
 title: Deployment design
 kind: plan
-status: in-progress
+status: folded
 module: infrastructure
 opened: 2026-10-20
-verified: 2026-10-21
+closed: 2026-10-22
+verified: 2026-10-22
+folded_into:
+  - docs/modules/infrastructure/deployment.md
+  - docs/modules/infrastructure/hosting.md
+  - docs/work/2026-10-version-2-integrations.md
 code:
   - Dockerfile
   - mealplanner/config.yaml
@@ -15,7 +20,7 @@ code:
 
 How one image runs as a Home Assistant add-on on a Raspberry Pi and as a plain container on
 Kubernetes, and how CI produces it. Expands the "Hosting", "Images" and "Storage" rows of
-[the v1 scope](2026-10-v1-scope.md).
+[the v1 scope](../work/2026-10-v1-scope.md).
 
 **The image, the add-on and CI landed in slice 3 (2026-10-21)** and are described as built in
 [deployment](../modules/infrastructure/deployment.md) — read that, not the sections below, for how they work.
@@ -23,6 +28,15 @@ Differences from this plan: the add-on folder is `mealplanner/`; the Actual Budg
 yet (an empty `options:` until version 2 needs them); no icon or logo yet. What remains here is the
 standalone (Kubernetes) section, slice 14, and `actual-http-api`, version 2. Fold this doc when slice 14
 lands.
+
+**Folded 2026-10-22, when slice 14 landed.** The standalone section is built as described in
+[deployment](../modules/infrastructure/deployment.md), with these departures from the plan below: a chart
+(`Charts/mealplanner`, not published) rather than plain manifests, since auth, Litestream, the ingress and the
+NetworkPolicy are each optional; **no built-in shared password** - a household app behind a password the app keeps would
+need its own login screen, session and rate limiting, and a sign-in proxy or `Auth:Mode=None` behind a VPN covers the
+same cases; Litestream as a sidecar only (not in-process), with a restore init container. Building it found that any
+startup failure left the container hanging as PID 1, which the add-on (started under an init) had hidden. The
+`actual-http-api` bundling plan moved to the [version 2 integrations](../work/2026-10-version-2-integrations.md) doc.
 
 ## Why one image, and why that departs from the GSBC repos
 

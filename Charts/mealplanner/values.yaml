@@ -1,0 +1,101 @@
+# The meal planner on Kubernetes. Read docs/modules/infrastructure/deployment.md ("Standalone") before installing:
+# it lists what has to exist first (the sign-in proxy, the S3 bucket and its Secret).
+
+image:
+  repository: ghcr.io/asherslab/asherslab-mealplanner
+  # Empty: the chart's appVersion. Pin the semantic version you mean to run - "latest" moves under you.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Who the app believes. It refuses to start with neither set (Features/Auth/AuthOptions.cs).
+auth:
+  # TrustedHeader: a reverse proxy signs people in (oauth2-proxy, Authentik) and names them in userHeader.
+  # None: nobody is checked - only where the network itself is the gate.
+  mode: TrustedHeader
+  # Required for TrustedHeader: the proxy's addresses, comma-separated, IPv4 written out in full. In a cluster the
+  # ingress controller's pod address moves, so this is usually the pod network (k3s: 10.42.0.0/16) - and then any pod
+  # could claim to be the proxy, which is what networkPolicy below is for.
+  trustedProxies: ""
+  # oauth2-proxy's; Authentik's is X-authentik-username. The proxy must REPLACE the browser's own copy of it.
+  userHeader: X-Forwarded-User
+  # Optional: a header with the name to show (oauth2-proxy: X-Forwarded-Preferred-Username; Authentik: X-authentik-name).
+  displayNameHeader: ""
+
+# SQLite is one file with one writer: one replica, ever, and Recreate rather than a rolling update - two pods on the
+# same file would corrupt it. Not configurable on purpose.
+
+persistence:
+  # The PVC for /data. ReadWriteOnce: one node, one pod. A few MB a year of meals; 1Gi is decades.
+  size: 1Gi
+  storageClass: ""
+  # An existing claim to use instead of creating one (keeps the data through an uninstall).
+  existingClaim: ""
+
+# Measured on 2026-10-22 with the image in Docker (docs/modules/infrastructure/deployment.md): 76 MiB after serving the
+# app and a two-browser sync, workstation GC; Litestream beside it 22 MiB. Sized for a Raspberry Pi-class node.
+resources:
+  requests:
+    cpu: 25m
+    memory: 96Mi
+  limits:
+    memory: 256Mi
+
+# Extra environment for the app. Workstation GC: the server GC's heap per core costs memory a Pi does not have, for
+# throughput a household's few requests never need.
+env:
+  DOTNET_gcServer: "0"
+
+service:
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  # The sign-in proxy's annotations go here - e.g. ingress-nginx with oauth2-proxy:
+  #   nginx.ingress.kubernetes.io/auth-url: "https://auth.example.com/oauth2/auth"
+  #   nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.com/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+  #   nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Preferred-Username"
+  # (with auth.userHeader X-Auth-Request-User). gRPC-Web is plain HTTP/1.1 POSTs: nothing gRPC-specific is needed,
+  # but the change stream is a long-lived response, so keep proxy buffering off and the read timeout long.
+  annotations: {}
+  # - secretName: mealplanner-tls
+  #   hosts: [meals.example.com]
+  tls: []
+
+# Only the namespaces named here may open the app's port - the ingress controller's. Without it, trustedProxies set to
+# the pod network trusts every pod in the cluster. Needs a CNI that enforces NetworkPolicy (k3s's default does).
+networkPolicy:
+  enabled: false
+  # Namespaces allowed in, by label: the ingress controller's.
+  fromNamespaceLabels:
+    kubernetes.io/metadata.name: ingress-nginx
+
+# Optional: Litestream replicating the SQLite file to S3-compatible storage, continuously, as a sidecar - and, on a pod
+# whose PVC is empty, restoring it before the app starts. SQLite cannot live ON S3; this is how S3 gets involved.
+litestream:
+  enabled: false
+  image: litestream/litestream:0.3.13
+  # Required when enabled.
+  bucket: ""
+  # Where in the bucket.
+  path: mealplanner
+  region: ""
+  # For anything not AWS (MinIO, Backblaze B2, Cloudflare R2): its URL, and usually forcePathStyle.
+  endpoint: ""
+  forcePathStyle: false
+  # Required when enabled: a Secret with LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY. Never in values.
+  existingSecret: ""
+  # How old the oldest restorable point may be.
+  retention: 168h
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

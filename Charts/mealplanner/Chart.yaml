@@ -1,0 +1,10 @@
+apiVersion: v2
+name: mealplanner
+description: >-
+  The meal planner standalone - the same image as the Home Assistant add-on, on Kubernetes: one replica, SQLite on a
+  PVC, signed in by a reverse proxy, optionally replicated to S3 by Litestream. docs/modules/infrastructure/deployment.md
+type: application
+# The chart's own version. Bump it when the chart changes; the image is appVersion (or image.tag).
+version: 0.1.0
+# The image tag installed by default. Set image.tag to the version to run - CI's tags are the semantic versions.
+appVersion: "latest"

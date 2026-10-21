@@ -1,0 +1,19 @@
+{{- if not .Values.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "mealplanner.claim" . }}
+  labels:
+    {{- include "mealplanner.labels" . | nindent 4 }}
+  annotations:
+    # The household's data: an uninstall leaves it. Delete the claim by hand to really start again.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}

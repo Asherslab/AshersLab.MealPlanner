@@ -3,7 +3,7 @@
     <!--
         The one process in production. It serves the gRPC-Web API AND the Blazor WASM app from the same
         origin, which is why it references the WASM project: there is no YARP, no nginx image and no
-        migrations Job (docs/work/2026-10-deployment.md). The WASM files reach the browser as this
+        migrations Job (docs/archive/2026-10-deployment.md). The WASM files reach the browser as this
         project's static web assets.
     -->
     <PropertyGroup>
