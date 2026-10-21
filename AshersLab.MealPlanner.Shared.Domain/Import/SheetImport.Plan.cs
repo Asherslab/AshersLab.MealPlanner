@@ -48,9 +48,24 @@ public sealed partial class SheetImport
         return pool;
     }
 
-    /// <summary>Meals deleted here, and not also live under the same key: a plan name for one is left out, not remade.</summary>
-    private HashSet<string> GoneMeals(Dictionary<string, string> pool) =>
-        [.. _known.Meals.Where(m => m.Deleted).Select(m => ImportNames.Key(m.Name)).Where(k => !pool.ContainsKey(k))];
+    /// <summary>
+    /// Meals deleted here, and not also live under the same key, by key: a plan name for one is left out, not remade - and
+    /// one only like it ("Nodles") is asked about with the deleted meal offered and chosen.
+    /// </summary>
+    private Dictionary<string, string> GoneMeals(Dictionary<string, string> pool)
+    {
+        Dictionary<string, string> gone = new(StringComparer.Ordinal);
+        foreach (KnownNamed meal in _known.Meals.Where(m => m.Deleted).OrderBy(m => m.Id))
+        {
+            string key = ImportNames.Key(meal.Name);
+            if (key.Length > 0 && !pool.ContainsKey(key))
+                gone.TryAdd(key, meal.Name);
+        }
+        return gone;
+    }
+
+    /// <summary>How a deleted meal reads among a plan question's options: choosing it leaves the name out.</summary>
+    public static string GoneOption(string name) => $"{name} - deleted here, leave it out";
 
     /// <summary>
     /// The names one choice of a cell plans, as few as match: the whole choice if it is a meal ("Fish, chips and
@@ -71,10 +86,10 @@ public sealed partial class SheetImport
         return names;
     }
 
-    private static Func<string, bool> KnownTo(Dictionary<string, string> pool, HashSet<string> gone) => name =>
+    private static Func<string, bool> KnownTo(Dictionary<string, string> pool, Dictionary<string, string> gone) => name =>
     {
         string key = ImportNames.Key(name);
-        return pool.ContainsKey(key) || gone.Contains(key) || SpecialMeals.Any(s => s.Key == key);
+        return pool.ContainsKey(key) || gone.ContainsKey(key) || SpecialMeals.Any(s => s.Key == key);
     };
 
     private IEnumerable<PlanCell> PlanCells() =>
@@ -96,7 +111,10 @@ public sealed partial class SheetImport
         if (!PlanWillImport)
             return [];
         Dictionary<string, string> pool  = MealPool();
-        Func<string, bool>         known = KnownTo(pool, GoneMeals(pool));
+        Dictionary<string, string> gone  = GoneMeals(pool);
+        Func<string, bool>         known = KnownTo(pool, gone);
+        // A deleted meal is an option too, so a typo of one is not quietly made into a new meal.
+        List<(string Key, string Name)> options = [.. pool.Select(p => (p.Key, p.Value)), .. gone.Select(g => (g.Key, GoneOption(g.Value)))];
 
         Dictionary<string, (string Name, List<SheetPlace> Places)> unknown = new(StringComparer.Ordinal);
         foreach (PlanCell cell in PlanCells())
@@ -117,7 +135,7 @@ public sealed partial class SheetImport
         foreach ((string key, (string name, List<SheetPlace> places)) in unknown)
         {
             List<NameCandidate<(string Key, string Name)>> candidates =
-                ImportNames.Candidates(name, pool.Select(p => (Key: p.Key, Name: p.Value)), p => p.Name);
+                ImportNames.Candidates(name, options, p => gone.GetValueOrDefault(p.Key) ?? p.Name);
             if (candidates.Count == 0)
                 continue;
             questions.Add(new PlanMealQuestion(key, ImportNames.Tidy(name), places, [.. candidates.Select(c => c.Item)],
@@ -146,7 +164,7 @@ public sealed partial class SheetImport
         }
 
         Dictionary<string, string> pool  = MealPool();
-        HashSet<string>            gone  = GoneMeals(pool);
+        Dictionary<string, string> gone  = GoneMeals(pool);
         Func<string, bool>         known = KnownTo(pool, gone);
         Dictionary<string, string?> suggested = PlanMealQuestions().ToDictionary(q => q.Key, q => q.Suggested, StringComparer.Ordinal);
 
@@ -167,14 +185,15 @@ public sealed partial class SheetImport
                 return null;
             if (meals.TryGetValue(key, out Guid id))
                 return id;
-            if (gone.Contains(key))
+            string? answer = choices.PlanMeals.TryGetValue(key, out string? chosen) ? chosen : suggested.GetValueOrDefault(key);
+            if (gone.ContainsKey(key) || (answer is not null && gone.ContainsKey(answer)))
             {
                 if (saidGone.Add(key))
-                    leftOut.Add($"{ImportNames.Tidy(name)} ({place}): that meal was deleted here, so it is left out of the plan.");
+                    leftOut.Add(gone.TryGetValue(key, out _)
+                        ? $"{ImportNames.Tidy(name)} ({place}): that meal was deleted here, so it is left out of the plan."
+                        : $"{ImportNames.Tidy(name)} ({place}): read as {gone[answer!]}, which was deleted here, so it is left out of the plan.");
                 return null;
             }
-
-            string? answer = choices.PlanMeals.TryGetValue(key, out string? chosen) ? chosen : suggested.GetValueOrDefault(key);
             if (answer is not null && meals.TryGetValue(answer, out Guid same))
                 return meals[key] = same;
 
@@ -208,11 +227,13 @@ public sealed partial class SheetImport
             if (slotIds.TryGetValue(at, out Guid? id))
                 return id;
 
-            List<KnownOrdered> named = [.. slots.Where(s => Names.Same(s.Name, name))];
-            int deleted = _known.Slots.Count(s => s.Deleted && Names.Same(s.Name, name));
-            if (nth < named.Count)
+            // Live and deleted alike, in the day's order: delete the morning Snack and the sheet's first Snack row is the
+            // deleted one, not the afternoon's.
+            List<KnownOrdered> named = [.. _known.Slots.Where(s => Names.Same(s.Name, name))
+                .OrderBy(s => s.Position).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ThenBy(s => s.Id)];
+            if (nth < named.Count && !named[nth].Deleted)
                 id = named[nth].Id;
-            else if (nth < named.Count + deleted)
+            else if (nth < named.Count)
             {
                 leftOut.Add($"\"{label}\": that slot was deleted here, so its row is left out of the plan.");
                 id = null;

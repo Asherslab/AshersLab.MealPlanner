@@ -30,9 +30,11 @@ public sealed record PlannedEntry(CalendarEntry Row, CalendarEntryNow Now, Templ
 /// <summary>
 /// The calendar as the pages read it, from either database: the entries on some days, and every skipped entry waiting to be
 /// replanned. <b>An untouched entry a plan made is shown only while the plan still puts it there</b> - its template entry
-/// live, the template's start and week count mapping its date to that entry's week and day. So removing an entry from the
-/// plan, or moving the plan's start, takes untouched entries off the calendar without an op of its own, on every device at
-/// once; anything the planner changed (a meal, people, a skip, a move) stays. Entries added by hand are always shown.
+/// live, and the plan's rotation <i>on that date</i> (<see cref="PlanTemplate.RotationOn"/>) mapping it to that entry's week
+/// and day. So removing an entry from the plan takes its untouched entries off the calendar, and changing the plan's start
+/// or week count from a date on moves them from that date on - without an op of their own, on every device at once. Days
+/// before the change keep the rotation they had: they are what was eaten. Anything the planner changed (a meal, people, a
+/// skip, a move) stays. Entries added by hand are always shown.
 /// </summary>
 public sealed class CalendarBook
 {
@@ -79,8 +81,8 @@ public sealed class CalendarBook
         IReadOnlyList<Guid> choices = source is null ? [] : [.. plans.ChoicesOf(source.Id).Select(c => c.MealId)];
 
         if (row.TemplateEntryId is not null && !row.Touched
-            && !(source is not null && template?.StartsOn is { } starts
-                 && Rotation.Puts(starts, template.WeekCount, new RotationEntry(source.Id, source.Week, source.Day, source.SlotId), row.Date)))
+            && !(source is not null && template?.RotationOn(row.Date) is ({ } starts, int weeks)
+                 && Rotation.Puts(starts, weeks, new RotationEntry(source.Id, source.Week, source.Day, source.SlotId), row.Date)))
             return null;
 
         CalendarEntryNow now = new(row.TemplateEntryId is not null, choices.Count > 0 ? choices[0] : null, source?.PeopleIds(),
@@ -89,28 +91,39 @@ public sealed class CalendarBook
     }
 
     /// <summary>
-    /// What applying <paramref name="template"/> from <paramref name="startsOn"/> over the days writes: a create for every
-    /// entry it puts there that the calendar has never held. Tombstones count as held - an entry removed stays removed.
+    /// What applying <paramref name="template"/> - as its rotation will be, each day by the rotation in effect on it - over
+    /// the days writes: a create for every entry it puts there that the calendar has never held. Tombstones count as held -
+    /// an entry removed stays removed - and are looked up by id, so a tombstone that never had a date (a delete of an entry
+    /// this browser never saw) counts too.
     /// </summary>
-    public static async Task<ApplyResult> ApplyAsync(DbContext db, PlanBook plans, PlanTemplate template, DateOnly startsOn,
+    public static async Task<ApplyResult> ApplyAsync(DbContext db, PlanBook plans, PlanTemplate template,
                                                      DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<GeneratedEntry> generated = Rotation.Generate(startsOn, template.WeekCount,
-            plans.EntriesOf(template.Id).Select(e => new RotationEntry(e.Id, e.Week, e.Day, e.SlotId)), from, to);
-        HashSet<Guid> ids = [.. generated.Select(g => g.Id)];
+        if (to.DayNumber - from.DayNumber + 1 > Rotation.MaxDays)
+            throw new ArgumentOutOfRangeException(nameof(to), to, $"Apply at most {Rotation.MaxDays} days at once.");
+        List<RotationEntry> entries = [.. plans.EntriesOf(template.Id).Select(e => new RotationEntry(e.Id, e.Week, e.Day, e.SlotId))];
+        List<GeneratedEntry> generated = [];
+        for (DateOnly day = from; day <= to; day = day.AddDays(1))
+            if (template.RotationOn(day) is ({ } starts, int weeks))
+                generated.AddRange(Rotation.Generate(starts, weeks, entries, day, day));
+        List<Guid> ids = [.. generated.Select(g => g.Id)];
         HashSet<Guid> held = [.. await db.Set<CalendarEntry>().AsNoTracking()
-            .Where(e => e.TemplateEntryId != null && e.Date >= from && e.Date <= to)
+            .Where(e => ids.Contains(e.Id))
             .Select(e => e.Id).ToListAsync(cancellationToken)];
-        held.IntersectWith(ids);
         return Rotation.Apply(generated, held);
     }
 
     /// <summary>
     /// The live entries from <paramref name="today"/> on that name something themselves - a meal, a slot moved to, people -
-    /// for "is it still used?" before a delete. What a plan puts there untouched is the plan's (<see cref="PlanBook"/>).
+    /// for "is it still used?" before a delete. What a plan puts there untouched is the plan's (<see cref="PlanBook"/>), and an
+    /// entry the calendar no longer shows holds nothing back.
     /// </summary>
-    public static async Task<List<CalendarEntry>> ComingAsync(DbContext db, DateOnly today, CancellationToken cancellationToken = default) =>
-        await db.Set<CalendarEntry>().AsNoTracking()
+    public static async Task<List<CalendarEntry>> ComingAsync(DbContext db, DateOnly today, CancellationToken cancellationToken = default)
+    {
+        PlanBook plans = await PlanBook.LoadAsync(db, cancellationToken);
+        List<CalendarEntry> rows = await db.Set<CalendarEntry>().AsNoTracking()
             .Where(e => !e.Deleted && e.Status == CalendarStatus.Planned && (e.Date >= today || e.MovedDate >= today))
             .ToListAsync(cancellationToken);
+        return [.. rows.Where(r => Resolve(plans, r) is not null)];
+    }
 }

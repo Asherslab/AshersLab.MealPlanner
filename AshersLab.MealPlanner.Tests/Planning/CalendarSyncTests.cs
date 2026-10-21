@@ -245,9 +245,11 @@ public sealed class CalendarSyncTests : IAsyncLifetime
         foreach (TestBrowser browser in new[] { a, b })
         {
             List<(DateOnly, Guid, Guid?, bool)> shown = await ShownAsync(browser);
-            Assert.Contains((Mon.AddDays(1), Lunch, p.Soup, true), shown);
+            // Still to replan, with no meal: a skip writes only its status, so it follows its plan entry, now gone.
+            Assert.Contains((Mon.AddDays(1), Lunch, (Guid?)null, true), shown);
             Assert.DoesNotContain(shown, e => e.Item1 == Mon.AddDays(7));
-            Assert.DoesNotContain(shown, e => e.Item1 == Mon.AddDays(8));
+            // The plan entries still there keep their untouched entries.
+            Assert.Contains((Mon.AddDays(9), Dinner, p.Noodles, false), shown);
         }
     }
 
@@ -273,6 +275,79 @@ public sealed class CalendarSyncTests : IAsyncLifetime
         Assert.Equal([p.Noodles], shown.Where(e => e.Item1 == Mon.AddDays(7) && e.Item2 == Dinner).Select(e => e.Item3));
         Assert.Equal([p.Soup], shown.Where(e => e.Item1 == Mon.AddDays(8)).Select(e => e.Item3));
         Assert.DoesNotContain(shown, e => e.Item1 == Mon.AddDays(1));
+
+        // Nothing hidden holds anything back: the coming entries are exactly the ones shown.
+        await using LocalDbContext db = a.CreateDbContext();
+        List<CalendarEntry> coming = await CalendarBook.ComingAsync(db, Mon, Ct);
+        Assert.Equal(shown.Count, coming.Count);
+        Assert.DoesNotContain(coming, e => e.Date == Mon.AddDays(1));
+    }
+
+    [Fact]
+    public async Task Moving_the_start_from_a_week_on_keeps_every_week_before_it_as_it_was()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        var p = await PlanAsync(a);
+        await ApplyAsync(a, p.Template, Mon, Mon, End);
+        List<(DateOnly, Guid, Guid?, bool)> before = await ShownAsync(a);
+
+        // The second week should have been week 1. Fill it again from the new start.
+        await ApplyAsync(a, p.Template, Rotation.StartFor(Mon.AddDays(7), 1, 2), Mon.AddDays(7), End);
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { a, b })
+        {
+            List<(DateOnly, Guid, Guid?, bool)> shown = await ShownAsync(browser);
+            // The first week as eaten, though the new start would make it week 2: Monday's noodles and Tuesday's soup.
+            Assert.Equal(before.Where(e => e.Item1 < Mon.AddDays(7)), shown.Where(e => e.Item1 < Mon.AddDays(7)));
+            // From the change on, the new rotation alone: week 1's noodles and soup, and week 2's pizza and Wednesday gone.
+            Assert.Equal(
+                [(Mon.AddDays(7), Dinner, p.Noodles, false), (Mon.AddDays(8), Lunch, p.Soup, false)],
+                shown.Where(e => e.Item1 >= Mon.AddDays(7)));
+        }
+
+        // Filling the first week again changes nothing: it is still the rotation it had.
+        Assert.Empty((await ApplyAsync(a, p.Template, Mon, Mon, Mon.AddDays(6))).Edits);
+    }
+
+    [Fact]
+    public async Task An_entry_removed_before_this_browser_ever_saw_it_is_not_created_again()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        var p = await PlanAsync(a);
+        // A delete of a calendar entry this browser never held: a tombstone with no date, as a snapshot's can be.
+        Guid monday = Rotation.EntryId(p.MonDinner, Mon);
+        await a.WriteAsync(SyncedEntities.CalendarEntry, monday, OpKind.Delete, []);
+
+        CalendarApplyPlan applied = await ApplyAsync(a, p.Template, Mon, Mon, End);
+        Assert.DoesNotContain(applied.Result.Create, g => g.Id == monday);
+        Assert.Equal(1, applied.Result.AlreadyThere);
+    }
+
+    [Fact]
+    public async Task A_skip_from_a_stale_device_keeps_the_meal_another_device_chose()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        var p = await PlanAsync(a);
+        await ApplyAsync(a, p.Template, Mon, Mon, End);
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        // A chooses soup for Monday; B, offline and not having seen it, skips Monday - later.
+        PlannedEntry onA = (await CalendarAsync(a)).On(Mon, Dinner).Single();
+        await SaveAsync(a, onA, As(onA) with { Meal = p.Soup });
+        PlannedEntry onB = (await CalendarAsync(b)).On(Mon, Dinner).Single();
+        b.Now = a.Now.AddMinutes(1);
+        await SaveAsync(b, onB, As(onB) with { Skipped = true });
+        await a.SyncAsync();
+        await b.SyncAsync();
+        await a.SyncAsync();
+
+        foreach (TestBrowser browser in new[] { a, b })
+            Assert.Equal([(Mon, Dinner, (Guid?)p.Soup, true)], (await ShownAsync(browser)).Where(e => e.Item1 == Mon));
     }
 
     [Fact]

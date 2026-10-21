@@ -109,6 +109,35 @@ public sealed class ImportSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_meal_deleted_before_the_plans_first_import_is_not_made_again_by_it_nor_is_a_typo_of_one()
+    {
+        // Before any import: two meals made and deleted - one by the plan's exact name, one spelt one letter off.
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();
+        Guid porridge = Guid.CreateVersion7(), eatingOut = Guid.CreateVersion7();
+        foreach ((Guid id, string name) in new[] { (porridge, "Porridge"), (eatingOut, "Eatting out") })
+        {
+            await a.WriteAsync(SyncedEntities.Meal, id, OpKind.Create,
+                new Shared.Domain.Meals.MealDraft(name, null, Shared.Domain.Meals.MealKind.Simple, 1, null, null).FieldsChangedFrom(null));
+            a.Now = a.Now.AddSeconds(1);
+            await a.WriteAsync(SyncedEntities.Meal, id, OpKind.Delete, []);
+        }
+        await a.SyncAsync();
+
+        // A fresh browser imports the plan for the first time, with the review's defaults.
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        await b.SyncAsync();
+        ImportPlan plan = await ImportAsync(b, new ImportChoices { HouseholdStore = SheetImportTests.Costco });
+
+        Assert.True(plan.PlanCounts.Entries > 0);
+        Assert.Contains("Porridge (Plan C3): that meal was deleted here, so it is left out of the plan.", plan.LeftOut);
+        Assert.Contains("Eating out (Plan B5): read as Eatting out, which was deleted here, so it is left out of the plan.", plan.LeftOut);
+        await b.SyncAsync();
+        await using LocalDbContext db = b.CreateDbContext();
+        Assert.Empty(await db.Meals.Where(m => !m.Deleted && (m.Name == "Porridge" || m.Name == "Eating out")).ToListAsync(Ct));
+    }
+
+    [Fact]
     public async Task Units_arrive_marked_as_guesses_and_a_meals_ingredients_keep_the_sheets_order()
     {
         await using TestBrowser a = await TestBrowser.OpenAsync(_server);

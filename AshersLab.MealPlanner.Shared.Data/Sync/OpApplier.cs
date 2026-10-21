@@ -74,15 +74,14 @@ public static class OpApplier
         SyncedEntity type = SyncedEntities.Find(row.Entity)
                          ?? throw new InvalidOperationException($"The snapshot has an unknown entity '{row.Entity}'.");
 
-        if (row.Deleted)
-        {
-            // Delete wins whatever its clock, so any reading will do.
-            await ApplyAsync(db, type, row.EntityId, OpKind.Delete, default, [], cancellationToken);
-            return;
-        }
-
+        // A tombstone's fields first, then the delete: what was deleted is still known by name ("that meal was deleted
+        // here") on a browser that only ever saw the snapshot. Once deleted here already, the updates change nothing.
         foreach ((OpField field, Hlc clock) in row.Fields)
             await ApplyAsync(db, type, row.EntityId, OpKind.Update, clock, [field], cancellationToken);
+
+        // Delete wins whatever its clock, so any reading will do.
+        if (row.Deleted)
+            await ApplyAsync(db, type, row.EntityId, OpKind.Delete, default, [], cancellationToken);
     }
 
     /// <summary>Every synced row with its field clocks, tombstones included, in one read.</summary>
@@ -99,12 +98,11 @@ public static class OpApplier
                 Dictionary<string, FieldClock> held = clocks[(type.Entity, row.Id)].ToDictionary(c => c.Field, StringComparer.Ordinal);
 
                 // Only fields an op set: a tombstone made by a delete of an unseen id has default values and no
-                // clocks, and those defaults must not travel as if someone had chosen them.
-                List<(OpField, Hlc)> fields = row.Deleted
-                    ? []
-                    : [.. type.ReadFields(row)
-                        .Where(f => held.ContainsKey(f.Name))
-                        .Select(f => (f, Hlc.Parse(held[f.Name].Hlc)))];
+                // clocks, and those defaults must not travel as if someone had chosen them. A tombstone of a row that
+                // had fields keeps them, so a browser loading by snapshot knows what was deleted - by name, by date.
+                List<(OpField, Hlc)> fields = [.. type.ReadFields(row)
+                    .Where(f => held.ContainsKey(f.Name))
+                    .Select(f => (f, Hlc.Parse(held[f.Name].Hlc)))];
 
                 rows.Add(new SnapshotRow(type.Entity, row.Id, row.Deleted, fields));
             }

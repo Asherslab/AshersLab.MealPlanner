@@ -156,7 +156,11 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   startup seeding both go through it.
 - **Pull** returns ops after the browser's seq, ascending, at most 500 (200 by default), with `HasMore`, each with
   its chain. It returns a **snapshot** instead - every synced row with each field's clock, as of the newest seq and
-  its chain, read in one transaction - when the cursor means nothing here, and says why (`SnapshotReason`):
+  its chain, read in one transaction - when the cursor means nothing here, and says why (`SnapshotReason`). **A
+  tombstone travels with its fields** (`OpApplier.SnapshotAsync`), applied before its delete: a phone that only ever
+  saw the snapshot still knows a deleted meal by name, so the import does not make it again. Which values a tombstone
+  holds can differ between copies - an update arriving after the delete is ignored - so read them as "what was
+  deleted", never as data:
 
   | Reason | When | What the browser does |
   |---|---|---|

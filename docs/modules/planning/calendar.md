@@ -6,6 +6,8 @@ module: planning
 verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.Shared.Domain/Planning/Rotation.cs
+  - AshersLab.MealPlanner.Shared.Domain/Planning/RotationPhases.cs
+  - AshersLab.MealPlanner.Tests/Domain/RotationPhasesTests.cs
   - AshersLab.MealPlanner.Shared.Domain/Planning/CalendarEntryRules.cs
   - AshersLab.MealPlanner.Shared.Domain/Planning/PlanTemplateRules.cs
   - AshersLab.MealPlanner.Shared.Data/Planning/CalendarEntry.cs
@@ -46,15 +48,23 @@ plans themselves are [plan templates](plan-templates.md); every edit is an op ([
   (the browser's SQLite reader cannot read `DateOnly`; see the price's `ObservedOn`), which is also why range queries
   compare text.
 - **An untouched entry from a plan is shown only while the plan still puts it there** (`CalendarBook.Resolve`): its
-  template entry live, the template's start and week count mapping its date to that entry's week and day. Removing an
-  entry from the plan, shortening the plan or moving its start takes untouched entries off the calendar on every device,
-  with no op of its own and nothing to conflict. Anything the planner changed stays. **Everything that reads the calendar
-  must go through `CalendarBook`**, or it will count rows the planner cannot see.
-- **A changed entry writes out its meal and people.** As planned, both are null and follow the plan (make soup the usual
-  choice in the plan and next week's untouched entries say soup). The moment anything else changes - a skip, a move,
-  another meal, other people - both are written in full (`CalendarEntryDraft.ChangesFrom`), so a skipped entry waiting to
-  be replanned still knows it was the toddler's noodles after that plan entry is deleted. Saving it as planned again sends
-  the nulls back.
+  template entry live, and the plan's rotation **on that date** mapping it to that entry's week and day. Removing an
+  entry from the plan takes its untouched entries off the calendar on every device, with no op of its own and nothing to
+  conflict. Anything the planner changed stays. **Everything that reads the calendar must go through `CalendarBook`**, or
+  it will count rows the planner cannot see - deleting a slot was once refused over an entry nobody could see.
+- **Changing a plan's start or week count changes the calendar from a date on, never before it**
+  (`Shared.Domain/Planning/RotationPhases.cs`). The plan's `StartsOn`/`WeekCount` are its rotation now; its `Earlier`
+  field lists the rotations it had, each until the day it changed, written in the same op as the change. So "the week of
+  2 Nov is week 1" moves 2 November on, and last week - what was eaten, which batches and serves count - stays as it
+  was. Fill changes the rotation from the week filled; the plan editor's week count from today. Filling an older week as
+  the week it was changes nothing; filling it as another week replaces every later change. Two devices changing one plan
+  at once: the later op's start and history win whole.
+- **Saving sends only the fields the planner changed** (`CalendarEntryDraft.ChangesFrom`). A skip sends the status, a
+  move the two move fields; neither ever sends the meal or people. As planned, the meal and people are null and follow the
+  plan (make soup the usual choice and the untouched entries say soup); choosing the plan's own again sends null back.
+  Writing them out with a skip would let an offline phone's skip, clocked later, undo the soup another phone chose
+  (`CalendarSyncTests.A_skip_from_a_stale_device_keeps_the_meal_another_device_chose`). The price: a skipped or moved
+  entry follows its plan entry, so one whose plan entry is removed shows "meal removed" until a meal is chosen.
 - **A past entry still `Planned` counts as eaten** (`PlannedEntry.EatenBy`). Nobody ticks meals off; skipping is the one
   thing recorded. Batches, serves and the pantry (slices 10 and 11) read it that way.
 
@@ -71,8 +81,9 @@ plans themselves are [plan templates](plan-templates.md); every edit is an op ([
 | `Status` | `Planned` or `Skipped`, by name; a new entry is `Planned` |
 | `MovedDate`, `MovedSlotId` | where it is now, when moved; null where it was planned. Always written together |
 
-`PlanTemplate.StartsOn` is the Monday the plan's week 1 began (null until it is first applied). It is one decision for the
-household, so the later edit wins; the calendar shows "Spreadsheet plan: week 3" from it. Nothing is a foreign key: an
+`PlanTemplate.StartsOn` is the Monday the plan's week 1 began (null until it is first applied), and `PlanTemplate.Earlier`
+the rotations before its last change ("2026-11-02|2026-10-05|4;..." - until, start, weeks). It is one decision for the
+household, so the later edit wins; the calendar shows "Spreadsheet plan: week 3" from the rotation of the week shown. Nothing is a foreign key: an
 entry whose meal was deleted shows "meal removed"; one in a deleted slot is not shown on the grid.
 
 `CalendarBook` is how pages read it: the entries on some days (moved ones on the day they moved to), each resolved into
@@ -87,9 +98,12 @@ count nowhere; at most 84 days at once), and `Apply` keeps only the ids the cale
 (`LocalData`) builds the edits: the template's `StartsOn` when it changed, and the creates - written as one
 `WriteAllAsync`. The page and the tests both call it.
 
-Moving a plan's start and applying again is safe: the old untouched entries stop being shown (their dates no longer map
-to their week), the new ones are created, and nothing a planner changed is touched. Two plans applied to the same week
-are both shown - a separate toddler plan beside the household's is a real use.
+Moving a plan's start and applying again is safe: from the week filled on, the old untouched entries stop being shown
+(their dates no longer map to their week), the new ones are created, and nothing a planner changed is touched; the weeks
+before keep their rotation (above). `CalendarBook.ApplyAsync` generates each day by the rotation in effect on it, and
+finds what the calendar already holds by id, so a tombstone that never had a date (a delete of an entry the browser never
+saw) still counts. Two plans applied to the same week are both shown - a separate toddler plan beside the household's is
+a real use.
 
 ## What a skip leaves for slice 10
 
@@ -142,10 +156,15 @@ server holds each of that week's entries once. The six rows (one a tombstone) ar
 profiles', outboxes empty. Screenshots of the desktop week, the phone day and the phone entry sheet.
 
 The in-process tests: `Tests/Domain/RotationTests.cs` (Mondays across years and a leap day, week numbers wrapping forwards
-and backwards, a rotation through two daylight-saving changes, the start from "this week is week n", generation from
-mid-week and before the start, the day limit, ids, applying again) and `Tests/Domain/CalendarRulesTests.cs` (every field's
-one spelling, the create's fields, who eats it, and every case of what saving the sheet sends) and
-`Tests/Planning/CalendarSyncTests.cs` (through the real host: two browsers applying offline make each entry once; a stale
-browser's apply undoes no skip, move, meal or removal; untouched entries follow the plan's choices and drop out when the
-plan loses an entry; moving the start doubles no day; a hand-added entry skipped and replanned). Breaking the "untouched
-entries follow the plan" rule in `CalendarBook.Resolve` fails two of the sync tests.
+and backwards, a rotation across two daylight-saving dates - which only documents that `DateOnly` has no time to shift;
+the one real conversion, "today" from `DateTime.Now` in the pages, is untested - the start from "this week is week n",
+generation from mid-week and before the start, the day limit, ids, applying again), `Tests/Domain/RotationPhasesTests.cs`
+(the rotation of each day, a change cutting off later ones, changing back folding away, the field's spelling, what a plan
+change sends) and `Tests/Domain/CalendarRulesTests.cs` (every field's one spelling, the create's fields, who eats it, and
+every case of what saving the sheet sends - only what changed) and `Tests/Planning/CalendarSyncTests.cs` (through the real
+host: two browsers applying offline make each entry once; a stale browser's apply undoes no skip, move, meal or removal;
+a stale browser's skip keeps the meal another chose; untouched entries follow the plan's choices and drop out when the plan
+loses an entry; moving the start doubles no day, hides nothing from "is it used", and keeps every week before it; a
+dateless tombstone is not created again; a hand-added entry skipped and replanned). Each of the 2026-10-22 review fixes was
+checked by breaking it - a rotation read from the current start only, `ComingAsync` not resolving, applying by date range,
+a skip writing the meal - and each break failed its test.

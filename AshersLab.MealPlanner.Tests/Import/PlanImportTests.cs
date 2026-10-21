@@ -197,6 +197,25 @@ public class PlanImportTests
     }
 
     [Fact]
+    public void Deleting_the_first_of_two_same_named_slots_leaves_out_the_first_row_not_the_second()
+    {
+        ImportKnown known = Known(slots:
+        [
+            .. SlotSeeds.Select((n, i) => new KnownOrdered(SlotSeed(i), n, i + 1, Deleted: i == 1)),
+        ]);
+        ImportPlan plan = Plan(known);
+        List<Planned> entries = Entries(plan, known);
+
+        Assert.DoesNotContain(plan.Edits, e => e.Entity == SlotRules.Entity);
+        // The morning row is the deleted slot's: none of it lands anywhere.
+        Assert.DoesNotContain(entries, e => e.Meals.Contains("Pear") || e.Meals.Contains("Rice cakes"));
+        Assert.DoesNotContain(entries, e => e.Slot == SlotSeed(1));
+        // The afternoon row stays in the afternoon Snack.
+        Assert.Equal([["Popcorn"]], At(entries, 1, "Monday", SlotSeed(3)));
+        Assert.Contains("\"Snack\": that slot was deleted here, so its row is left out of the plan.", plan.LeftOut);
+    }
+
+    [Fact]
     public void A_meal_deleted_here_is_left_out_of_the_plan_and_not_made_again()
     {
         ImportKnown known = Known(meals: [new KnownNamed(Guid.CreateVersion7(), "Noodles", true)]);
@@ -205,6 +224,26 @@ public class PlanImportTests
         Assert.DoesNotContain(plan.Edits, e => e.Entity == MealRules.Entity && Field(e, MealRules.NameField) == "Noodles");
         Assert.Equal([["Leftovers", "Pizza"]], At(Entries(plan, known), 1, "Monday", SlotSeed(4)));
         Assert.Contains("Noodles (Plan B6): that meal was deleted here, so it is left out of the plan.", plan.LeftOut);
+    }
+
+    [Fact]
+    public void A_typo_of_a_deleted_meal_is_asked_about_with_the_deleted_meal_chosen_and_left_out()
+    {
+        // "noodles" is in Monday's dinner; the planner deleted a meal spelt one letter off.
+        ImportKnown known = Known(meals: [new KnownNamed(Guid.CreateVersion7(), "Nooddles", true)]);
+
+        PlanMealQuestion noodles = Import(known).Review().PlanMeals.Single(q => q.Key == "noodle");
+        Assert.Equal("nooddle", noodles.Suggested);
+        Assert.Contains(("nooddle", SheetImport.GoneOption("Nooddles")), noodles.Options);
+
+        ImportPlan plan = Plan(known);
+        Assert.DoesNotContain(plan.Edits, e => e.Entity == MealRules.Entity && Field(e, MealRules.NameField) is "Noodles" or "Nooddles");
+        Assert.Contains("Noodles (Plan B6): read as Nooddles, which was deleted here, so it is left out of the plan.", plan.LeftOut);
+
+        // Answered "a new single-serve meal", it is made.
+        ImportChoices choices = new();
+        choices.PlanMeals["noodle"] = null;
+        Assert.Contains(Plan(known, choices).Edits, e => e.Entity == MealRules.Entity && Field(e, MealRules.NameField) == "Noodles");
     }
 
     [Fact]

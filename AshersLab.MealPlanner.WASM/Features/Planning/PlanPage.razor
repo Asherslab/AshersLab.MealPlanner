@@ -280,8 +280,11 @@
         List<OpField> fields = [];
         if (result.Name != _template.Name)
             fields.Add(new OpField(PlanTemplateRules.NameField, result.Name));
+        // Once on the calendar, from today on: the days before keep the rotation they were eaten by.
         if (result.Weeks != _template.WeekCount)
-            fields.Add(new OpField(PlanTemplateRules.WeekCountField, OpValues.FormatInt(result.Weeks)));
+            fields.AddRange(_template.StartsOn is { } starts
+                ? PlanTemplateRules.RotationChange(_template.Earlier, starts, _template.WeekCount, DateOnly.FromDateTime(DateTime.Now), starts, result.Weeks)
+                : [new OpField(PlanTemplateRules.WeekCountField, OpValues.FormatInt(result.Weeks))]);
         if (fields.Count > 0)
             await WriteAsync(SyncedEntities.PlanTemplate, Id, OpKind.Update, fields);
     }

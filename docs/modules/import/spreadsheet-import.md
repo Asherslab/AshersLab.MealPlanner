@@ -38,7 +38,9 @@ product and price names).
   run. The one exception is the planner's own answer: a unit still marked as the import's guess, which a price
   contradicts, is changed when the review is answered so (below). **Something deleted here is not brought back** -
   ingredient, meal, product or price: the matching reads tombstones too, and says so ("Chives: deleted here before, so
-  not added again.", "Lamb mince $24.99 (Plan C16): its product was deleted here, so not added again.").
+  not added again.", "Lamb mince $24.99 (Plan C16): its product was deleted here, so not added again."). This works on
+  a phone that loaded everything from the server's snapshot too: a snapshot carries a tombstone's fields, its name
+  included ([offline sync](../sync/offline-sync.md#the-server)).
 - **A sheet price is compared with what the sheet said last time, never with the latest price.** Prices are written as
   `PriceSource.Sheet` ("spreadsheet" in a price's history). A product's sheet prices are written only when the sheet now
   says something it did not say on the last day it gave that product any (`SheetImport.SheetSaidLast`, deleted ones
@@ -134,12 +136,15 @@ this run adds, by `ImportNames.Key` (case, punctuation and plurals ignored): the
 `Leftovers` / `NoCost` of that name when there is none; a name like a meal is asked (below); any other name a new
 single-serve (`Simple`) meal, in no group, made of the ingredient of the same key when there is one ("Apple" of
 "Apples") - **made on first sight and reused after**, however many cells name it. A name whose meal was deleted here is
-left out of the plan, said once, and not made again.
+left out of the plan, said once, and not made again. **A name only like a deleted meal** ("Nodles", with "Noodles"
+deleted) is asked about like any other near match, with "Noodles - deleted here, leave it out" among the answers and
+chosen when it is a likely match; left so, it is left out and said ("read as Noodles, which was deleted here").
 
 **Slots** are the row label's leading word ("Lunch (packed for work)" is Lunch; the rest of the label is listed under
 "Not imported", since who an entry is for is not something the sheet says). The nth row of a word in a week is the nth
-slot of that name - the two snacks. A slot the day lacks is added at the end, once for every week; one deleted here
-leaves its rows out rather than coming back.
+slot of that name **counting deleted ones, in the day's order** - the two snacks: delete the morning Snack and the
+sheet's first Snack row is left out, while the second still goes to the afternoon one. A slot the day lacks is added at
+the end, once for every week; one deleted here leaves its rows out rather than coming back.
 
 ## Stores, when the sheet names none
 

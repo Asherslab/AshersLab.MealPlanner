@@ -187,8 +187,8 @@
 
     /// <summary>"Spreadsheet plan: week 3" for each plan this week's entries came from.</summary>
     private string WeeksOnScreen() =>
-        string.Join(" · ", _calendar.Plans.Templates.Where(t => t.StartsOn is not null && Days.Any(d => _calendar.On(d).Any(e => e.Template?.Id == t.Id)))
-            .Select(t => $"{t.Name}: week {Rotation.WeekOf(t.StartsOn!.Value, t.WeekCount, _monday)}"));
+        string.Join(" · ", _calendar.Plans.Templates.Where(t => t.RotationOn(_monday).StartsOn is not null && Days.Any(d => _calendar.On(d).Any(e => e.Template?.Id == t.Id)))
+            .Select(t => t.RotationOn(_monday) is ({ } starts, int weeks) ? $"{t.Name}: week {Rotation.WeekOf(starts, weeks, _monday)}" : t.Name));
 
     private static string EntryClass(PlannedEntry entry) => entry.Skipped ? "plan-entry cal-skipped" : "plan-entry";
 
@@ -258,8 +258,9 @@
 
     private async Task ApplyPlan()
     {
+        // The week this one was, by the rotation it had then - an earlier one's, for a week before the plan last changed.
         List<ApplyPlanOption> plans = [.. _calendar.Plans.Templates.Select(t => new ApplyPlanOption(t.Id, t.Name, t.WeekCount,
-            t.StartsOn is { } starts ? Rotation.WeekOf(starts, t.WeekCount, _monday) : 1))];
+            t.RotationOn(_monday) is ({ } starts, int weeks) ? Math.Min(Rotation.WeekOf(starts, weeks, _monday), t.WeekCount) : 1))];
         if (await PlanDialogs.ApplyPlanAsync(Dialogs, Viewport, plans, _monday) is not { } answer)
             return;
 

@@ -20,8 +20,8 @@ public enum CalendarStatus
 /// <b>A create carries only what never changes</b> - the template entry, and the date and slot it was planned for. Two
 /// devices applying a plan create the same id (<see cref="Rotation.EntryId"/>) with the same fields, so the later create
 /// changes nothing: if it carried the meal, the status or where it is, a stale device's apply would clock after a skip or
-/// a move made elsewhere and undo it. Everything the planner changes is a field of its own, null meaning "as planned"
-/// (and once anything is changed, the meal and people are written out - <see cref="CalendarEntryDraft.ChangesFrom"/>):
+/// a move made elsewhere and undo it. Everything the planner changes is a field of its own, null meaning "as planned",
+/// and saving sends only the fields changed (<see cref="CalendarEntryDraft.ChangesFrom"/>):
 /// <list type="bullet">
 /// <item><see cref="MealField"/> - null eats the template entry's usual choice, whatever it is now.</item>
 /// <item><see cref="PeopleField"/> - null is the template entry's people (everyone, for an entry added by hand).</item>
@@ -173,15 +173,14 @@ public sealed record CalendarEntryNow(
 public sealed record CalendarEntryDraft(Guid? Meal, IReadOnlyList<Guid>? People, bool Skipped, DateOnly Day, Guid Slot)
 {
     /// <summary>
-    /// What saving this over <paramref name="now"/> sends - only what changed, since an op that changes nothing still wins
-    /// its merge.
+    /// What saving this over <paramref name="now"/> sends - <b>only the fields the planner changed</b>, since an op that
+    /// changes nothing still wins its merge. A skip or a move sends its own fields and never the meal or people: phone A
+    /// choosing soup while an offline phone B skips the same entry must end as skipped soup, not as B's stale noodles. The
+    /// price: a skipped or moved entry still follows its plan entry, so one whose plan entry is removed has no meal ("meal
+    /// removed") until one is chosen.
     /// <para>
-    /// <b>An entry from a plan is either as planned or the planner's own.</b> As planned - the usual meal, the planned
-    /// people, not skipped, where it was planned - its meal and people are null and follow the plan. Anything else and both
-    /// are written out, so a skipped or moved entry still knows what it was when the plan entry it came from is changed or
-    /// removed: a skip waiting to be replanned must not turn into another meal, or nothing. Saving it as planned again sends
-    /// the nulls back. A move sends both its fields, and moving home clears them; replanning a skipped entry is moving it
-    /// and un-skipping it in one op.
+    /// A meal or people chosen back to what the plan says sends null, so the entry follows the plan again. A move sends both
+    /// its fields, and moving home clears them; replanning a skipped entry is moving it and un-skipping it in one op.
     /// </para>
     /// </summary>
     public IReadOnlyList<OpField> ChangesFrom(CalendarEntryNow now)
@@ -190,18 +189,20 @@ public sealed record CalendarEntryDraft(Guid? Meal, IReadOnlyList<Guid>? People,
 
         CalendarStatus status = Skipped ? CalendarStatus.Skipped : CalendarStatus.Planned;
         bool home = Day == now.Date && Slot == now.Slot;
-        bool asPlanned = now.FromPlan && Meal == now.Usual && PlanPeople.Format(People) == PlanPeople.Format(now.PlannedPeople)
-                         && status == CalendarStatus.Planned && home;
 
-        Guid? meal = asPlanned ? null : Meal;
-        if (meal != now.MealField)
-            fields.Add(new OpField(CalendarEntryRules.MealField, OpValues.FormatId(meal)));
+        if (Meal != now.Meal)
+        {
+            Guid? meal = now.FromPlan && Meal == now.Usual ? null : Meal;
+            if (meal != now.MealField)
+                fields.Add(new OpField(CalendarEntryRules.MealField, OpValues.FormatId(meal)));
+        }
 
-        string? people = !now.FromPlan ? CalendarPeople.Field(People, null)
-            : asPlanned ? null
-            : PlanPeople.Format(People) ?? CalendarPeople.Everyone;
-        if (people != now.PeopleField)
-            fields.Add(new OpField(CalendarEntryRules.PeopleField, people));
+        if (PlanPeople.Format(People) != PlanPeople.Format(now.People))
+        {
+            string? people = CalendarPeople.Field(People, now.FromPlan ? now.PlannedPeople : null);
+            if (people != now.PeopleField)
+                fields.Add(new OpField(CalendarEntryRules.PeopleField, people));
+        }
 
         if (status != now.Status)
             fields.Add(new OpField(CalendarEntryRules.StatusField, CalendarEntryRules.FormatStatus(status)));

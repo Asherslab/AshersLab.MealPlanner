@@ -18,6 +18,10 @@ public sealed record CalendarApplyPlan(ApplyResult Result, IReadOnlyList<LocalEd
 public static class CalendarApply
 {
     /// <returns>Null when the template is gone.</returns>
+    /// <remarks>
+    /// A different start changes the plan's rotation from <paramref name="from"/> on, keeping every day before it as it was
+    /// (<see cref="RotationPhases"/>): "the week of 2 Nov is week 1" never moves what was eaten the week before.
+    /// </remarks>
     public static async Task<CalendarApplyPlan?> PlanAsync(LocalDbContext db, Guid templateId, DateOnly startsOn, DateOnly from, DateOnly to,
                                                            CancellationToken cancellationToken = default)
     {
@@ -25,11 +29,19 @@ public static class CalendarApply
         if (plans.Template(templateId) is not { } template)
             return null;
 
-        ApplyResult result = await CalendarBook.ApplyAsync(db, plans, template, startsOn, from, to, cancellationToken);
         List<LocalEdit> edits = [];
-        if (template.StartsOn != startsOn)
-            edits.Add(new LocalEdit(SyncedEntities.PlanTemplate, template.Id, OpKind.Update,
-                [new OpField(PlanTemplateRules.StartsOnField, OpValues.FormatDate(startsOn))]));
+        IReadOnlyList<OpField> rotation = PlanTemplateRules.RotationChange(template.Earlier, template.StartsOn, template.WeekCount,
+            from, startsOn, template.WeekCount);
+        PlanTemplate after = template;
+        if (rotation.Count > 0)
+        {
+            edits.Add(new LocalEdit(SyncedEntities.PlanTemplate, template.Id, OpKind.Update, rotation));
+            after = new PlanTemplate { Id = template.Id, Name = template.Name, WeekCount = template.WeekCount, StartsOn = startsOn, Earlier = template.Earlier };
+            if (rotation.FirstOrDefault(f => f.Name == PlanTemplateRules.EarlierField) is { } earlier)
+                after.Earlier = earlier.Value;
+        }
+
+        ApplyResult result = await CalendarBook.ApplyAsync(db, plans, after, from, to, cancellationToken);
         edits.AddRange(result.Create.Select(g => new LocalEdit(SyncedEntities.CalendarEntry, g.Id, OpKind.Create, CalendarEntryRules.CreateFields(g))));
         return new CalendarApplyPlan(result, edits, Rotation.WeekOf(startsOn, template.WeekCount, from));
     }

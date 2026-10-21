@@ -96,20 +96,17 @@ public class CalendarRulesTests
         Assert.Empty(As(changed).ChangesFrom(changed));
     }
 
-    /// <summary>Planned, after the planner changed something: its meal and people written out.</summary>
-    private static readonly CalendarEntryNow Own = Planned with { MealField = Noodles, PeopleField = PlanPeople.Format([Sam]) };
-
     private static readonly string? SamText = PlanPeople.Format([Sam]);
 
     [Fact]
-    public void Choosing_another_meal_writes_out_the_meal_and_people_and_the_usual_one_again_goes_back_to_as_planned()
+    public void Choosing_another_meal_sends_only_the_meal_and_the_usual_one_again_goes_back_to_as_planned()
     {
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = OpValues.FormatId(Soup), ["People"] = SamText },
+        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = OpValues.FormatId(Soup) },
             Fields((As(Planned) with { Meal = Soup }).ChangesFrom(Planned)));
 
-        CalendarEntryNow soup = Own with { MealField = Soup };
+        CalendarEntryNow soup = Planned with { MealField = Soup };
         Assert.Equal(new Dictionary<string, string?> { ["MealId"] = OpValues.FormatId(Pizza) }, Fields((As(soup) with { Meal = Pizza }).ChangesFrom(soup)));
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = null, ["People"] = null }, Fields((As(soup) with { Meal = Noodles }).ChangesFrom(soup)));
+        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = null }, Fields((As(soup) with { Meal = Noodles }).ChangesFrom(soup)));
     }
 
     [Fact]
@@ -125,59 +122,57 @@ public class CalendarRulesTests
     [Fact]
     public void Who_eats_it_this_time_is_sent_only_when_it_differs_from_the_plan()
     {
-        string? noodles = OpValues.FormatId(Noodles);
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = noodles, ["People"] = "everyone" },
+        Assert.Equal(new Dictionary<string, string?> { ["People"] = "everyone" },
             Fields((As(Planned) with { People = null }).ChangesFrom(Planned)));
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = noodles, ["People"] = PlanPeople.Format([Alex, Sam]) },
+        Assert.Equal(new Dictionary<string, string?> { ["People"] = PlanPeople.Format([Alex, Sam]) },
             Fields((As(Planned) with { People = [Alex, Sam] }).ChangesFrom(Planned)));
-        CalendarEntryNow everyone = Own with { PeopleField = "everyone" };
+        CalendarEntryNow everyone = Planned with { PeopleField = "everyone" };
         Assert.Null(everyone.People);
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = null, ["People"] = null }, Fields((As(everyone) with { People = [Sam] }).ChangesFrom(everyone)));
+        Assert.Equal(new Dictionary<string, string?> { ["People"] = null }, Fields((As(everyone) with { People = [Sam] }).ChangesFrom(everyone)));
     }
 
     [Fact]
-    public void Skipping_keeps_what_was_skipped_and_unskipping_goes_back_to_the_plan()
+    public void Skipping_and_unskipping_send_only_the_status()
     {
-        // Written out, so the skip still names noodles and Sam if the plan entry is changed or removed before it is replanned.
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = OpValues.FormatId(Noodles), ["People"] = SamText, ["Status"] = "Skipped" },
-            Fields((As(Planned) with { Skipped = true }).ChangesFrom(Planned)));
-        CalendarEntryNow skipped = Own with { Status = CalendarStatus.Skipped };
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = null, ["People"] = null, ["Status"] = "Planned" },
-            Fields((As(skipped) with { Skipped = false }).ChangesFrom(skipped)));
+        // Never the meal or people: another device may have chosen them meanwhile, and a stale copy would undo that.
+        Assert.Equal(new Dictionary<string, string?> { ["Status"] = "Skipped" }, Fields((As(Planned) with { Skipped = true }).ChangesFrom(Planned)));
+        CalendarEntryNow skipped = Planned with { MealField = Soup, Status = CalendarStatus.Skipped };
+        Assert.Equal(new Dictionary<string, string?> { ["Status"] = "Planned" }, Fields((As(skipped) with { Skipped = false }).ChangesFrom(skipped)));
     }
 
     [Fact]
     public void A_move_sends_both_its_fields_and_moving_home_clears_them()
     {
-        string? noodles = OpValues.FormatId(Noodles);
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = noodles, ["People"] = SamText, ["MovedDate"] = "2026-10-29", ["MovedSlotId"] = OpValues.FormatId(Dinner) },
+        Assert.Equal(new Dictionary<string, string?> { ["MovedDate"] = "2026-10-29", ["MovedSlotId"] = OpValues.FormatId(Dinner) },
             Fields((As(Planned) with { Day = Thu }).ChangesFrom(Planned)));
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = noodles, ["People"] = SamText, ["MovedDate"] = "2026-10-27", ["MovedSlotId"] = OpValues.FormatId(Lunch) },
+        Assert.Equal(new Dictionary<string, string?> { ["MovedDate"] = "2026-10-27", ["MovedSlotId"] = OpValues.FormatId(Lunch) },
             Fields((As(Planned) with { Slot = Lunch }).ChangesFrom(Planned)));
 
-        CalendarEntryNow moved = Own with { MovedDate = Thu, MovedSlot = Lunch };
+        CalendarEntryNow moved = Planned with { MovedDate = Thu, MovedSlot = Lunch };
         Assert.Equal((Thu, Lunch), (moved.Day, moved.InSlot));
         Assert.Equal(new Dictionary<string, string?> { ["MovedDate"] = OpValues.FormatDate(Thu), ["MovedSlotId"] = OpValues.FormatId(Dinner) },
             Fields((As(moved) with { Slot = Dinner }).ChangesFrom(moved)));
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = null, ["People"] = null, ["MovedDate"] = null, ["MovedSlotId"] = null },
+        Assert.Equal(new Dictionary<string, string?> { ["MovedDate"] = null, ["MovedSlotId"] = null },
             Fields((As(moved) with { Day = Tue, Slot = Dinner }).ChangesFrom(moved)));
     }
 
     [Fact]
     public void Replanning_a_skipped_entry_moves_and_unskips_it_in_one_op()
     {
-        CalendarEntryNow skipped = Own with { Status = CalendarStatus.Skipped };
+        CalendarEntryNow skipped = Planned with { Status = CalendarStatus.Skipped };
         Assert.Equal(new Dictionary<string, string?> { ["Status"] = "Planned", ["MovedDate"] = "2026-10-29", ["MovedSlotId"] = OpValues.FormatId(Lunch) },
             Fields((As(skipped) with { Skipped = false, Day = Thu, Slot = Lunch }).ChangesFrom(skipped)));
     }
 
     [Fact]
-    public void A_skip_still_names_its_meal_after_the_plan_entry_is_gone()
+    public void A_skip_follows_its_plan_entry_and_names_no_meal_once_it_is_gone()
     {
-        // The plan entry removed: no usual meal, nobody planned. The written-out fields still say what it was.
-        CalendarEntryNow gone = Own with { Status = CalendarStatus.Skipped, Usual = null, PlannedPeople = null };
-        Assert.Equal(Noodles, gone.Meal);
-        Assert.Equal([Sam], gone.People!);
+        // The plan entry removed: no usual meal, nobody planned - the price of never writing out what was not changed.
+        CalendarEntryNow gone = Planned with { Status = CalendarStatus.Skipped, Usual = null, PlannedPeople = null };
+        Assert.Null(gone.Meal);
+        Assert.Null(gone.People);
+        // One the planner had given its own meal keeps it.
+        Assert.Equal(Soup, (gone with { MealField = Soup }).Meal);
     }
 
     [Fact]
@@ -185,7 +180,7 @@ public class CalendarRulesTests
     {
         CalendarEntryNow orphan = Planned with { Usual = null };
         Assert.Null(orphan.Meal);
-        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = OpValues.FormatId(Soup), ["People"] = SamText },
+        Assert.Equal(new Dictionary<string, string?> { ["MealId"] = OpValues.FormatId(Soup) },
             Fields((As(orphan) with { Meal = Soup }).ChangesFrom(orphan)));
     }
 }

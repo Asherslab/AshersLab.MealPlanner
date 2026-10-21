@@ -52,7 +52,7 @@ The calendar - a template applied to real dates, overrides, skipping - is [the c
 |---|---|---|
 | `Person` | `Name`, `Colour` | `Colour` is `#rrggbb`, lower case, from `PersonRules.Palette`; a new person gets the first nobody has |
 | `Slot` | `Name`, `Position` | a hand-set position like a meal group (`ListPosition`); seeded |
-| `PlanTemplate` | `Name`, `WeekCount`, `StartsOn` | 1 to 12 weeks; `StartsOn` is the Monday week 1 began on the calendar, set by applying it ([the calendar](calendar.md)) |
+| `PlanTemplate` | `Name`, `WeekCount`, `StartsOn`, `Earlier` | 1 to 12 weeks; `StartsOn` is the Monday week 1 began on the calendar, set by applying it; `Earlier` the rotations before a change of start or week count, which keep the days before it as they were ([the calendar](calendar.md)) |
 | `TemplateEntry` | `TemplateId`, `Week`, `Day`, `SlotId`, `People` | `Day` by name ("Monday"); `People` above |
 | `TemplateChoice` | `EntryId`, `MealId` | one per meal the entry may be |
 
