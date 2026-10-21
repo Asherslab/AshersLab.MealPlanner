@@ -76,6 +76,9 @@ Present tense, kept current, no dates.
 
 - [Version 1 scope](work/2026-10-v1-scope.md) — what the app is, every decision already made, the
   domain model, how costs are computed, and the build order. **Start here.**
+- [Version 1 acceptance](work/2026-10-v1-acceptance.md) — the definition of done driven on a phone-sized screen
+  (2026-10-22): what works, the seven gaps fixed, what is left, and **the owner's remaining checks, in order** (iPhone,
+  the add-on on the Pi and a real backup and restore, wiping the test data, the first real import).
 - [Version 2 integrations](work/2026-10-version-2-integrations.md) — Actual Budget and Woolworths live
   prices. Not to be built yet.
 

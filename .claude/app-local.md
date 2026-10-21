@@ -94,9 +94,18 @@ Opening that random port works for the page but nothing else should be pointed a
 ## Driving the app
 
 Chrome (`mcp__claude-in-chrome__*`) works against `https://localhost:7283` with no sign-in. The home
-page is the scaffold's wiring check: it calls `IServerInfoService.Get` over gRPC-Web and shows the
+page is where the planner lands: `home-today` (today's entries `home-today-entry`, or `home-today-empty`), `home-no-people`
+while nobody is on People, and the buttons `home-calendar`, `home-shopping`, `home-meals`, `home-receipts`. Under "About
+this app" is the wiring check: it calls `IServerInfoService.Get` over gRPC-Web and shows the
 server version, server time and the newest applied migration. The refresh icon (aria-label "Check the
 server again") repeats the call — the server time changing is the evidence that it went to the server.
+
+**Driving it as the phone does**, one step at a time rather than a whole check script: the 2026-10-22 acceptance walk
+(`docs/work/2026-10-v1-acceptance.md`) used a small throwaway HTTP driver over two `launch()`ed profiles - touch events at
+an element's centre (`Input.dispatchTouchEvent` with `Emulation.setTouchEmulationEnabled`), text by `Input.insertText`,
+a screenshot after each step - which finds what a script's `.click()` hides (a drawer left open over the page). Native
+`<select>`s still have to be set by value and `change`; the OS picker cannot be driven. A meal's ingredient sheet offers
+`meal-ingredient-new` and the calendar entry sheet `cal-new-meal` for a name nothing has yet.
 
 In the network panel the call is `POST https://localhost:7283/gRPC/AshersLab.MealPlanner.ServerInfo/Get`.
 
