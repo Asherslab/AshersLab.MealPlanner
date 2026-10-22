@@ -193,6 +193,9 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   the op is still here and simply goes again. A rejected op leaves at once; it would be rejected forever.
 - **The cursor** (`SyncState`: epoch, pulled-through seq and that op's chain, this device's clock) is one row
   shared by every window.
+- **A copy that cannot be opened** (a failed migration) is reset from the page, by the planner, after a warning
+  of how many outbox ops it loses: the whole database goes, and the browser starts again as a new device with a
+  first-load pull. See [the browser database](browser-database.md#when-this-browsers-copy-cannot-be-opened).
 - **A round** (`SyncRound.RunAsync`) pushes the whole outbox in batches of 200, then pulls until caught up. After
   a snapshot it pushes and pulls once more: a snapshot carries rows, not op ids, so only a second push can tell
   which queued ops the server already has, and a `HistoryLost` snapshot has just queued ops to give back. Every

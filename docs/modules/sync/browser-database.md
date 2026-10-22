@@ -3,16 +3,19 @@ title: The browser database
 kind: reference
 status: current
 module: sync
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.LocalData
   - AshersLab.MealPlanner.WASM/Data/LocalDatabase.cs
+  - AshersLab.MealPlanner.WASM/Data/LocalDataGate.razor
+  - AshersLab.MealPlanner.WASM/Data/ResetDeviceDialog.razor
   - AshersLab.MealPlanner.WASM/Components/ThisDeviceCard.razor
   - AshersLab.MealPlanner.WASM/Program.cs
   - AshersLab.MealPlanner.WASM/AshersLab.MealPlanner.WASM.csproj
   - AshersLab.MealPlanner.WASM/wwwroot/js/storage.js
   - AshersLab.MealPlanner.WASM/wwwroot/js/shared-database.js
   - AshersLab.MealPlanner.Tests/Js
+  - .claude/tools/chrome-device-reset-check.mjs
 ---
 
 # The browser database
@@ -64,6 +67,11 @@ adding a local table, a local migration, or anything that waits on the local dat
 - **A model change needs a migration.** The browser applies migrations, never `EnsureCreated`, and a model
   change without one builds and then fails in every browser that already has the database.
   `LocalDbContextTests.Every_model_change_has_a_migration` catches it.
+- **Never edit or regenerate a local migration a browser may have applied.** The browser records the id it
+  applied; a regenerated one has a new id, so EF applies it again, its `CREATE TABLE` meets the table already
+  there, and that browser cannot open its copy (`SCHEMA_INCOMPATIBLE`). Seen 2026-10-22 in a profile last opened
+  during development. The page's reset (below) gets the device going again, but it loses any unsent edits; once
+  real data exists, write a new migration instead.
 
 ## What it is
 
@@ -98,7 +106,10 @@ the same.
 1. Imports `js/shared-database.js`, retrying up to four times with a fresh URL. If it never loads, the start
    is `FAILED` and the card asks for a reload — never an unshared database.
 2. Calls SqliteWasmBlazor's `ISqliteWasmInitializer.InitializeAsync()`, which creates the worker (now the
-   shim's) and applies migrations.
+   shim's) and applies migrations - holding the Web Lock `mealplanner-db-start`, so one window at a time does.
+   Two windows migrating the one shared database together both read the same history and both apply the next
+   migration; the second fails `SCHEMA_INCOMPATIBLE`. Seen when a reset reloaded two windows onto an empty
+   database at once, about one run in four before the lock.
 3. Records this start against the `Device` row, in a `BEGIN IMMEDIATE` transaction so two windows starting
    together cannot both insert one.
 4. Asks the browser to keep the storage.
@@ -125,6 +136,7 @@ stands in for the worker SqliteWasmBlazor creates:
 | The leading window closes | The next window in the lock queue starts a worker and announces itself. Requests that were in flight to the old leader fail ("try again") — nobody can know whether they ran. A transaction open on the old leader fails until its `ROLLBACK`, so its later statements cannot commit one by one. |
 | The new worker cannot start yet | The lock and the access handles are let go by different parts of a closing window. A worker that fails before it is ready is retried 5 times, 0.25 s doubling to 4 s, then reported. |
 | Other windows' changes | After a commit, or a write outside a transaction, the leader broadcasts; `LocalDatabase.ChangedElsewhere` fires in every other window, and the card re-reads. |
+| A reset | Every window waits on the Web Lock `mealplanner-db-reset` (shared) before it opens anything; a reset holds it exclusively. See "When this browser's copy cannot be opened". |
 | Diagnostics | `mealPlannerDatabase.events` in the console: the last 50 things this window's shim did. `mealPlannerDatabase.role()` is `leader` or `follower`. |
 
 Exports and imports (SqliteWasmBlazor's `streamId` messages) stage through OPFS and work only in the leading
@@ -145,6 +157,42 @@ crashed on `mealPlannerDatabase.subscribe` — which is why the script is now im
 start fails visibly instead. The pure parts — statement classification and the gate — have unit tests in
 `AshersLab.MealPlanner.Tests/Js/shared-database.test.mjs`, run by the xunit suite through Node (skipped,
 not passed, where Node is missing).
+
+## When this browser's copy cannot be opened
+
+A start that ends in anything but `READY` shows the reason in every page's `LocalDataGate` (`local-db-state`);
+Home's "This device" card points at it rather than repeating it. When the failure is one a reset can cure
+(`LocalDatabaseStart.CanReset`: any failure to open or migrate - `SCHEMA_INCOMPATIBLE`, `FAILED`, `TIMEOUT` - but
+not `TAB_LOCKED`, where a window outside the shim holds the files, nor the cross-window script failing to
+download, where a reload is the cure) the gate offers **Reset this device's copy** (`local-db-reset`). Never
+automatic:
+
+1. `LocalDatabase.CountUnsentAsync` reads the outbox through EF, which works while the migrations are what failed.
+   It is an upper bound (the outbox also holds edits the server accepted but this browser has not pulled back)
+   and `null` - "there's no telling" - when the table or the worker cannot answer within 5 s.
+2. `ResetDeviceDialog` asks in two steps, as the server-reset question does: what resetting means and what would
+   be lost (`device-reset-unsent`), then "This can't be undone" (`device-reset-confirm`).
+3. `mealPlannerDatabase.reset()` in `shared-database.js` takes the reset lock, stops this window's worker if it
+   leads, and broadcasts `reset`: every other started window stops its worker and reloads - and, reloaded, waits
+   on the reset lock. Once this window holds the leader lock, no worker is running anywhere. It deletes the OPFS
+   root entries `databases` (SqliteWasmBlazor's SAHPool - every file) and `export-staging`, retrying for about
+   10 s while a just-terminated worker's access handles let go, and reloads. The other windows then start one at a
+   time (the start lock) on an empty database.
+4. If another window keeps the leader lock for 20 s - an old build that does not know `reset` - or the files will
+   not delete, nothing is deleted, the lock is given back, and the gate says to close the other windows.
+
+What goes with the files: everything this browser holds is in that one database - the `Device` row, the outbox,
+`SyncState` (cursor, epoch, an unanswered server-replaced question) and every synced row. So the browser comes
+back as a **new device**: a new id, a first-load pull of the server's snapshot. Keeping the old id is deliberately
+not done - its clock state would be gone, and a new edit's HLC could repeat one the server already holds. The server keeps
+no device list, so nothing there needs cleaning up. The one other piece of state, `SyncLoop`'s sessionStorage note
+that it already reloaded once for an out-of-date build, clears itself on the next successful round.
+
+Seen working with `node .claude/tools/chrome-device-reset-check.mjs <scratch>` (port 19351): it plants the
+2026-10-22 failure (deletes the newest migration's history row), holds one unsent edit, opens a second window,
+resets from the first at 390 px, and reads back both windows, the browser's SQLite and the server's. `UNREADABLE=1`
+also drops the outbox, for the "no telling" wording. Six clean runs plus that variant on 2026-10-22; the
+multi-window check still passes all 22.
 
 ## Persistence, as measured
 

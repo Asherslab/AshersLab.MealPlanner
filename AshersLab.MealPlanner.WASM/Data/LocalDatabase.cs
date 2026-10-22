@@ -62,10 +62,20 @@ public sealed class LocalDatabase(
             return new LocalDatabaseStart(DbInitState.FAILED,
                 "part of the app did not download. Reload the page.", null, null);
 
-        await initializer.InitializeAsync();
+        await js.InvokeVoidAsync("mealPlannerDatabase.startBegin");
+        try
+        {
+            await initializer.InitializeAsync();
+        }
+        finally
+        {
+            await js.InvokeVoidAsync("mealPlannerDatabase.startDone");
+        }
 
+        // TAB_LOCKED is a window that does not share the database, not a broken copy: closing it is the cure.
         if (status.State != DbInitState.READY)
-            return new LocalDatabaseStart(status.State, status.Failure?.DefaultMessage, null, null);
+            return new LocalDatabaseStart(status.State, status.Failure?.DefaultMessage, null, null,
+                CanReset: status.State != DbInitState.TAB_LOCKED);
 
         await js.InvokeVoidAsync("mealPlannerDatabase.subscribe", DotNetObjectReference.Create(this));
 
@@ -74,6 +84,36 @@ public sealed class LocalDatabase(
 
         return new LocalDatabaseStart(DbInitState.READY, null, device, await RequestPersistentStorage());
     }
+
+    /// <summary>
+    /// How many edits made here the server may not have, for warning before a reset - read from the outbox even
+    /// though the database did not open. <c>null</c> when it cannot be read at all: no table, or no worker to ask.
+    /// An upper bound: the outbox also holds edits the server accepted that this browser has not yet pulled back.
+    /// </summary>
+    public async Task<int?> CountUnsentAsync()
+    {
+        try
+        {
+            return await CountOutbox().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        async Task<int> CountOutbox()
+        {
+            await using LocalDbContext db = await _serial.CreateDbContextAsync();
+            return await db.Outbox.CountAsync();
+        }
+    }
+
+    /// <summary>
+    /// Deletes this browser's database and reloads every window of the app into a fresh one, which pulls everything
+    /// from the server as a new device. For a copy that cannot be opened; see docs/modules/sync/browser-database.md.
+    /// On success the page reloads and this never returns; otherwise it returns why not, and nothing was deleted.
+    /// </summary>
+    public ValueTask<string?> ResetAsync() => js.InvokeAsync<string?>("mealPlannerDatabase.reset");
 
     /// <summary>
     /// Loads <c>wwwroot/js/shared-database.js</c>, which must replace SqliteWasmBlazor's Worker before
@@ -118,4 +158,8 @@ public sealed class LocalDatabase(
 /// <param name="Failure">SqliteWasmBlazor's own sentence for a failed start.</param>
 /// <param name="Device">This browser, after counting this start.</param>
 /// <param name="StoragePersisted">See <see cref="LocalDatabase"/>'s RequestPersistentStorage.</param>
-public sealed record LocalDatabaseStart(DbInitState State, string? Failure, Device? Device, bool? StoragePersisted);
+/// <param name="CanReset">
+/// The database failed to open or migrate, and <see cref="LocalDatabase.ResetAsync"/> is the way out. Not when the
+/// cross-window script did not download (a reload is) or another window holds the database unshared.
+/// </param>
+public sealed record LocalDatabaseStart(DbInitState State, string? Failure, Device? Device, bool? StoragePersisted, bool CanReset = false);

@@ -7,6 +7,7 @@ opened: 2026-10-22
 verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.WASM/Data/LocalDatabase.cs
+  - AshersLab.MealPlanner.WASM/Data/LocalDataGate.razor
   - AshersLab.MealPlanner.WASM/wwwroot/js/shared-database.js
   - AshersLab.MealPlanner.WASM/Pages/Home.razor
   - AshersLab.MealPlanner.LocalData/Migrations
@@ -35,7 +36,16 @@ Canvas habits worth knowing:
   nudging it.
 - The Rider MCP sometimes drops in a station's session; `/mcp` in that pane reconnects it.
 
-## Next step 1 - a way out when a device's copy cannot be opened (not started)
+## Next step 1 - a way out when a device's copy cannot be opened (done)
+
+Built 2026-10-22 as specified below; how it works now is in
+[the browser database](../modules/sync/browser-database.md#when-this-browsers-copy-cannot-be-opened). The choices the
+brief left open: the reset deletes the whole OPFS pool, so the browser comes back as a **new device** (its old clock
+state goes with the files, and reusing the id could repeat an HLC); the unsent count is the outbox, read through EF
+even though migrating failed, and "no telling" when that read fails. Building it found a second, general bug:
+two windows starting on a database with pending migrations both applied them and the second failed - now one
+window at a time starts (the `mealplanner-db-start` Web Lock). Seen working with
+`.claude/tools/chrome-device-reset-check.mjs`. What the brief asked for, kept for the record:
 
 **Found 2026-10-22, in the owner's own Chrome.** A profile last opened during slice 5 held a browser database whose
 `__EFMigrationsHistory` recorded `20261021030511_AddPriceObservations` - a draft migration a station applied and then
@@ -48,9 +58,6 @@ same-origin page that does not boot the app (`/healthz`), after which the app lo
 No committed migration was ever renamed or deleted; the server is unaffected. Stations' checks use fresh profiles,
 which is why none hit it. Once real data exists the same trap is a migration edited after a device applied it - see
 "This app is not in production yet" in `AGENTS.md`.
-
-The station to build it (brief below) could not start: new canvas sessions came up "Not logged in" on the account the
-canvas was using. Open it under a signed-in account.
 
 Brief:
 

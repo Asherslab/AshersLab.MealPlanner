@@ -1,5 +1,5 @@
 // The pure half of wwwroot/js/shared-database.js: how statements are classified, and how the transaction
-// gate orders requests from several windows onto one SQLite connection. Run by SharedDatabaseScriptTests,
+// gate orders requests from several windows onto one SQLite connection, and how a reset deletes the files. Run by SharedDatabaseScriptTests,
 // or directly: node --test AshersLab.MealPlanner.Tests/Js/shared-database.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +10,7 @@ import vm from 'node:vm';
 const script = fileURLToPath(new URL('../../AshersLab.MealPlanner.WASM/wwwroot/js/shared-database.js', import.meta.url));
 const sandbox = {};
 vm.runInNewContext(readFileSync(script, 'utf8'), sandbox);   // no window: only the pure half is installed
-const { classify, TransactionGate } = sandbox.MealPlannerSharedDatabase;
+const { classify, TransactionGate, removeEntries } = sandbox.MealPlannerSharedDatabase;
 
 test('classify: transaction boundaries as EF Core and SqliteWasmBlazor send them', () => {
     assert.equal(classify('BEGIN'), 'begin');
@@ -141,4 +141,50 @@ test('gate: a window that closes while waiting loses its queued requests and owe
     const commit = r('A', 'commit', 3); g.submit(commit);
     g.completed(commit, true);
     assert.deepEqual(sent.map(x => x.n), [1, 3]);
+});
+
+// A stand-in OPFS directory: each name fails with the listed error names, in order, before it is removed.
+function directory(failures) {
+    const removed = [], calls = [];
+    return {
+        removed, calls,
+        async removeEntry(name, options) {
+            calls.push({ name, recursive: options?.recursive });
+            const next = failures[name]?.shift();
+            if (next) throw Object.assign(new Error(next), { name: next });
+            removed.push(name);
+        },
+    };
+}
+const noWait = waits => ms => { waits.push(ms); return Promise.resolve(); };
+
+test('reset: removes every entry, recursively', async () => {
+    const dir = directory({});
+    await removeEntries(dir, ['databases', 'export-staging'], noWait([]));
+    assert.deepEqual(dir.removed, ['databases', 'export-staging']);
+    assert.ok(dir.calls.every(c => c.recursive === true));
+});
+
+test('reset: an entry that is not there is already gone', async () => {
+    const dir = directory({ 'export-staging': ['NotFoundError'] });
+    const waits = [];
+    await removeEntries(dir, ['databases', 'export-staging'], noWait(waits));
+    assert.deepEqual(dir.removed, ['databases']);
+    assert.deepEqual(waits, []);
+});
+
+test('reset: waits, backing off, while a terminated worker still holds the files', async () => {
+    const dir = directory({ databases: ['NoModificationAllowedError', 'NoModificationAllowedError', 'InvalidStateError'] });
+    const waits = [];
+    await removeEntries(dir, ['databases'], noWait(waits));
+    assert.deepEqual(dir.removed, ['databases']);
+    assert.deepEqual(waits, [250, 500, 1000]);
+});
+
+test('reset: gives up after its attempts, with the last error, waits capped at 2 s', async () => {
+    const dir = directory({ databases: Array(8).fill('NoModificationAllowedError') });
+    const waits = [];
+    await assert.rejects(removeEntries(dir, ['databases'], noWait(waits)), { name: 'NoModificationAllowedError' });
+    assert.deepEqual(dir.removed, []);
+    assert.deepEqual(waits, [250, 500, 1000, 2000, 2000, 2000, 2000]);
 });

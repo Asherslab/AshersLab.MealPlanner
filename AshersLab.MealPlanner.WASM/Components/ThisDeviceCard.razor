@@ -31,9 +31,10 @@
         }
         else if (_device is null)
         {
-            <MudAlert Severity="Severity.Error" data-testid="local-db-state">
-                This browser could not open its copy of the data (@_start.State): @_start.Failure
-            </MudAlert>
+            @* The page's LocalDataGate says why, and offers the reset. *@
+            <MudText Class="mud-text-secondary" data-testid="device-not-open">
+                This browser's copy of the data is not open (@_start.State) - see above.
+            </MudText>
         }
         else
         {

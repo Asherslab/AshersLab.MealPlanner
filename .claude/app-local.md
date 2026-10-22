@@ -445,9 +445,13 @@ How it works is in `docs/modules/sync/browser-database.md`. How to look at it:
 - **Across a browser restart** — never quit the user's Chrome. `.claude/tools/chrome-restart-check.mjs`
   launches a separate headless Chrome on a throwaway profile, reads the card, and ends the browser with
   `Browser.close` or `SIGKILL`; run it repeatedly on the same profile directory.
-- **Wiping it** — DevTools → Application → Storage → "Clear site data", or in the page
+- **Wiping it** — when it cannot be opened, the page's own **Reset this device's copy** (`local-db-reset`)
+  does it with other windows open. Otherwise DevTools → Application → Storage → "Clear site data", or in the page
   `await (await navigator.storage.getDirectory()).removeEntry('databases', {recursive: true})` with every
   app tab closed but one, then reload.
+- **A copy that cannot be opened, reset** — `node .claude/tools/chrome-device-reset-check.mjs <scratch>`
+  (port 19351; `UNREADABLE=1` also drops the outbox). Needs the app restarted after a WASM change, like every
+  check. About a minute.
 
 Browser-database migrations are generated in `AshersLab.MealPlanner.LocalData`, not the host:
 

@@ -93,7 +93,28 @@
         }
     }
 
-    root.MealPlannerSharedDatabase = { classify, TransactionGate };
+    /**
+     * Removes each of `names` from an OPFS directory, waiting for whatever still holds its files to let go: a
+     * worker just terminated - this window's or another's - keeps its access handles for a moment, and removing
+     * a file with an open handle fails. An entry that is not there is already gone. Throws once `attempts` have
+     * failed, about 10 s with the default waits.
+     */
+    async function removeEntries(directory, names, wait, attempts = 8) {
+        for (const name of names) {
+            for (let attempt = 1; ; attempt++) {
+                try {
+                    await directory.removeEntry(name, { recursive: true });
+                    break;
+                } catch (e) {
+                    if (e?.name === 'NotFoundError') break;
+                    if (attempt >= attempts) throw e;
+                    await wait(Math.min(250 * 2 ** (attempt - 1), 2000));
+                }
+            }
+        }
+    }
+
+    root.MealPlannerSharedDatabase = { classify, TransactionGate, removeEntries };
 
     if (typeof window === 'undefined' || !root.navigator?.locks || typeof BroadcastChannel === 'undefined') return;
     // Loaded again by a retry after a load that did run: one Worker patch only.
@@ -104,6 +125,11 @@
     const CHANNEL = 'mealplanner-db';
     const LEADER_LOCK = 'mealplanner-db-leader';
     const TAB_LOCK = 'mealplanner-db-tab-';
+    const RESET_LOCK = 'mealplanner-db-reset';
+    const START_LOCK = 'mealplanner-db-start';
+    // SqliteWasmBlazor's SAHPool directory - every database file - and its export staging, at the OPFS root.
+    const DATABASE_ENTRIES = ['databases', 'export-staging'];
+    const RESET_TAKE_OVER_MS = 20_000;
     const WORKER_FILE = 'sqlite-wasm-worker.js';
     const START_ATTEMPTS = 6;     // 0.25 + 0.5 + 1 + 2 + 4 s between them: about 8 s before giving up
     const forever = () => new Promise(() => {});
@@ -145,6 +171,7 @@
          * a retry no window in the profile would ever get a database until every one reloaded.
          */
         startWorker() {
+            if (this.stopped) return;
             this.attempt++;
             this.worker = new RealWorker(this.client.workerUrl, this.client.workerOptions);
             this.worker.onmessage = e => this.fromWorker(e.data);
@@ -156,8 +183,16 @@
             if (this.client.loggingMessage) this.worker.postMessage(this.client.loggingMessage);
         }
 
+        /** For a reset: let go of the database files. Nothing is answered after this; the window reloads. */
+        stop() {
+            this.stopped = true;
+            this.worker.terminate();
+            note('worker stopped for a reset');
+        }
+
         startFailed(reason) {
             this.worker.terminate();
+            if (this.stopped) return;
             if (this.attempt >= START_ATTEMPTS) {
                 note(`worker failed ${this.attempt} times, giving up: ${reason}`);
                 this.client.workerFailed({ type: 'error', error: reason });
@@ -235,6 +270,8 @@
             this.queued = [];            // requests waiting for a leader
             this.transaction = 'none';   // none | open | broken
             this.transactionLeader = null;
+            this.started = false;        // past the reset lock: this window may open the database
+            this.resetting = null;       // during a reset: called instead of starting a worker on the leader lock
             this.channel = new BroadcastChannel(CHANNEL);
             this.channel.onmessage = e => this.fromChannel(e.data);
             root.mealPlannerDatabase.client = this;
@@ -302,9 +339,14 @@
         }
 
         // --- Leadership ---
-        start() {
+        async start() {
+            // A reset in another window holds this lock until the old files are gone; a window it reloaded, or one
+            // opened meanwhile, must not open them first.
+            await navigator.locks.request(RESET_LOCK, { mode: 'shared' }, () => {});
+            this.started = true;
             navigator.locks.request(TAB_LOCK + this.tabId, forever);
             navigator.locks.request(LEADER_LOCK, async () => {
+                if (this.resetting) { note('leader lock granted during a reset'); return this.resetting(); }
                 note('leader lock granted, starting worker');
                 this.leader = new Leader(this);
                 await this.leader.ready;
@@ -315,6 +357,15 @@
             addEventListener('pagehide', () => { if (this.leader) this.channel.postMessage({ t: 'leader-gone', id: this.tabId }); });
             this.channel.postMessage({ t: 'hello', from: this.tabId });
             note(`started as ${this.tabId.slice(0, 8)}, said hello`);
+        }
+
+        /** Another window is resetting the database: let go of it and reload, to wait for the fresh one. */
+        resetElsewhere() {
+            if (!this.started || this.resetting) return;
+            note('reset by another window, reloading');
+            this.resetting = () => {};
+            this.leader?.stop();
+            location.reload();
         }
 
         leaderIs(id) {
@@ -379,6 +430,9 @@
                 case 'worker-error':
                     if (!this.leader) this.onmessage?.({ data: m.data });
                     break;
+                case 'reset':
+                    this.resetElsewhere();
+                    break;
             }
         }
     }
@@ -392,9 +446,74 @@
             if (!c || c.leaderId === null) return null;
             return c.leaderId === c.tabId ? 'leader' : 'follower';
         },
+        /**
+         * One window at a time starts and migrates. Two windows migrating the one shared database together both
+         * read the same history, both apply the next migration, and the second fails SCHEMA_INCOMPATIBLE - seen
+         * when a reset reloaded two windows onto an empty database. Resolves once this window holds the turn; it
+         * lasts until startDone(), or until the window goes.
+         */
+        startBegin() {
+            return new Promise(granted => navigator.locks.request(START_LOCK,
+                () => new Promise(done => { this.endStart = done; granted(); })));
+        },
+        startDone() {
+            this.endStart?.();
+            this.endStart = null;
+        },
         /** Calls dotnetRef.OnChangedElsewhere() whenever another window commits a change. */
         subscribe(dotnetRef) {
             addEventListener('mealplanner-db-changed', () => dotnetRef.invokeMethodAsync('OnChangedElsewhere'));
+        },
+        /**
+         * Deletes this browser profile's database and reloads every window of the app, which then opens a fresh
+         * one. Works whether or not the database opened. On success the page reloads and this never settles;
+         * otherwise it resolves to why not, and nothing was deleted.
+         */
+        reset() {
+            return navigator.locks.request(RESET_LOCK, async () => {
+                note('reset: started');
+                const client = this.client;
+                const channel = client?.channel ?? new BroadcastChannel(CHANNEL);
+                const tell = () => channel.postMessage({ t: 'reset' });
+
+                // The leader lock is held by whichever window runs the worker; holding it here means none does.
+                // Held until `release` - given back if the reset fails, so the other windows are not left without one.
+                let release;
+                const held = new Promise(r => release = r);
+                const abort = new AbortController();
+                const taken = new Promise(resolve => {
+                    if (client?.leader) { client.leader.stop(); resolve(); return; }
+                    const grant = () => { resolve(); return held; };
+                    if (client) client.resetting = grant;   // its own queued request may be granted first
+                    navigator.locks.request(LEADER_LOCK, { signal: abort.signal }, grant).catch(() => {});
+                });
+                tell();
+                const retell = setInterval(tell, 2000);   // a window that had not started when first told
+                const timedOut = new Promise(resolve => setTimeout(() => resolve('timeout'), RESET_TAKE_OVER_MS));
+                const outcome = await Promise.race([taken, timedOut]);
+                clearInterval(retell);
+                if (outcome === 'timeout') {
+                    note('reset: another window kept the database');
+                    abort.abort();
+                    if (client) client.resetting = null;
+                    release();
+                    return 'Another window of the meal planner is still using this device\'s copy. Close the other ' +
+                        'windows of it, reload this one, and try again.';
+                }
+
+                try {
+                    await removeEntries(await navigator.storage.getDirectory(), DATABASE_ENTRIES,
+                        ms => new Promise(r => setTimeout(r, ms)));
+                } catch (e) {
+                    note(`reset: could not delete the files: ${e?.name}`);
+                    release();
+                    return `This device's copy could not be deleted (${e?.name ?? e}). Close every window of the ` +
+                        'meal planner, open one, and try again.';
+                }
+                note('reset: deleted, reloading');
+                location.reload();
+                return forever();   // keeps the reset lock until this page is gone
+            });
         },
     };
 

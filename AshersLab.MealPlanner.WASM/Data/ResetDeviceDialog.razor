@@ -1,0 +1,65 @@
+@*
+    This browser's copy of the data cannot be opened, and resetting it - deleting it and fetching everything from the
+    server again - is the way out. Asked, never done for the planner: whatever this device has not sent is lost. Plain
+    words; the planner is not a developer.
+
+    Two steps, in ServerReplacedDialog's style: the explanation with what would be lost, then a second, unmistakable
+    confirmation. Closes with true once confirmed; the host (LocalDataGate) does the reset.
+*@
+
+<MudDialog data-testid="device-reset">
+    <DialogContent>
+        @if (!_confirming)
+        {
+            <MudText Class="mb-3">
+                This device's copy of the meal planner is damaged or out of step with the app, so the app can't use it.
+                Resetting deletes it and downloads everything again from the server.
+            </MudText>
+            <MudText Class="mb-3" data-testid="device-reset-unsent">@UnsentText(Unsent)</MudText>
+            <MudText Class="mud-text-secondary" Typo="Typo.body2">
+                Any other windows of the meal planner on this device will reload.
+            </MudText>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense="true" Class="mb-3">
+                This can't be undone.
+            </MudAlert>
+            <MudText Class="mb-3" data-testid="device-reset-warning">
+                Changes made on this device that haven't reached the server are deleted for good. Everything else comes
+                back from the server.
+            </MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!_confirming)
+        {
+            <MudButton OnClick="() => Dialog.Cancel()" Class="mr-auto" data-testid="device-reset-cancel">Cancel</MudButton>
+            <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="() => _confirming = true"
+                       data-testid="device-reset-next">Reset</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="() => _confirming = false" Class="mr-auto" data-testid="device-reset-back">Go back</MudButton>
+            <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="() => Dialog.Close(DialogResult.Ok(true))"
+                       data-testid="device-reset-confirm">Delete for good</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    /// <summary><see cref="LocalDatabase.CountUnsentAsync"/>: null when it cannot be known.</summary>
+    [Parameter] public int? Unsent { get; set; }
+
+    private bool _confirming;
+
+    private static string UnsentText(int? unsent) => unsent switch
+    {
+        null => "This device's copy can't be read, so there's no telling whether it holds changes the server hasn't got. Any it does are lost.",
+        0    => "Every change made on this device has reached the server, so nothing is lost.",
+        1    => "1 change made on this device may not have reached the server yet. Resetting loses it.",
+        _    => $"Up to {unsent} changes made on this device may not have reached the server yet. Resetting loses them.",
+    };
+}

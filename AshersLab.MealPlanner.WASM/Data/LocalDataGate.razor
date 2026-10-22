@@ -1,6 +1,8 @@
 @using SqliteWasmBlazor
+@inject LocalDatabase Database
+@inject IDialogService Dialogs
 
-@* What a LocalDataPage shows until the browser database has opened, or when it could not. *@
+@* What a LocalDataPage shows until the browser database has opened, or when it could not - with the way out. *@
 
 @if (Start is null)
 {
@@ -11,6 +13,31 @@ else if (Start.State != DbInitState.READY)
     <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="local-db-state">
         This browser could not open its copy of the data (@Start.State): @Start.Failure
     </MudAlert>
+    @if (Start.CanReset)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="local-db-reset-offer">
+            @if (_resetting)
+            {
+                <MudText Class="mb-2">Resetting this device's copy…</MudText>
+                <MudProgressLinear Indeterminate="true" Color="Color.Error"/>
+            }
+            else
+            {
+                <MudText Class="mb-3">
+                    If reloading doesn't help, reset this device's copy: it is deleted and everything is downloaded again
+                    from the server.
+                </MudText>
+                @if (_resetFailure is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3" data-testid="local-db-reset-failure">
+                        @_resetFailure
+                    </MudAlert>
+                }
+                <MudButton Color="Color.Error" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RestartAlt"
+                           Disabled="_asking" OnClick="AskToReset" data-testid="local-db-reset">Reset this device's copy</MudButton>
+            }
+        </MudPaper>
+    }
 }
 else
 {
@@ -21,4 +48,29 @@ else
     [Parameter, EditorRequired] public LocalDatabaseStart? Start { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool    _asking;
+    private bool    _resetting;
+    private string? _resetFailure;
+
+    private async Task AskToReset()
+    {
+        _asking = true;
+        int? unsent = await Database.CountUnsentAsync();
+        _asking = false;
+
+        DialogParameters<ResetDeviceDialog> parameters = new() { { d => d.Unsent, unsent } };
+        DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.Small, BackdropClick = false };
+        IDialogReference dialog = await Dialogs.ShowAsync<ResetDeviceDialog>("Reset this device's copy?", parameters, options);
+        if (await dialog.Result is not { Canceled: false })
+            return;
+
+        _resetting    = true;
+        _resetFailure = null;
+        StateHasChanged();
+
+        // Returns only if it failed: on success the page reloads into a fresh copy.
+        _resetFailure = await Database.ResetAsync();
+        _resetting    = false;
+    }
 }

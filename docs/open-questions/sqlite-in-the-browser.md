@@ -4,7 +4,7 @@ kind: investigation
 status: open
 module: sync
 opened: 2026-10-20
-verified: 2026-10-21
+verified: 2026-10-22
 code:
   - AshersLab.MealPlanner.WASM/Data/LocalDatabase.cs
   - AshersLab.MealPlanner.WASM/Components/ThisDeviceCard.razor

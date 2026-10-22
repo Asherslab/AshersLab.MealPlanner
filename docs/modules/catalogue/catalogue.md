@@ -170,7 +170,8 @@ and nothing is archived.
 
 `WASM/Data/LocalDataPage.cs` is the base of every page that edits synced data: it starts the browser database
 after the first render, reloads on another window's or a sync round's change, and its `WriteAsync` is the only
-write path (`LocalOps.WriteAsync`, then a sync kick). `LocalDataGate` shows the loading and failed states.
+write path (`LocalOps.WriteAsync`, then a sync kick). `LocalDataGate` shows the loading and failed states, and the reset for a copy that cannot be opened
+([browser database](../sync/browser-database.md)).
 `Components/NameList.razor` is the add / rename / delete (and reorder) list stores and categories share.
 
 The menu is a drawer (`Layout/MainLayout.razor`): open beside the page from the `Md` breakpoint up, behind the
