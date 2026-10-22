@@ -51,53 +51,19 @@ export async function create(optionsJson) {
   }
 }
 
-// A browser runs one passkey request at a time: the autofill one waits in the background, and is called off before any
-// other starts.
-let waiting = null;
-
-/** Calls off the autofill request, if one is waiting. */
-export function abort() {
-  waiting?.abort();
-  waiting = null;
-}
-
 /**
  * Signs in with a passkey from the server's request options: the browser's own prompt, Face ID or the PIN. The
  * assertion as JSON, or null when cancelled - or refused for want of a tap: Safari only prompts in answer to one.
+ *
+ * No autofill (mediation: 'conditional') sign-in: Safari on a Mac offered its field to Passwords, and the request
+ * waiting in the background held the one passkey request a browser runs, so the button's did nothing.
  */
 export async function get(optionsJson) {
-  abort();
   try {
     return serialise(await navigator.credentials.get({ publicKey: requestOptions(optionsJson) }));
   } catch (e) {
     if (e?.name === 'NotAllowedError' || e?.name === 'AbortError') return null;
     throw e;
-  }
-}
-
-/** Whether the browser offers passkeys among a field's autofill suggestions (iPhone: on the keyboard's bar). */
-export async function autofillAvailable() {
-  try {
-    return !!(await window.PublicKeyCredential?.isConditionalMediationAvailable?.());
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The autofill sign-in: waits, in the background, until the person picks the passkey from a field marked
- * autocomplete="username webauthn" - then Face ID. The assertion as JSON, or null when called off.
- */
-export async function getFromAutofill(optionsJson) {
-  abort();
-  const mine = waiting = new AbortController();
-  try {
-    return serialise(await navigator.credentials.get({ publicKey: requestOptions(optionsJson), mediation: 'conditional', signal: mine.signal }));
-  } catch (e) {
-    if (e?.name === 'NotAllowedError' || e?.name === 'AbortError') return null;
-    throw e;
-  } finally {
-    if (waiting === mine) waiting = null;
   }
 }
 

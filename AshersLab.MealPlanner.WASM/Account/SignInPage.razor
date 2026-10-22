@@ -1,16 +1,16 @@
 @page "/sign-in"
 @using AshersLab.MealPlanner.WASM.Sync
-@implements IAsyncDisposable
 @inject AccountClient Account
 @inject SyncLoop Sync
 @inject NavigationManager Navigation
 
 @*
-    Signing in, with the passkey this phone already has. Three ways, so it is as close to no taps as each browser allows:
-    on a device that has signed in here before, the prompt opens by itself (Chrome and Android allow that; Safari only
-    prompts after a tap, so there it does nothing); the field offers the passkey in its autofill - on an iPhone, on the
-    keyboard's bar - one tap, then Face ID; and the button. Nothing on this phone is lost while signed out. Where the app
-    has no sign-in of its own (Home Assistant, a sign-in proxy), it says to reload instead: the proxy's login comes first.
+    Signing in, with the passkey this phone already has. On a device that has signed in here before, the prompt opens by
+    itself (Chrome and Android allow that; Safari only prompts after a tap, so there it does nothing); and the button.
+    No autofill field: Safari on a Mac offers it to Passwords ("has no password to AutoFill"), and its background request
+    held the one passkey request a browser allows, so the button did nothing. Nothing on this phone is lost while signed
+    out. Where the app has no sign-in of its own (Home Assistant, a sign-in proxy), it says to reload instead: the
+    proxy's login comes first.
 *@
 
 <PageTitle>Sign in - Meal Planner</PageTitle>
@@ -38,17 +38,8 @@
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">This browser can't use passkeys. Open the app in Safari or Chrome.</MudAlert>
                 }
-                @if (_autofill)
-                {
-                    @* The browser lists this site's passkeys in this field's suggestions: "username webauthn" is what asks it to. *@
-                    <label class="account-field">
-                        <span>Your passkey</span>
-                        <input type="text" name="username" autocomplete="username webauthn" autofocus placeholder="Tap to choose it"
-                               readonly="@_busy" data-testid="sign-in-autofill"/>
-                    </label>
-                }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" StartIcon="@Icons.Material.Filled.Key"
-                           Class="@(_autofill ? "mt-3" : null)" Disabled="_busy || !_supported" OnClick="SignIn"
+                           Disabled="_busy || !_supported" OnClick="SignIn"
                            data-testid="sign-in-passkey">Sign in with a passkey</MudButton>
                 @if (_problem is not null)
                 {
@@ -68,7 +59,7 @@
     [SupplyParameterFromQuery(Name = "back")] public string? BackParameter { get; set; }
 
     private AccountState? _state;
-    private bool _supported = true, _autofill, _busy, _started, _gone;
+    private bool _supported = true, _busy, _started;
     private string? _problem;
 
     /// <summary>Only a path in this app - never somewhere else a link could name.</summary>
@@ -78,10 +69,7 @@
     {
         _state = await Account.StateAsync();
         if (_state is { Available: true, SignedIn: false })
-        {
             _supported = await Account.SupportedAsync();
-            _autofill = _supported && await Account.AutofillAvailableAsync();
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -91,7 +79,7 @@
         _started = true;
 
         // A device that has signed in here before: the prompt, by itself. Refused for want of a tap (Safari), it is
-        // as if cancelled - the autofill and the button are still there.
+        // as if cancelled - the button is still there.
         if (await Account.KnownAsync())
         {
             // The button waits: a browser runs one passkey request at a time.
@@ -100,17 +88,7 @@
             AccountResult prompted = await Account.SignInAsync();
             _busy = false;
             StateHasChanged();
-            if (await Finished(prompted))
-                return;
-        }
-
-        // The autofill: waits in the background for the passkey to be picked from the field, until the page goes or the
-        // button starts a sign-in of its own (which calls this one off).
-        while (_autofill && !_gone)
-        {
-            AccountResult picked = await Account.SignInFromAutofillAsync();
-            if (picked.Cancelled || await Finished(picked))
-                return;
+            await Finished(prompted);
         }
     }
 
@@ -139,15 +117,4 @@
         return false;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        _gone = true;
-        try
-        {
-            await Account.StopAutofillAsync();
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-    }
 }

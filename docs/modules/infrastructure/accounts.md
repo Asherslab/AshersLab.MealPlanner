@@ -100,12 +100,14 @@ nobody), the sign-in and invitation endpoints, and the health probes. **Every gR
   request is fetched as the banner appears, because **Safari only shows the prompt in answer to a tap**, and a round trip
   to the server between the tap and the prompt can lose it. Cancelled, or a device that never signed in, opens the page.
 - **Sign in** (`/sign-in`): on a known device the prompt **opens by itself** (Chrome and Android allow it; Safari refuses
-  without a tap, which reads as cancelled). Then the **autofill**: a field marked `autocomplete="username webauthn"`, where
-  the browser offers this site's passkeys among its suggestions - on an iPhone on the keyboard's bar - while a
-  `mediation: 'conditional'` request waits in the background (called off when the page goes or the button starts its own;
-  a browser runs one passkey request at a time, so the button is disabled while the prompt is open). And the button,
-  *Sign in with a passkey*. Where the app has no sign-in of its own (`/account` is a 404 - ingress or a proxy), it says to
-  reload instead.
+  without a tap, which reads as cancelled; a browser runs one passkey request at a time, so the button is disabled while
+  that prompt is open). Then the button, *Sign in with a passkey*. Where the app has no sign-in of its own (`/account` is
+  a 404 - ingress or a proxy), it says to reload instead.
+- **No autofill sign-in field.** It was tried (2026-10-22: a field marked `autocomplete="username webauthn"` with a
+  `mediation: 'conditional'` request waiting behind it) and taken out the next day: Safari on a Mac offered the field to
+  Passwords - "has no password to AutoFill" under the passkey - and the button did nothing, the waiting request being
+  the one a browser allows. A text box is also the wrong picture of signing in with a passkey. Do not bring it back
+  without seeing it work in Safari on a Mac and an iPhone.
 - **Welcome** (`/welcome#...`): the inviter's name for them, or a box for their own; *Make my passkey*; *You're in*.
 - **Settings → Who can sign in** (`/settings/access`): each member and their passkeys (*synced to their other devices* or
   *this device only*), remove a passkey (never a member's last - remove the member and invite them again) or a member

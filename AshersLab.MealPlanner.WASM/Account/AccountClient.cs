@@ -98,9 +98,6 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
     /// <summary>Whether this device has signed in here before, so has a passkey to offer (a hint, kept on the device).</summary>
     public async Task<bool> KnownAsync() => await (await Passkeys()).InvokeAsync<bool>("known");
 
-    /// <summary>Whether the browser offers the passkey in a sign-in field's autofill.</summary>
-    public async Task<bool> AutofillAvailableAsync() => await (await Passkeys()).InvokeAsync<bool>("autofillAvailable");
-
     /// <summary>Fetches the request options now, so a sign-in on the next tap goes straight to the prompt.</summary>
     public async Task PrepareSignInAsync()
     {
@@ -120,20 +117,6 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
             return new AccountResult(false, problem);
         return await Assert(await (await Passkeys()).InvokeAsync<string?>("get", options));
     }
-
-    /// <summary>
-    /// Waits for the passkey to be picked from the sign-in field's autofill, then signs in. Cancelled when the page calls
-    /// it off (<see cref="StopAutofillAsync"/>) or starts another sign-in.
-    /// </summary>
-    public async Task<AccountResult> SignInFromAutofillAsync()
-    {
-        (string? options, string? problem) = await PostText("account/sign-in/options", new EmptyBody(), AccountJson.Default.EmptyBody);
-        if (options is null)
-            return new AccountResult(false, problem);
-        return await Assert(await (await Passkeys()).InvokeAsync<string?>("getFromAutofill", options));
-    }
-
-    public async Task StopAutofillAsync() => await (await Passkeys()).InvokeVoidAsync("abort");
 
     private async Task<AccountResult> Assert(string? credential)
     {
