@@ -119,7 +119,7 @@ ingredients and the shopping list are grouped in this order."; a "New category" 
 | `BaseUnit` | `Gram`, `Millilitre` or `Each` - the enum member's **name** | required on create; never rename a member. Shown as g / ml / each. |
 | `CategoryId`, `UsualStoreId` | lower-case hyphenated GUID, or null for none | not checked against existing rows - see the traps |
 | `IsStaple` | `true` or `false` | staples are costed by quantity like anything else and left off the shopping list |
-| `UnitGuessed` | `true` or `false` | `true` only from the [spreadsheet import](../import/spreadsheet-import.md); saving the editor sends `false` |
+| `UnitGuessed` | `true` or `false` | `true` only from the spreadsheet import (removed 2026-10-23; ingredients it made may still carry it); saving the editor sends `false` |
 | `StapleStock` | `Have`, `RunningLow` or `Out` - by name | a staple's stock, set one tap at a time on [the pantry](../pantry/pantry.md), alone in its op; `Have` until someone says otherwise. The editor never sends it |
 
 - **A create needs a unit, and the editor has no default.** Every quantity of the ingredient - in a recipe, in a
@@ -179,7 +179,7 @@ write path (`LocalOps.WriteAsync`, then a sync kick). `LocalDataGate` shows the 
 Settings show. Add or move a page there, not in a menu. On a phone (below MudBlazor's `Md`, 960 px) the bottom bar
 (`Layout/BottomNav.razor`) holds Today, Plan, Shop, Meals and More, one tap each; there is no drawer. More lists
 Pantry, Receipts, Prices, Ingredients and Plans, then Settings, which holds the lists set up once a season - People,
-Slots of the day, Meal groups, Categories, Stores, Import spreadsheet - and Diagnostics last. So a store is three taps
+Who can sign in, Slots of the day, Meal groups, Categories, Stores - and Diagnostics last. So a store is three taps
 away (More, Settings, Stores), and every page reached that way has a back arrow to its parent in the app bar
 (`app-back`). From `Md` up there is no bottom bar: the drawer (`Layout/MainLayout.razor`) sits open with the four
 daily pages, a Kitchen group, and Settings. Which of the two shows is CSS (`MainLayout.razor.css`,

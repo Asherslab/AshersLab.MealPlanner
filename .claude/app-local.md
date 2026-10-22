@@ -175,26 +175,10 @@ navigating**: `go()` is a full reload, and a write still in flight when the dial
 saves untouched: no op, still 1234.5, on the server and in the profile's SQLite. **Wait on the server's rows, not the
 chip**, after a save: the chip reads "online, 0 waiting" before a write made a moment ago is even queued.
 
-**Import** (`/import`, `nav-import`): the file box `import-file` (an `<input type=file>` - set it with the DevTools
-protocol's `DOM.setFileInputFiles`; the Chrome extension's `file_upload` only takes files shared with the session, and
-the real sheet is in `private/`), then `import-summary` (or `import-error`), `import-run`, `import-done` /
-`import-nothing`; questions `import-ingredient-question` / `import-serves-question` / `import-group-question` /
-`import-category-question` (`data-key`), `import-household-store` and `import-price-store-all` (labels around a native
-select), per price `import-price` (`data-id`) with `import-price-store`, `import-price-pack`, `import-price-note`,
-`import-price-state` ("Will be imported", "Already here", "Left out: ..."); guessed units a price contradicts
-`import-unit-question` (`data-key`, `data-says` = the unit the price says) with `import-unit-Gram|Millilitre|Each`; new
-ingredients `import-new-ingredient` with the same buttons; `import-left-out`. On Ingredients, a guessed unit is
-`ingredient-unit-guessed` (chip) and `ingredient-unit-guessed-note` (in the editor).
-`node .claude/tools/chrome-import-check.mjs <scratch>/import <sheet.xlsx> [<later-sheet.xlsx>]` - the planner's exports
-are kept out of git (see AGENTS.md); pass their absolute paths -
-(ports 19352/19353, about 3 minutes with a later sheet) drives it from two profiles and prints counts only; with a later
-download of the sheet it imports that on top and checks nothing already there changed. Start from a fresh server
-database (stop the app, delete `mealplanner.db*`, start it) - against one already holding the import it can only say
-"nothing new".
-
-The import's review also asks about plan names (`import-plan-meal-question`, `data-key`, a native select whose empty value
-is "a new single-serve meal"), and the done message links to the plan (`import-plan-link`). The check reports the plan's
-weeks, entries and choices from the server, and with a later sheet includes the plan's rows in "nothing changed".
+The spreadsheet import was removed on 2026-10-23 (the planner plans in the app now). On Ingredients, an ingredient it
+left with a guessed unit still shows `ingredient-unit-guessed` (chip) and `ingredient-unit-guessed-note` (in the editor).
+**Files for a file box** (receipts) are set with the DevTools protocol's `DOM.setFileInputFiles`, absolute paths - the
+Chrome extension's `file_upload` only takes files shared with the session, and the real receipts are in `private/`.
 
 **People** (`/people`, `nav-people`): `person-new-name` (input id too) and `person-add`; per row `person-row` (`data-id`;
 its `[role=button]` opens the inline editor) and `person-name`; the editor: `person-edit-name` (input id),

@@ -20,7 +20,6 @@ public enum NavGroup
     /// <summary>Set up once a season - on the Settings page only.</summary>
     Household,
     Shopping,
-    Data,
     Diagnostics,
 }
 
@@ -88,8 +87,6 @@ public static class NavModel
             "The aisles a shopping list is grouped by"),
         new("stores",      "stores",      "Stores",           Icons.Material.Filled.Storefront, NavGroup.Shopping,  SettingsRoute,
             "Where you shop"),
-        new("import",      "import",      "Import spreadsheet", Icons.Material.Filled.UploadFile, NavGroup.Data,    SettingsRoute,
-            "Bring in meals and plans from the old spreadsheet"),
         new("settings/diagnostics", "diagnostics", "Diagnostics", Icons.Material.Filled.MonitorHeart, NavGroup.Diagnostics, SettingsRoute,
             "This device and the server, for when something is wrong"),
     ];

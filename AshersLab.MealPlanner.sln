@@ -32,6 +32,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "archive", "archive", "{5E91
 		docs\archive\2026-10-deployment.md = docs\archive\2026-10-deployment.md
 		docs\archive\2026-10-offline-sync.md = docs\archive\2026-10-offline-sync.md
 		docs\archive\2026-10-receipt-formats.md = docs\archive\2026-10-receipt-formats.md
+		docs\archive\2026-10-spreadsheet-import.md = docs\archive\2026-10-spreadsheet-import.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "modules", "modules", "{331AE102-A8F0-47ED-9C68-E28C98929852}"
@@ -41,11 +42,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "catalogue", "catalogue", "{
 		docs\modules\catalogue\catalogue.md = docs\modules\catalogue\catalogue.md
 		docs\modules\catalogue\products-and-prices.md = docs\modules\catalogue\products-and-prices.md
 		docs\modules\catalogue\README.md = docs\modules\catalogue\README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "import", "import", "{ED4F04CE-EE1A-49A6-AA7C-25DED5BD7722}"
-	ProjectSection(SolutionItems) = preProject
-		docs\modules\import\spreadsheet-import.md = docs\modules\import\spreadsheet-import.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{F5CEBEAF-8131-46D3-BF40-5BD5B8E554B1}"
@@ -231,7 +227,6 @@ Global
 		{5E91169D-D9F9-4D4D-BBDF-06E27B1BD9E8} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
 		{331AE102-A8F0-47ED-9C68-E28C98929852} = {FBEB0265-1454-4FE6-9879-C7C7E8AE6883}
 		{E069C94C-304A-4466-8A56-02FC9D90C83A} = {331AE102-A8F0-47ED-9C68-E28C98929852}
-		{ED4F04CE-EE1A-49A6-AA7C-25DED5BD7722} = {331AE102-A8F0-47ED-9C68-E28C98929852}
 		{F5CEBEAF-8131-46D3-BF40-5BD5B8E554B1} = {331AE102-A8F0-47ED-9C68-E28C98929852}
 		{2140B86A-4D17-433F-81CE-037A454B86FE} = {331AE102-A8F0-47ED-9C68-E28C98929852}
 		{1F2FF96A-A9A7-42C3-9473-5E71361AA341} = {331AE102-A8F0-47ED-9C68-E28C98929852}

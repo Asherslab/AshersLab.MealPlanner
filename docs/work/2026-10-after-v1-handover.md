@@ -115,13 +115,22 @@ passkeys** ([signing in](../modules/infrastructure/accounts.md)): the first from
 by invitation. `mealplanner/DOCS.md` is the owner's set-up. (A detour first used a sign-in proxy with Authelia; replaced
 the same day.)
 
+## The spreadsheet import is gone (2026-10-23)
+
+The planner will never plan in a spreadsheet again, so the import - and refining its review - was not worth keeping. Its
+code is removed; [its doc](../archive/2026-10-spreadsheet-import.md) is archived. The owner enters the first plan by hand,
+to show the planner the app. What an import already brought in stays: guessed units still show "Check unit", and its
+prices are still "spreadsheet" in a price's history (`PriceSource.Sheet` stays, for that data).
+
 ## Next step 4 - the add-on on the Pi (the owner)
 
 Replaces most of step 2's Pi items: install the add-on, set `public_url`, add the proxy host, open the setup link from
 the Log tab on a phone, invite the household, install the app on both phones - per `mealplanner/DOCS.md` - and note what
 differed from it: it is proven only against `.claude/tools/addon-sim` and Chrome's virtual authenticator, not a real
 iPhone's passkeys. Still from step 2: the multi-arch pull, first load and RAM, a real backup and restore (the passkeys
-must survive it), then wiping the test data and the first real import.
+must survive it), then the first real data - entered by hand (the import is gone, above). Done 2026-10-23: the add-on
+installed and reached through the proxy, the owner's passkey, the installed app opening offline, an update reaching it,
+and a backup and restore.
 
 ## Next step 5 - Actual Budget, read only (this leg, after the Pi)
 

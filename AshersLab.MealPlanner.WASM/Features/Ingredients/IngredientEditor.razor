@@ -34,7 +34,7 @@
             @if (Draft.UnitGuessed)
             {
                 <MudText Typo="Typo.caption" Color="Color.Warning" Class="d-block" data-testid="ingredient-unit-guessed-note">
-                    The spreadsheet import guessed this. Check it - saving marks it as checked.
+                    This was guessed when it was imported. Check it - saving marks it as checked.
                 </MudText>
             }
             @if (_unitError is not null && _unit is null)

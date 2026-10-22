@@ -1,7 +1,9 @@
 ---
 title: Spreadsheet import
 kind: reference
-status: current
+status: rejected
+closed: 2026-10-23
+reason: Removed with its code - the planner plans in the app from now on and will never import a spreadsheet again, so its review was not worth refining; the owner enters the first plan by hand.
 module: import
 verified: 2026-10-22
 code:

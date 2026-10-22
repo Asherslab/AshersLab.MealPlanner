@@ -224,8 +224,8 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
 - **Several edits as one** (`LocalOps.WriteAllAsync`, which `WriteAsync` is the one-edit case of): every edit is
   checked with the server's rules before anything is written, then all are applied and queued in one transaction,
   each with its own clock tick in the order given - all of them or none. For something written as a whole, where
-  half would be worse than nothing: the [spreadsheet import](../import/spreadsheet-import.md) - about 900 ops with its
-  plan - and a plan entry with its choices. They push in batches like any other queued ops. **Each edit is saved and
+  half would be worse than nothing: a receipt's import, a plan entry with its choices (and, while it existed, the
+  spreadsheet import - about 900 ops with its plan, which sized the per-edit saving below). They push in batches like any other queued ops. **Each edit is saved and
   the change tracker cleared before the next**, inside the one transaction: kept tracked, every save scanned every row
   the batch had touched, and the import with its plan took 54 s in desktop Chrome; cleared, 12 s.
 - **Pulled pages and snapshots are forgotten op by op, row by row, too** (`LocalOps.ApplyPulledAsync`,

@@ -53,7 +53,7 @@ its own copy and syncs when it can.
 - Blazor WebAssembly + MudBlazor; offline-first with browser SQLite and a sync chip that says whether edits have
   reached the server.
 - Areas: Today, Calendar (and plan templates), Shopping, Pantry, Receipts, Meals, Ingredients, Prices, and the
-  household set-up lists: People, Slots of the day, Meal groups, Categories, Stores. Spreadsheet import (one-off).
+  household set-up lists: People, Who can sign in, Slots of the day, Meal groups, Categories, Stores.
   Technical status (server version, this device) is for diagnosis only.
 - Money in cents; a cost that cannot be computed shows as incomplete ("from $X + 1 unpriced"), never as zero.
 - Plain words throughout: no developer vocabulary (ops, sync epochs, migrations) in anything the planner reads.

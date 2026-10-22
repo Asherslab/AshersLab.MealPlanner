@@ -50,9 +50,6 @@ Present tense, kept current, no dates.
   pack says them, price history, an ingredient's price per unit (usual store first, rounded once), and why aliases
   are not a field.
 
-- [Spreadsheet import](modules/import/spreadsheet-import.md) - the planner's sheet into drafts: where it finds meals,
-  ingredients and prices, units marked as guesses, what it asks, one transaction, and why a second run adds only
-  what is new.
 - [People, slots and plan templates](modules/planning/plan-templates.md) — the household, the slots of the day, and the
   rotation of weeks: an entry per thing eaten, its meal choices as rows, who eats it, the week grid and the day view.
 - [The calendar](modules/planning/calendar.md) — a plan laid onto real dates (safe to repeat, and from two phones at

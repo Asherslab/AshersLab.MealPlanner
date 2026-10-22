@@ -1,4 +1,3 @@
-using AshersLab.MealPlanner.Shared.Domain.Import;
 using AshersLab.MealPlanner.Shared.Domain.Planning;
 using AshersLab.MealPlanner.Shared.Domain.Sync;
 
@@ -153,15 +152,5 @@ public class PlanningRulesTests
         TemplateEntryChange change = new TemplateEntryDraft([A], null).ChangesFrom((null, [(row1, A), (row2, A)]));
         Assert.Equal([row2], change.RemoveChoices);
         Assert.Empty(change.AddMeals);
-    }
-
-    [Fact]
-    public void A_plan_cell_keeps_each_level_of_its_text()
-    {
-        IReadOnlyList<PlanChoiceText> cell = SheetText.PlanChoices(" Crumpet, eggs  + soldiers / Porridge ");
-        Assert.Equal(["Crumpet, eggs + soldiers", "Porridge"], cell.Select(c => c.Text));
-        Assert.Equal(["Crumpet", "eggs + soldiers"], cell[0].Parts.Select(p => p.Text));
-        Assert.Equal(["eggs", "soldiers"], cell[0].Parts[1].Items);
-        Assert.Empty(SheetText.PlanChoices(" / , + "));
     }
 }

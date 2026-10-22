@@ -82,7 +82,7 @@ Delete says "mince is used by 1 product: ... Delete them on the Prices page firs
 | `ProductId` | GUID, never null | required |
 | `PriceCents` | whole cents as plain digits (`OpValues.FormatCents`), 1 to 10,000,000 | one pack; never dollars, never a decimal |
 | `ObservedOn` | `yyyy-MM-dd` | the day it was seen; no time, no zone |
-| `Source` | `Manual`, `Receipt`, `Live` or `Sheet` - by name | the pages write `Manual`; the [spreadsheet import](../import/spreadsheet-import.md) `Sheet`, so a later import compares only with what the sheet said; [receipts](../receipts/receipts.md) `Receipt`, on the receipt's date; live prices come later |
+| `Source` | `Manual`, `Receipt`, `Live` or `Sheet` - by name | the pages write `Manual`; `Sheet` was the spreadsheet import's (removed 2026-10-23; its prices stay, shown as "spreadsheet"); [receipts](../receipts/receipts.md) `Receipt`, on the receipt's date; live prices come later |
 | `PerKgCents` | whole cents or null | variable-weight meat: what a gram costs when the pack price depends on its weight |
 
 - **Append-only by use, not by rule.** The pages add a price and delete a mistaken one; nothing edits one, because the
