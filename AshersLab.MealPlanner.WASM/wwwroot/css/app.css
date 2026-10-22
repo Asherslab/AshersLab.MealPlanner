@@ -13,6 +13,7 @@
 
 :root {
     --bottle: #2F5D50;
+    --bottle-deep: #264C41;   /* a pressed or hovered bottle-green control */
     --laminate: #DDE9DF;
     --enamel: #FBFBF6;
     --ink: #1D2B27;
@@ -58,6 +59,13 @@ table, .num { font-variant-numeric: tabular-nums; }
     top: -5px; left: 0; right: 0; height: 10px;
     background: radial-gradient(circle at 7px 5px, var(--laminate) 3px, transparent 3.5px) 0 0 / 14px 10px repeat-x;
 }
+/* Only the top sheet of a page is torn off the pad: a sheet that follows another - as a later sibling, or inside one -
+   keeps a clean edge, so stacked sheets (Settings, Shop) do not repeat the perforation as wallpaper. */
+.page-body .pad ~ .pad::before,
+.page-body .pad ~ * .pad::before,
+.page-body :has(.pad) ~ .pad::before,
+.page-body :has(.pad) ~ * .pad::before { display: none; }
+
 .pad-head {
     background: var(--bottle);
     color: var(--enamel);
@@ -139,8 +147,19 @@ table, .num { font-variant-numeric: tabular-nums; }
 .app-bar .mud-typography-h6 { font-weight: 700; letter-spacing: -0.01em; }
 .app-drawer { border-right: 1px solid var(--chrome); }
 .app-drawer .mud-nav-link { border-radius: 10px; margin: 1px 8px; width: auto; }
-.app-drawer .mud-nav-link.active { background-color: var(--laminate); color: var(--bottle); font-weight: 700; }
-.app-drawer .mud-nav-link.active .mud-nav-link-icon { color: var(--bottle); }
+/* The current page in tomato, as the bottom bar marks its tab - and none of MudBlazor's side stripe. MudBlazor's own
+   active rule sits under .mud-navmenu.mud-navmenu-default with :not(.mud-nav-link-disabled); this repeats that and adds
+   the drawer, to outrank it in every state. */
+.app-drawer .mud-navmenu.mud-navmenu-default .mud-nav-link.active:not(.mud-nav-link-disabled),
+.app-drawer .mud-navmenu.mud-navmenu-default .mud-nav-link.active:not(.mud-nav-link-disabled):hover,
+.app-drawer .mud-navmenu.mud-navmenu-default .mud-nav-link.active:not(.mud-nav-link-disabled):focus-visible {
+    background-color: rgba(217, 83, 60, 0.14);
+    color: var(--tomato-ink);
+    font-weight: 700;
+    border-inline-end-width: 0;
+    --mud-ripple-color: var(--tomato);
+}
+.app-drawer .mud-nav-link.active .mud-nav-link-icon { color: var(--tomato-ink); }
 
 /* Dialogs are a sheet lifted off the pad: enamel, the title in printed green, sentence-case actions with room for a
    thumb. Every MudDialog (message boxes included); .pad-dialog for the editors that ask for it by name. */
@@ -148,6 +167,9 @@ table, .num { font-variant-numeric: tabular-nums; }
 .mud-dialog .mud-dialog-title { color: var(--bottle); font-weight: 700; padding: 18px 24px 8px; }
 .mud-dialog .mud-dialog-actions { padding: 8px 16px 16px; gap: 8px; }
 .mud-dialog .mud-dialog-actions .mud-button-root { min-height: 44px; }
+
+/* Filled buttons sit flat on the paper like everything else: no MudBlazor elevation shadow. */
+.mud-button-filled, .mud-button-filled:hover, .mud-button-filled:active, .mud-button-filled:focus-visible { box-shadow: none; }
 
 /* A button on a pad's green head band (Change days, Fill from a plan, Edit): enamel outline on the band. */
 .pad-head .mud-button-outlined { border-color: rgba(251, 251, 246, 0.62); color: var(--enamel); }
@@ -278,9 +300,11 @@ table, .num { font-variant-numeric: tabular-nums; }
 }
 
 #blazor-error-ui {
-    background: lightyellow;
+    background: var(--enamel);
+    color: var(--tomato-ink);
+    font-weight: 700;
+    border-top: 2px solid var(--tomato);
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
     display: none;
     left: 0;
     padding: 0.6rem 1.25rem 0.7rem 1.25rem;

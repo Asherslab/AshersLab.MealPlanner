@@ -33,12 +33,15 @@
 <div class="shop">
     <section class="pad shop-head" data-testid="shop-head">
         <header class="pad-head">
-            <h1 data-testid="shop-range">@ShoppingText.Range(_from, _to)</h1>
+            <h1 data-testid="shop-range" title="@ShoppingText.Range(_from, _to)">@ShoppingText.ShortRange(_from, _to)</h1>
             <p>
-                Shopping list
                 @if (_book is not null)
                 {
-                    <span class="shop-eaten-line">· food eaten <span data-testid="shop-eaten">@_book.Eaten.Format()</span></span>
+                    <span class="shop-eaten-line">The food for these days: <span data-testid="shop-eaten">@_book.Eaten.Format()</span></span>
+                }
+                else
+                {
+                    <span>Shopping list</span>
                 }
             </p>
             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.DateRange"

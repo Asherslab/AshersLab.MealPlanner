@@ -32,8 +32,8 @@ STORY: Open the app, see today's pad sheet: what's for each slot, whose magnets 
 in red marker, never removed). The Plan tab is the whole week's pad; Shop is a ruled list pad torn into stores.
 
 FIRST VIEWPORT: Bottle-green app bar (app name, sync state); on the sage ground a pad sheet filling the width with a
-bottle-green head band (day, week), slot labels ruled down the left in small green print, meal names large in marker,
-magnet dots under each; the two week tiles below the sheet; bottom bar Today, Plan, Shop, Meals, More on enamel with
+bottle-green head band (day, week, the household's magnets), slot labels ruled down the left in small green print, meal
+names large in marker, a row's own magnets only when it is for some of the household; the two week tiles below the sheet; bottom bar Today, Plan, Shop, Meals, More on enamel with
 the active tab in tomato.
 
 FORM: The Fridge-Door Pad, my top-ranked grounded candidate (1 of 7), chosen over the dealt Kitchen Bench (7 of 7).
@@ -53,6 +53,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 - Fonts self-hosted in wwwroot: the app works offline.
 - Controls stay standard MudBlazor components, re-themed; no costume of a paper pad's own "interface".
 
-## Unresolved
+## Resolved
 
-- Person magnet colours: assigned per person, stored with People (a later slice), or derived from order.
+- Person magnet colours: people already carry a colour (Person.Colour, PersonRules.Palette); the palette is now the
+  canister family, and a person shows as a magnet, never as a coloured text background.
+- Where the magnets go: seen in the running app on 2026-10-22, every row of a day carried all three magnets, because
+  nearly every entry is for everyone - the same dots repeated down the sheet said nothing. So the household's magnets
+  sit once on a day's or week's head band (Today, Plan), and an entry carries its own only when it is for some of the
+  household: the magnet then means "not everyone". The same rule as PeopleDots, where everyone stays quiet.
+- The week tile's cost is the week's food (every serve at its meal's cost), not what is left to buy: an empty list is
+  $0.00 even when every meal is unpriced, which breaks "a cost that cannot be computed is incomplete, never zero".

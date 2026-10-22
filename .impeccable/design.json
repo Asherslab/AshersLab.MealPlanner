@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T00:00:00Z",
+  "title": "Design System: AshersLab Meal Planner",
+  "extensions": {
+    "colorMeta": {
+      "bottle":        { "role": "primary",   "displayName": "Bottle Green",  "canonical": "#2F5D50", "oklch": "oklch(44.1% 0.056 173)", "tonalRamp": ["#00100A", "#002C22", "#1A493D", "#3A685B", "#5A887A", "#7BAA9B", "#A0D0C1", "#C9FBEB"] },
+      "tomato":        { "role": "secondary", "displayName": "Tomato",        "canonical": "#D9533C", "oklch": "oklch(61.6% 0.173 32)",  "tonalRamp": ["#220000", "#4A0400", "#791000", "#A9230C", "#D04A34", "#F76E56", "#FAAE9F", "#FEE9E5"] },
+      "tomato-ink":    { "role": "secondary", "displayName": "Tomato Ink",    "canonical": "#B8412C", "oklch": "oklch(53.9% 0.158 32)",  "tonalRamp": ["#220000", "#4A0300", "#790E00", "#A42D19", "#CA513B", "#F0745C", "#FAAE9E", "#FEE9E5"] },
+      "butter":        { "role": "tertiary",  "displayName": "Butter",        "canonical": "#F2C14E", "oklch": "oklch(83.4% 0.141 85)",  "tonalRamp": ["#130900", "#302100", "#523C01", "#75590F", "#9C7716", "#C6960D", "#EDBC49", "#FEEDCA"] },
+      "sky":           { "role": "tertiary",  "displayName": "Sky",           "canonical": "#7FB6CF", "oklch": "oklch(74.7% 0.068 228)", "tonalRamp": ["#000E17", "#012837", "#09465C", "#2F657C", "#50859D", "#71A7C0", "#96CDE7", "#DBF3FE"] },
+      "sage":          { "role": "tertiary",  "displayName": "Sage",          "canonical": "#6FA27A", "oklch": "oklch(66.5% 0.080 150)", "tonalRamp": ["#001101", "#002D10", "#194B28", "#396A45", "#598B64", "#7AAD84", "#9FD3A9", "#C8FFD3"] },
+      "info-blue":     { "role": "tertiary",  "displayName": "Info Blue (MudBlazor only)",     "canonical": "#2F6E8A", "oklch": "oklch(50.9% 0.078 230)", "tonalRamp": ["#000E18", "#012838", "#08465E", "#256581", "#4886A3", "#69A8C6", "#8FCEED", "#DDF2FE"] },
+      "success-green": { "role": "tertiary",  "displayName": "Success Green (MudBlazor only)", "canonical": "#3F7A4E", "oklch": "oklch(52.7% 0.093 150)", "tonalRamp": ["#001002", "#022D11", "#0C4D24", "#316C41", "#528D60", "#73AF80", "#98D6A5", "#CBFED5"] },
+      "laminate":      { "role": "neutral",   "displayName": "Sage Laminate", "canonical": "#DDE9DF", "oklch": "oklch(92.2% 0.018 151)", "tonalRamp": ["#060D07", "#1E271F", "#39433B", "#566158", "#768178", "#97A299", "#BCC8BE", "#E6F2E8"] },
+      "enamel":        { "role": "neutral",   "displayName": "White Enamel",  "canonical": "#FBFBF6", "oklch": "oklch(98.7% 0.007 107)", "tonalRamp": ["#0B0B08", "#242421", "#40403C", "#5E5E5A", "#7D7D79", "#9F9F9A", "#C4C4C0", "#EFEFEA"] },
+      "ink":           { "role": "neutral",   "displayName": "Ink",           "canonical": "#1D2B27", "oklch": "oklch(27.5% 0.020 175)", "tonalRamp": ["#030E0B", "#192723", "#35433F", "#52625D", "#71817C", "#92A39E", "#B7C9C3", "#E1F3EE"] },
+      "ink-soft":      { "role": "neutral",   "displayName": "Soft Ink",      "canonical": "#4E5F59", "oklch": "oklch(46.9% 0.023 172)", "tonalRamp": ["#020E0A", "#182823", "#34443E", "#51625C", "#70827C", "#91A39D", "#B6C9C2", "#E0F4ED"] },
+      "chrome":        { "role": "neutral",   "displayName": "Chrome",        "canonical": "#B7C1BD", "oklch": "oklch(80.2% 0.012 170)", "tonalRamp": ["#060D0A", "#1E2623", "#3A423F", "#57605C", "#76807C", "#97A19D", "#BDC7C3", "#E7F1ED"] },
+      "rule":          { "role": "neutral",   "displayName": "Ruled Line",    "canonical": "#D6DED9", "oklch": "oklch(89.3% 0.011 159)", "tonalRamp": ["#070D09", "#202622", "#3B423E", "#59605B", "#787F7B", "#99A19C", "#BEC6C1", "#E9F1EC"] }
+    },
+    "typographyMeta": {
+      "display":  { "displayName": "Display",  "purpose": "A pad sheet's head band title: the day, the week, the date range." },
+      "headline": { "displayName": "Headline", "purpose": "The big number in a week tile; tabular figures." },
+      "marker":   { "displayName": "Marker",   "purpose": "Kalam. Only names the household wrote (meals, extra shopping lines), at 20px and up." },
+      "title":    { "displayName": "Title",    "purpose": "A list row's name: a More destination, a shop line." },
+      "body":     { "displayName": "Body",     "purpose": "Running text and notes on a sheet." },
+      "label":    { "displayName": "Label",    "purpose": "Printed slot labels and categories, in bottle green, sentence case." },
+      "caption":  { "displayName": "Caption",  "purpose": "The meta line under an entry, in soft ink." }
+    },
+    "shadows": [
+      { "name": "pad-lift",      "value": "0 1px 0 rgba(29,43,39,0.10), 0 2px 6px -2px rgba(29,43,39,0.12)", "purpose": "Every pad sheet: the sheet resting on the bench." },
+      { "name": "lifted-sheet",  "value": "0 1px 0 rgba(29,43,39,0.10), 0 12px 32px -8px rgba(29,43,39,0.30)", "purpose": "Dialogs: a sheet picked up off the pad." },
+      { "name": "magnet-lip",    "value": "inset 0 -2px 0 rgba(0,0,0,0.22), 0 1px 1px rgba(29,43,39,0.25)", "purpose": "Person magnets (3px lip on the 34px colour swatches)." }
+    ],
+    "motion": [
+      { "name": "ease-settle", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Background-colour changes: the active tab's pill, row hover and press." },
+      { "name": "duration-tint", "value": "160ms", "purpose": "Tint transitions; removed under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "600px", "purpose": "Shop's forms go from stacked to one line." },
+      { "name": "md", "value": "960px", "purpose": "MudBlazor Md: bottom bar gives way to the open drawer; the week becomes a grid." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Pad Sheet",
+      "kind": "card",
+      "refersTo": "pad-sheet",
+      "description": "The main container in place of a card: enamel paper, bottle-green head band, ruled rows, perforated top.",
+      "html": "<section class=\"ds-pad\"><header class=\"ds-pad-head\"><h2>Thursday 22 October</h2><p>Week of Mon 19 Oct</p><span class=\"ds-magnets\"><span class=\"ds-magnet\" style=\"background:#F2C14E\"></span><span class=\"ds-magnet\" style=\"background:#7FB6CF\"></span><span class=\"ds-magnet\" style=\"background:#D9533C\"></span></span></header><div class=\"ds-pad-row\"><span class=\"ds-pad-label\">Breakfast</span><div class=\"ds-pad-entry\"><span class=\"ds-marker\">Porridge</span><div class=\"ds-meta\">2 unpriced</div></div></div><div class=\"ds-pad-row ds-struck\"><span class=\"ds-pad-label\">Lunch</span><div class=\"ds-pad-entry\"><span class=\"ds-marker\">Leftovers</span></div></div><div class=\"ds-pad-row\"><span class=\"ds-pad-label\">Dinner</span><div class=\"ds-pad-entry\"><span class=\"ds-marker\">Lamb korma</span></div></div></section>",
+      "css": ".ds-pad { position: relative; margin-top: 6px; background: #FBFBF6; color: #1D2B27; border-radius: 4px 4px 14px 14px; box-shadow: 0 1px 0 rgba(29,43,39,0.10), 0 2px 6px -2px rgba(29,43,39,0.12); font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; } .ds-pad::before { content: ''; position: absolute; top: -5px; left: 0; right: 0; height: 10px; background: radial-gradient(circle at 7px 5px, #DDE9DF 3px, transparent 3.5px) 0 0 / 14px 10px repeat-x; } .ds-pad-head { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; background: #2F5D50; color: #FBFBF6; padding: 16px 18px 14px; border-radius: 4px 4px 0 0; } .ds-pad-head h2 { grid-column: 1; margin: 0; font: 700 1.625rem/1.1 'Atkinson Hyperlegible', system-ui, sans-serif; letter-spacing: -0.01em; } .ds-pad-head p { grid-column: 1; margin: 4px 0 0; font-size: 0.875rem; color: rgba(251,251,246,0.86); } .ds-magnets { grid-column: 2; grid-row: 1 / span 2; align-self: center; display: inline-flex; gap: 6px; } .ds-magnet { display: inline-block; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.22), 0 1px 1px rgba(29,43,39,0.25); } .ds-pad-row { display: grid; grid-template-columns: 5.5rem 1fr; min-height: 64px; border-top: 1px solid #D6DED9; } .ds-pad-head + .ds-pad-row { border-top: 0; } .ds-pad-label { padding: 12px 10px 12px 14px; border-right: 1px solid #D6DED9; font: 700 0.8125rem/1.25 'Atkinson Hyperlegible', system-ui, sans-serif; color: #2F5D50; } .ds-pad-entry { padding: 10px 14px; } .ds-marker { font: 700 1.375rem/1.15 Kalam, 'Atkinson Hyperlegible', cursive; color: #1D2B27; } .ds-meta { margin-top: 6px; font-size: 0.8125rem; color: #4E5F59; } .ds-struck .ds-marker { text-decoration: line-through; text-decoration-color: #D9533C; text-decoration-thickness: 2px; color: #4E5F59; }"
+    },
+    {
+      "name": "Week Tiles",
+      "kind": "custom",
+      "refersTo": "week-tile",
+      "description": "The week at a glance: a big number over what it counts. An incomplete cost keeps its unpriced count under the number; nothing priced reads $?.",
+      "html": "<div class=\"ds-week-tiles\"><a class=\"ds-week-tile\" href=\"#\"><b>12</b><span>to get this week</span></a><a class=\"ds-week-tile\" href=\"#\"><b>$146.20</b><span>this week · 1 unpriced</span></a></div>",
+      "css": ".ds-week-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .ds-week-tile { display: block; background: #FBFBF6; border: 1px solid #B7C1BD; border-radius: 14px; padding: 14px 16px; color: #1D2B27; text-decoration: none; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-week-tile:hover { border-color: #2F5D50; } .ds-week-tile:focus-visible { outline: 2px solid #2F5D50; outline-offset: 2px; } .ds-week-tile b { display: block; font: 700 1.75rem/1 'Atkinson Hyperlegible', system-ui, sans-serif; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; } .ds-week-tile span { display: block; margin-top: 6px; font-size: 0.8125rem; color: #4E5F59; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "MudBlazor filled button re-themed: bottle green, enamel text, sentence case.",
+      "html": "<button class=\"ds-btn-primary\">Add</button>",
+      "css": ".ds-btn-primary { min-height: 44px; padding: 8px 22px; background: #2F5D50; color: #FBFBF6; border: 0; border-radius: 12px; font: 700 0.9375rem/1.2 'Atkinson Hyperlegible', system-ui, sans-serif; text-transform: none; cursor: pointer; transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-primary:hover { background: #3A685B; } .ds-btn-primary:focus-visible { outline: 2px solid #2F5D50; outline-offset: 2px; }"
+    },
+    {
+      "name": "Button on a Head Band",
+      "kind": "button",
+      "refersTo": "button-on-band",
+      "description": "An outlined button on a sheet's bottle-green band (Fill from a plan, Change days).",
+      "html": "<div class=\"ds-band\"><button class=\"ds-btn-band\">Fill from a plan</button></div>",
+      "css": ".ds-band { background: #2F5D50; padding: 16px 18px; border-radius: 4px 4px 0 0; } .ds-btn-band { min-height: 40px; padding: 6px 16px; background: transparent; color: #FBFBF6; border: 1px solid rgba(251,251,246,0.62); border-radius: 12px; font: 700 0.9375rem/1.2 'Atkinson Hyperlegible', system-ui, sans-serif; cursor: pointer; } .ds-btn-band:hover { background: rgba(251,251,246,0.12); } .ds-btn-band:focus-visible { outline: 2px solid #FBFBF6; outline-offset: 2px; }"
+    },
+    {
+      "name": "Outlined Field",
+      "kind": "input",
+      "refersTo": "",
+      "description": "MudBlazor outlined field / dressed native select: enamel, chrome outline, 12px, 48px tall, bottle-green focus.",
+      "html": "<label class=\"ds-field\"><span>Store</span><select><option>Anywhere</option></select></label>",
+      "css": ".ds-field { display: block; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; } .ds-field > span { display: block; margin-bottom: 4px; font-size: 0.75rem; color: #4E5F59; } .ds-field > select, .ds-field > input { width: 100%; min-height: 48px; padding: 0 12px; font: inherit; font-size: 1rem; color: #1D2B27; background: #FBFBF6; border: 1px solid #B7C1BD; border-radius: 12px; caret-color: #2F5D50; } .ds-field > select:focus, .ds-field > input:focus { outline: 2px solid #2F5D50; outline-offset: -1px; }"
+    },
+    {
+      "name": "Bottom Bar",
+      "kind": "nav",
+      "refersTo": "bottom-nav-tab",
+      "description": "The phone's five tabs on enamel; the active tab in tomato ink with its icon in a tomato pill.",
+      "html": "<nav class=\"ds-bottom-nav\"><a class=\"ds-tab ds-tab-active\" href=\"#\"><span class=\"ds-tab-icon\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\"><path d=\"M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11zM7 11h5v5H7z\"/></svg></span><span class=\"ds-tab-label\">Today</span></a><a class=\"ds-tab\" href=\"#\"><span class=\"ds-tab-icon\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\"><path d=\"M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11z\"/></svg></span><span class=\"ds-tab-label\">Plan</span></a><a class=\"ds-tab\" href=\"#\"><span class=\"ds-tab-icon\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\"><path d=\"M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7.2 14h9.5l3.3-7H5.2L4.3 4H1v2h2l3.6 7.6L5.2 16H19v-2z\"/></svg></span><span class=\"ds-tab-label\">Shop</span></a></nav>",
+      "css": ".ds-bottom-nav { display: flex; background: #FBFBF6; border-top: 1px solid #B7C1BD; padding: 6px 4px; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; } .ds-tab { flex: 1 1 0; min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #4E5F59; text-decoration: none; } .ds-tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 30px; border-radius: 15px; transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-tab-label { font-size: 0.75rem; font-weight: 700; line-height: 1; } .ds-tab-active { color: #B8412C; } .ds-tab-active .ds-tab-icon { background: rgba(217,83,60,0.14); } .ds-tab:hover .ds-tab-icon { background: rgba(47,93,80,0.06); } .ds-tab-active:hover .ds-tab-icon { background: rgba(217,83,60,0.14); } .ds-tab:focus-visible { outline: 2px solid #2F5D50; outline-offset: -4px; border-radius: 12px; }"
+    },
+    {
+      "name": "Shop Line",
+      "kind": "custom",
+      "refersTo": "shop-tick",
+      "description": "A ruled list line: tick box in a printed margin, what to get, its cost. Bought lines are struck in tomato, never removed.",
+      "html": "<div class=\"ds-shop\"><div class=\"ds-shop-line\"><span class=\"ds-box-col\"><span class=\"ds-box\"></span></span><span class=\"ds-what\"><span class=\"ds-name\">Rolled oats</span><span class=\"ds-detail\">1 kg · for Porridge</span></span><span class=\"ds-cost\">$3.20</span></div><div class=\"ds-shop-line\"><span class=\"ds-box-col\"><span class=\"ds-box ds-bought\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z\"/></svg></span></span><span class=\"ds-what ds-struck\"><span class=\"ds-name\">Milk</span><span class=\"ds-detail\">2 L</span></span><span class=\"ds-cost ds-unpriced\">unpriced</span></div></div>",
+      "css": ".ds-shop { background: #FBFBF6; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; } .ds-shop-line { display: grid; grid-template-columns: 3.5rem minmax(0,1fr) auto; align-items: center; min-height: 64px; border-top: 1px solid #D6DED9; cursor: pointer; } .ds-shop-line:active { background: rgba(47,93,80,0.06); } .ds-box-col { align-self: stretch; display: flex; align-items: center; justify-content: center; border-right: 1px solid #D6DED9; } .ds-box { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 2px solid #2F5D50; border-radius: 6px; background: #FBFBF6; color: #2F5D50; box-sizing: border-box; } .ds-bought { background: #2F5D50; color: #FBFBF6; } .ds-what { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; } .ds-name { font-size: 1.0625rem; font-weight: 700; line-height: 1.25; color: #1D2B27; } .ds-detail { font-size: 0.875rem; color: #4E5F59; } .ds-struck .ds-name { text-decoration: line-through; text-decoration-color: #D9533C; text-decoration-thickness: 2px; color: #4E5F59; } .ds-cost { padding-right: 12px; font-size: 0.9375rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #1D2B27; } .ds-unpriced { font-weight: 400; color: #4E5F59; }"
+    },
+    {
+      "name": "Destination Row",
+      "kind": "nav",
+      "refersTo": "",
+      "description": "A ruled link on a sheet (More, Settings): title over description, chevron turning bottle green on hover.",
+      "html": "<a class=\"ds-dest\" href=\"#\"><span class=\"ds-dest-text\"><span class=\"ds-dest-title\">Pantry</span><span class=\"ds-dest-desc\">What's in the cupboard and fridge</span></span><svg class=\"ds-chev\" viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\"><path d=\"M10 6 8.6 7.4 13.2 12l-4.6 4.6L10 18l6-6z\"/></svg></a>",
+      "css": ".ds-dest { display: flex; align-items: center; gap: 16px; min-height: 68px; padding: 10px 12px 10px 18px; background: #FBFBF6; color: #1D2B27; text-decoration: none; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-dest:hover { background-color: rgba(47,93,80,0.05); } .ds-dest:active { background-color: rgba(47,93,80,0.10); } .ds-dest:focus-visible { outline: 2px solid #2F5D50; outline-offset: -3px; border-radius: 8px; } .ds-dest-text { flex: 1; display: flex; flex-direction: column; gap: 2px; } .ds-dest-title { font-weight: 700; font-size: 1.0625rem; line-height: 1.3; } .ds-dest-desc { font-size: 0.875rem; line-height: 1.35; color: #4E5F59; } .ds-chev { color: #B7C1BD; } .ds-dest:hover .ds-chev { color: #2F5D50; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Fridge-Door Pad",
+    "overview": "The week is the planner pad stuck to the fridge: a printed grid the household writes in, with magnets marking who. Every screen is one or more sheets of that pad lying on a sage laminate bench. The sheet's printed parts (the head band, the slot labels, the rules) are bottle-green ink; what the household wrote (meal names, extra shopping lines) is in a marker hand. Done things are struck through in tomato marker and stay where they were.\n\nThe world refuses the category default of identical grey cards in a list. Content sits on ruled paper, divided by hairlines, not boxed. Density is phone-first and thumb-sized: rows are at least 64px tall, controls at least 44px, and on a wide screen a day or a list keeps a phone-ish 640px column, centred, while only the week grid spreads out.\n\nThe app is light only; it is used in a lit kitchen and a supermarket aisle. Controls stay standard MudBlazor components, re-themed into this world through `Design/AppTheme.cs`; the pad is never costumed with a fake paper \"interface\".",
+    "keyCharacteristics": [
+      "White-enamel sheets on a sage laminate ground, with a perforated tear along the top sheet.",
+      "A bottle-green printed head band on each sheet; slot labels ruled down the left in small green print.",
+      "Meal names in Kalam marker, everything else in Atkinson Hyperlegible.",
+      "Round person magnets with a bottom lip mark who an entry is for, only when it is not everyone.",
+      "Struck, not removed: ticked and skipped things keep their place under a tomato line.",
+      "Fonts are self-hosted in `wwwroot/fonts` because the app works offline."
+    ],
+    "rules": [
+      { "name": "The Two Places Rule", "body": "Every colour lives in both `wwwroot/css/app.css` (custom properties on `:root`) and `Design/AppTheme.cs` (the MudBlazor palette). Change one, change both.", "section": "colors" },
+      { "name": "The One Attention Colour Rule", "body": "Anything that needs seeing to (unpriced, short of serves, running low, an error) reads in tomato ink. There is no amber warning and no separate error red.", "section": "colors" },
+      { "name": "The Struck-in-Tomato Rule", "body": "A done or skipped thing is struck through with a 2px tomato line and its text drops to ink soft. It is never removed, hidden or greyed into a separate colour.", "section": "colors" },
+      { "name": "The Marker Rule", "body": "Kalam only for names the household wrote, and only at 20px and up. Never for labels, numbers, prices or controls.", "section": "typography" },
+      { "name": "The Sentence-Case Rule", "body": "No uppercase labels, overlines or buttons anywhere; MudBlazor's button and overline transforms are switched off in the theme. \"Grams (g)\", not \"GRAMS (G)\".", "section": "typography" },
+      { "name": "The Tabular Figures Rule", "body": "Tables, `.num`, week-tile numbers, prices and day numbers use tabular figures so money and dates line up.", "section": "typography" },
+      { "name": "The Paper-Not-Cards Rule", "body": "No shadow beyond the pad lift on anything that rests on the page. Depth is enamel on laminate; a hover is a bottle tint, not a lift.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do put a day, a list or a set of entries on a pad sheet (enamel on laminate, bottle-green head band, ruled rows).",
+      "Do keep a day or list to a centred 640px column on wide screens.",
+      "Do show a cost that cannot be computed as incomplete: \"from $X + N unpriced\", or \"$?\" when nothing is priced. Never as $0.00.",
+      "Do strike done and skipped things through in tomato and leave them where they were.",
+      "Do mark unsent edits with the dashed ink-soft edge.",
+      "Do change `wwwroot/css/app.css` and `Design/AppTheme.cs` together.",
+      "Do self-host any new font in `wwwroot/fonts` with its licence beside it; the app works offline.",
+      "Do keep touch targets at least 44px and list rows at least 64px."
+    ],
+    "donts": [
+      "Don't use identical grey cards in a list; rule rows on a sheet instead.",
+      "Don't set labels, numbers, prices or controls in Kalam, or Kalam below 20px.",
+      "Don't add drop shadows beyond the pad lift to anything resting on the page.",
+      "Don't use plain tomato for text; use tomato ink.",
+      "Don't show a person as a coloured text background; show their magnet.",
+      "Don't repeat the household's magnets on every row; they sit once on the band, and a row carries magnets only when it is not for everyone.",
+      "Don't uppercase labels, overlines or buttons.",
+      "Don't add a dark theme without a decision; the world is light only."
+    ]
+  }
+}

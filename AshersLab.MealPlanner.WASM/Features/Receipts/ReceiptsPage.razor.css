@@ -34,7 +34,7 @@
 }
 
 .file-pick:hover {
-    background: #264C41;
+    background: var(--bottle-deep);
 }
 
 .file-pick:focus-within {

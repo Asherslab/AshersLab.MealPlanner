@@ -86,11 +86,20 @@ outstanding from earlier: confirm the GHCR package is Public, and delete the str
 Slice 13 skipped its check behind the simulated Home Assistant ingress because of it; slice 14 fetched images over the
 registry API with curl instead. Restart Docker Desktop, then run `.claude/tools/ingress-sim` once to close that gap.
 
-## Next step 3 - a frontend design leg
+## Next step 3 - a frontend design leg (done)
 
-After the owner has looked over the functionality: the app looks too much like stock Blazor and MudBlazor. Treat it as
-its own leg - a design direction first, agreed with the owner, then applied across the pages - not tweaks inside
-feature slices. Not started; wait for the owner's go.
+Done on 2026-10-22 with the impeccable design skill (installed globally with frontend-design and
+web-design-guidelines; impeccable.style). The owner chose the direction on the skill's decision page: "The Fridge-Door
+Pad" for its form, with "The Kitchen Bench" palette and week tiles. What it is now: [PRODUCT.md](../../PRODUCT.md),
+[DESIGN.md](../../DESIGN.md), and the direction contract in `.impeccable/surfaces/`. The navigation changed first, at
+the owner's ask: a phone bottom bar (Today, Plan, Shop, Meals, More), More and Settings pages, the debug cards moved to
+Settings > Diagnostics. Then every page was restyled and the skill's finish reviewer ran: eight material fixes (the
+week tile showed $0.00 for an unpriced week, magnets missing on Plan, mismatched names on the desktop drawer, and
+smaller ones), all scored resolved; disposition ship for those fixes. Building it found and fixed a sync gap - a pull
+confirming this device's own edits reported no change, so pages never re-read what was unsent.
+
+Open for the owner: look at it on the phone; whether any page still feels stock (the dialogs, the date pickers and the
+receipt review were restyled but are the least-seen pages).
 
 ## Later, from the walk-through
 

@@ -3,10 +3,29 @@
     margin: 0 auto;
 }
 
-/* The bar above says "Meal Planner" on this tab, so the page names itself - in plain bold print, not a band. */
+/* On a phone the app bar names the tab, so the heading is for screen readers only; a desktop's bar says "Meal
+   Planner", so there the page names itself in plain bold print. As on Settings. */
 .page-title {
-    margin: 4px 4px 12px;
-    font: 700 1.5rem/1.15 var(--font-body);
-    letter-spacing: -0.01em;
-    color: var(--ink);
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    margin: 0;
+}
+
+@media (min-width: 960px) {
+    .page-title {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip-path: none;
+        white-space: normal;
+        margin: 4px 4px 12px;
+        font: 700 1.5rem/1.15 var(--font-body);
+        letter-spacing: -0.01em;
+        color: var(--ink);
+    }
 }

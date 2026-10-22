@@ -31,6 +31,16 @@
                 <MudLink Href="./" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
             </span>
         }
+        else if (_here is { TabLabel: { } tab, Route.Length: > 0 })
+        {
+            @* A tab other than Today: the bar names it on a phone, as the bottom bar does; the app's name on a desktop. *@
+            <span class="phone-only app-bar-page">
+                <MudText Typo="Typo.h6" Class="app-bar-title">@tab</MudText>
+            </span>
+            <span class="wide-only">
+                <MudLink Href="./" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
+            </span>
+        }
         else
         {
             <MudLink Href="./" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
@@ -46,7 +56,7 @@
             @foreach (NavDestination d in NavModel.In(NavGroup.Main))
             {
                 <MudNavLink Href="@Link(d)" Match="@(d.Route.Length == 0 ? NavLinkMatch.All : NavLinkMatch.Prefix)"
-                            Icon="@d.Icon" data-testid="@($"nav-{d.Key}")">@d.Title</MudNavLink>
+                            Icon="@d.Icon" data-testid="@($"nav-{d.Key}")">@(d.TabLabel ?? d.Title)</MudNavLink>
             }
             <div class="drawer-heading">
                 <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Kitchen</MudText>

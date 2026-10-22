@@ -13,6 +13,11 @@ Start here. Every doc carries front-matter saying what it is (`kind`) and whethe
 Writing or moving a doc rather than reading one? [AGENTS.md](AGENTS.md) is the procedure — which
 directory, what front-matter, and how a doc leaves `work/`.
 
+Who the app is for, and how it looks, are not here either: [../PRODUCT.md](../PRODUCT.md) (the planner, their day, the
+product's principles) and [../DESIGN.md](../DESIGN.md) (the fridge-door pad in the kitchen bench's colours - tokens,
+type, components, the rules of the world), both kept by the impeccable design skill. Read DESIGN.md before any UI
+change.
+
 Operating the repo — running the app, driving the browser, reading the database — is not here. That
 is the global `run-and-inspect-app` skill plus this repo's `.claude/app-local.md`, and the repo-wide
 rules are in [../AGENTS.md](../AGENTS.md).

@@ -39,7 +39,8 @@ public static class AppTheme
             Tertiary             = "#2F6E8A",
             Info                 = "#2F6E8A",
             Success              = "#3F7A4E",
-            Warning              = "#8A6410",
+            // Attention is one marker colour app-wide: "how much?", "unpriced", running low all read in tomato.
+            Warning              = TomatoInk,
             Error                = TomatoInk,
             Dark                 = Ink,
             Background           = Laminate,

@@ -17,6 +17,15 @@ public static class ShoppingText
     public static string Range(DateOnly from, DateOnly to) => from == to ? Day(from) : $"{Day(from)} – {Day(to)}";
 
     /// <summary>
+    /// The list's days, short enough for one line of a phone's head band: "19–25 Oct", "26 Oct – 1 Nov", "Mon 26 Oct".
+    /// </summary>
+    public static string ShortRange(DateOnly from, DateOnly to) =>
+        from == to ? Day(from)
+        : from.Month == to.Month && from.Year == to.Year
+            ? $"{from.Day}–{to.ToString("d MMM", CultureInfo.InvariantCulture)}"
+            : $"{from.ToString("d MMM", CultureInfo.InvariantCulture)} – {to.ToString("d MMM", CultureInfo.InvariantCulture)}";
+
+    /// <summary>
     /// What to put in the trolley: "1 pack (1.25 kg spare)", "2 packs", "750 g" when no product gives a pack size,
     /// "1 pack · running low" for a staple, "in the pantry · need 300 g, have about 500 g".
     /// </summary>

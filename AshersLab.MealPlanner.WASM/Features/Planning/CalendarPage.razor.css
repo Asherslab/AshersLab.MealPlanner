@@ -31,6 +31,12 @@
     min-height: 40px;
 }
 
+/* The household's magnets, at the far end of the band's action line. */
+.cal-household {
+    margin-left: auto;
+    align-self: center;
+}
+
 .cal-head-actions ::deep .mud-button-outlined {
     border-color: rgba(251, 251, 246, 0.62);
 }

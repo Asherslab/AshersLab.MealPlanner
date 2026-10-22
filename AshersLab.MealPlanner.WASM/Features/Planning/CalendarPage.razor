@@ -59,6 +59,13 @@
                     <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
                                OnClick="() => GoToWeek(Rotation.MondayOf(Today))" data-testid="cal-this-week">This week</MudButton>
                 }
+                @* The household's magnets, as on Today: an entry carries its own only when it is for some of them. *@
+                @if (_people.Count > 0)
+                {
+                    <span class="cal-household" title="@string.Join(", ", _people.Select(p => p.Name))">
+                        <PeopleDots People="_people"/>
+                    </span>
+                }
             </div>
         </Head>
         <ChildContent>

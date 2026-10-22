@@ -77,7 +77,7 @@
     }
 
     <div class="mt-4">
-        <WeekTiles ToGet="_toGet" Done="_done" Spend="_spend"/>
+        <WeekTiles ToGet="_toGet" Done="_done" Food="_spend"/>
     </div>
 
     <MudButton Href="receipts" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Receipt"
@@ -135,7 +135,9 @@
         _done  = lines.Count(l => l.Tick != ShoppingTick.None) + shop.Extras.Count(e => e.Tick == ShoppingTick.Bought);
         _toGet = lines.Count + shop.Extras.Count - _done;
 
+        // What the week's food costs - every serve at its meal's cost - not what is left to buy: a list with nothing on it
+        // costs $0.00 even when every meal is unpriced, and an uncomputable cost must say so.
         ShoppingBook week = from == monday && to == monday.AddDays(6) ? shop : await ShoppingBook.LoadAsync(db, monday, monday.AddDays(6));
-        _spend = week.Spend;
+        _spend = week.Eaten;
     }
 }
