@@ -25,14 +25,53 @@
     --butter: #F2C14E;
     --sky: #7FB6CF;
     --sage: #6FA27A;
+    /* The printed band - head bands, the app bar, filled green controls - and what is printed on it. In the light the
+       band is the same bottle green as the print; at night they part (below). */
+    --band: #2F5D50;
+    --band-deep: #264C41;
+    --on-band: #FBFBF6;
+    --shade: 29, 43, 39;   /* what a shadow is cast in, as r, g, b for rgba() */
+    --pad-lift: 0 1px 0 rgba(var(--shade), 0.10), 0 2px 6px -2px rgba(var(--shade), 0.12);
+    --lifted: 0 1px 0 rgba(var(--shade), 0.10), 0 12px 32px -8px rgba(var(--shade), 0.30);
+    --selection: rgba(242, 193, 78, 0.55);
     --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-marker: "Kalam", "Atkinson Hyperlegible", cursive;
     --pad-radius: 14px;
+    color-scheme: light;
+}
+
+/* ---- The pad at night: the same kitchen with the bench lights off and the rangehood on --------------------------------
+   The planner's choice, kept with their sign-in (Settings → Colours; Design/Appearance.cs), never the phone's own
+   setting. The laminate goes to near-black green, the sheet to a dark enamel, the household's ink to the colour the
+   paper was; the print lifts to a pale bottle green so labels still read on the dark sheet, and the band stays a deep
+   bottle green it no longer has to share with the print. Tomato ink lifts for text; the canisters only soften. */
+:root[data-theme="dark"] {
+    --bottle: #8CC4AE;
+    --bottle-deep: #A6D3C1;
+    --laminate: #121A17;
+    --enamel: #1C2622;
+    --ink: #E9EEE8;
+    --ink-soft: #A5B4AD;
+    --chrome: #64766F;   /* 3.2:1 on the sheet: an input's outline still reads in a dark room */
+    --rule: #2C3833;
+    --tomato: #E5664E;
+    --tomato-ink: #F49B85;
+    --butter: #E9BD57;
+    --sky: #86BBD3;
+    --sage: #7DAE88;
+    --band: #2A5246;
+    --band-deep: #224338;
+    --on-band: #EEF1EA;
+    --shade: 0, 0, 0;
+    --pad-lift: 0 1px 0 rgba(0, 0, 0, 0.45), 0 2px 8px -2px rgba(0, 0, 0, 0.55);
+    --lifted: 0 1px 0 rgba(0, 0, 0, 0.45), 0 14px 36px -8px rgba(0, 0, 0, 0.70);
+    --selection: rgba(233, 189, 87, 0.38);
+    color-scheme: dark;
 }
 
 html { -webkit-text-size-adjust: 100%; }
 body { background: var(--laminate); color: var(--ink); font-family: var(--font-body); }
-::selection { background: rgba(242, 193, 78, 0.55); color: var(--ink); }
+::selection { background: var(--selection); color: var(--ink); }
 :focus-visible { outline: 2px solid var(--bottle); outline-offset: 2px; }
 * { scrollbar-color: var(--chrome) transparent; }
 input, textarea { caret-color: var(--bottle); }
@@ -49,7 +88,7 @@ table, .num { font-variant-numeric: tabular-nums; }
     position: relative;
     background: var(--enamel);
     border-radius: 4px 4px var(--pad-radius) var(--pad-radius);
-    box-shadow: 0 1px 0 rgba(29, 43, 39, 0.10), 0 2px 6px -2px rgba(29, 43, 39, 0.12);
+    box-shadow: var(--pad-lift);
     margin-top: 6px;
 }
 .pad::before {
@@ -67,13 +106,13 @@ table, .num { font-variant-numeric: tabular-nums; }
 .page-body :has(.pad) ~ * .pad::before { display: none; }
 
 .pad-head {
-    background: var(--bottle);
-    color: var(--enamel);
+    background: var(--band);
+    color: var(--on-band);
     padding: 16px 18px 14px;
     border-radius: 4px 4px 0 0;
 }
 .pad-head h1, .pad-head h2 { font: 700 1.625rem/1.1 var(--font-body); letter-spacing: -0.01em; margin: 0; }
-.pad-head p { margin: 4px 0 0; font-size: 0.875rem; color: rgba(251, 251, 246, 0.86); }
+.pad-head p { margin: 4px 0 0; font-size: 0.875rem; color: color-mix(in srgb, var(--on-band) 86%, transparent); }
 .pad-head { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; }
 .pad-head > :not(h1):not(h2):not(p) { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
 .pad-head h1, .pad-head h2, .pad-head p { grid-column: 1; }
@@ -137,7 +176,7 @@ table, .num { font-variant-numeric: tabular-nums; }
     display: inline-block;
     width: 18px; height: 18px;
     border-radius: 50%;
-    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22), 0 1px 1px rgba(29, 43, 39, 0.25);
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22), 0 1px 1px rgba(var(--shade), 0.25);
     vertical-align: middle;
 }
 .magnets { display: inline-flex; gap: 6px; align-items: center; }
@@ -154,7 +193,7 @@ table, .num { font-variant-numeric: tabular-nums; }
 .app-drawer .mud-navmenu.mud-navmenu-default .mud-nav-link.active:not(.mud-nav-link-disabled),
 .app-drawer .mud-navmenu.mud-navmenu-default .mud-nav-link.active:not(.mud-nav-link-disabled):hover,
 .app-drawer .mud-navmenu.mud-navmenu-default .mud-nav-link.active:not(.mud-nav-link-disabled):focus-visible {
-    background-color: rgba(217, 83, 60, 0.14);
+    background-color: color-mix(in srgb, var(--tomato) 14%, transparent);
     color: var(--tomato-ink);
     font-weight: 700;
     border-inline-end-width: 0;
@@ -164,7 +203,7 @@ table, .num { font-variant-numeric: tabular-nums; }
 
 /* Dialogs are a sheet lifted off the pad: enamel, the title in printed green, sentence-case actions with room for a
    thumb. Every MudDialog (message boxes included); .pad-dialog for the editors that ask for it by name. */
-.mud-dialog { border-radius: var(--pad-radius); box-shadow: 0 1px 0 rgba(29, 43, 39, 0.10), 0 12px 32px -8px rgba(29, 43, 39, 0.30); }
+.mud-dialog { border-radius: var(--pad-radius); box-shadow: var(--lifted); }
 .mud-dialog .mud-dialog-title { color: var(--bottle); font-weight: 700; padding: 18px 24px 8px; }
 .mud-dialog .mud-dialog-actions { padding: 8px 16px 16px; gap: 8px; }
 .mud-dialog .mud-dialog-actions .mud-button-root { min-height: 44px; }
@@ -172,10 +211,15 @@ table, .num { font-variant-numeric: tabular-nums; }
 /* Filled buttons sit flat on the paper like everything else: no MudBlazor elevation shadow. */
 .mud-button-filled, .mud-button-filled:hover, .mud-button-filled:active, .mud-button-filled:focus-visible { box-shadow: none; }
 
+/* At night a filled green button is printed band, as by day: MudBlazor's Primary is the pale print green there - right
+   for text buttons and links on the dark sheet, a glaring block as a fill (the selected day in the week's strip). */
+:root[data-theme="dark"] .mud-button-filled.mud-button-filled-primary { background-color: var(--band); color: var(--on-band); }
+:root[data-theme="dark"] .mud-button-filled.mud-button-filled-primary:hover { background-color: var(--band-deep); }
+
 /* A button on a pad's green head band (Change days, Fill from a plan, Edit): enamel outline on the band. */
-.pad-head .mud-button-outlined { border-color: rgba(251, 251, 246, 0.62); color: var(--enamel); }
-.pad-head .mud-button-root:hover { background-color: rgba(251, 251, 246, 0.12); }
-.pad-head .mud-button-text, .pad-head .mud-icon-button { color: var(--enamel); }
+.pad-head .mud-button-outlined { border-color: color-mix(in srgb, var(--on-band) 62%, transparent); color: var(--on-band); }
+.pad-head .mud-button-root:hover { background-color: color-mix(in srgb, var(--on-band) 12%, transparent); }
+.pad-head .mud-button-text, .pad-head .mud-icon-button { color: var(--on-band); }
 
 /* Today, circled in tomato marker - a day's date in a strip or a column head. */
 .pad-today { border: 2px solid var(--tomato); border-radius: 50%; }
@@ -291,7 +335,7 @@ table, .num { font-variant-numeric: tabular-nums; }
     height: 34px;
     border-radius: 50%;
     border: 0;
-    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22), 0 1px 2px rgba(29, 43, 39, 0.25);
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22), 0 1px 2px rgba(var(--shade), 0.25);
     cursor: pointer;
 }
 

@@ -61,7 +61,7 @@
 }
 
 .sheet-option:hover {
-    background: rgba(47, 93, 80, 0.06);
+    background: color-mix(in srgb, var(--bottle) 6%, transparent);
 }
 
 .sheet-where-fields {

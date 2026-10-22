@@ -24,7 +24,7 @@
     font-size: 1.875rem;
     line-height: 1.1;
     letter-spacing: 0;
-    color: var(--enamel);
+    color: var(--on-band);
     overflow-wrap: anywhere;
 }
 
@@ -38,7 +38,7 @@
 
 .meal-edit ::deep .mud-button-root {
     min-height: 44px;
-    border-color: rgba(251, 251, 246, 0.6);
+    border-color: color-mix(in srgb, var(--on-band) 60%, transparent);
 }
 
 /* What it costs: the figures are numbers, so Atkinson, bold, in tabular figures. "from $X + 1 unpriced" stays whole. */
@@ -96,7 +96,7 @@
 }
 
 .meal-line:hover {
-    background: rgba(47, 93, 80, 0.05);
+    background: color-mix(in srgb, var(--bottle) 5%, transparent);
 }
 
 .meal-line:last-child {

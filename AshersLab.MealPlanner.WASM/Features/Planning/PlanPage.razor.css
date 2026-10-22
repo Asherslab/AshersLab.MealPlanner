@@ -23,11 +23,11 @@
 /* Edit, on the head band: an enamel outline on the bottle green. */
 .plan ::deep .pad-head .mud-button-outlined {
     min-height: 40px;
-    border-color: rgba(251, 251, 246, 0.62);
+    border-color: color-mix(in srgb, var(--on-band) 62%, transparent);
 }
 
 .plan ::deep .pad-head .mud-button-outlined:hover {
-    background-color: rgba(251, 251, 246, 0.12);
+    background-color: color-mix(in srgb, var(--on-band) 12%, transparent);
 }
 
 /* The plan's weeks: a strip under the head band. */
@@ -104,7 +104,7 @@
 }
 
 .tpl-entry:hover {
-    background: rgba(47, 93, 80, 0.06);
+    background: color-mix(in srgb, var(--bottle) 6%, transparent);
 }
 
 .tpl-grid .plan-meals {
@@ -133,7 +133,7 @@
 .tpl-add:focus-visible {
     opacity: 1;
     color: var(--bottle);
-    background: rgba(47, 93, 80, 0.07);
+    background: color-mix(in srgb, var(--bottle) 7%, transparent);
 }
 
 /* ---- A phone: the days in a strip, one day's slots ruled down the sheet. ---- */

@@ -29,8 +29,8 @@ Present tense, kept current, no dates.
 - [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
 - [Signing in](modules/infrastructure/accounts.md) — the app's own sign-in with passkeys: setup and invitation links
-  stored as hashes, the public address passkeys are bound to, the session, the cross-site check, what is public, and
-  what the planner sees.
+  stored as hashes, the public address passkeys are bound to, the session, the cross-site check, what is public, what
+  the planner sees, and light or dark - kept with the sign-in, never the phone's dark mode.
 - [How the app is deployed](modules/infrastructure/deployment.md) — the one image, the Home Assistant add-on behind
   Nginx Proxy Manager (its options), ingress (still supported, no longer used: base path, the gRPC-Web prefix trap, the
   HA user), CI to GHCR, and the owner's

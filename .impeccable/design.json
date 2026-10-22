@@ -110,7 +110,7 @@
   ],
   "narrative": {
     "northStar": "The Fridge-Door Pad",
-    "overview": "The week is the planner pad stuck to the fridge: a printed grid the household writes in, with magnets marking who. Every screen is one or more sheets of that pad lying on a sage laminate bench. The sheet's printed parts (the head band, the slot labels, the rules) are bottle-green ink; what the household wrote (meal names, extra shopping lines) is in a marker hand. Done things are struck through in tomato marker and stay where they were.\n\nThe world refuses the category default of identical grey cards in a list. Content sits on ruled paper, divided by hairlines, not boxed. Density is phone-first and thumb-sized: rows are at least 64px tall, controls at least 44px, and on a wide screen a day or a list keeps a phone-ish 640px column, centred, while only the week grid spreads out.\n\nThe app is light only; it is used in a lit kitchen and a supermarket aisle. Controls stay standard MudBlazor components, re-themed into this world through `Design/AppTheme.cs`; the pad is never costumed with a fake paper \"interface\".",
+    "overview": "The week is the planner pad stuck to the fridge: a printed grid the household writes in, with magnets marking who. Every screen is one or more sheets of that pad lying on a sage laminate bench. The sheet's printed parts (the head band, the slot labels, the rules) are bottle-green ink; what the household wrote (meal names, extra shopping lines) is in a marker hand. Done things are struck through in tomato marker and stay where they were.\n\nThe world refuses the category default of identical grey cards in a list. Content sits on ruled paper, divided by hairlines, not boxed. Density is phone-first and thumb-sized: rows are at least 64px tall, controls at least 44px, and on a wide screen a day or a list keeps a phone-ish 640px column, centred, while only the week grid spreads out.\n\nBy day the app is light: it is used in a lit kitchen and a supermarket aisle. At night it can be the pad at night - the same kitchen with the bench lights off and the rangehood on - the planner's own choice on Settings → Colours, kept with their sign-in, never the phone's dark mode. Controls stay standard MudBlazor components, re-themed into this world through `Design/AppTheme.cs`; the pad is never costumed with a fake paper \"interface\".",
     "keyCharacteristics": [
       "White-enamel sheets on a sage laminate ground, with a perforated tear along the top sheet.",
       "A bottle-green printed head band on each sheet; slot labels ruled down the left in small green print.",
@@ -146,7 +146,9 @@
       "Don't show a person as a coloured text background; show their magnet.",
       "Don't repeat the household's magnets on every row; they sit once on the band, and a row carries magnets only when it is not for everyone.",
       "Don't uppercase labels, overlines or buttons.",
-      "Don't add a dark theme without a decision; the world is light only."
+      "Don't follow the phone's dark mode; light or dark is the planner's choice (Settings → Colours).",
+      "Don't write a colour as a literal in a page's CSS. Use a token, or color-mix of one for a tint, so the night gets it too.",
+      "Don't fill with --bottle where the band is meant; the band is --band, and at night the two are different greens."
     ]
   }
 }

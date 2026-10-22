@@ -17,6 +17,9 @@ public sealed class Member : IdentityUser<Guid>
     public string DisplayName { get; set; } = "";
 
     public DateTimeOffset JoinedAt { get; set; }
+
+    /// <summary>"light" or "dark" (<c>AppearanceRules</c>), chosen on Settings → Colours and followed on every device of theirs; null never chose - the light.</summary>
+    public string? Appearance { get; set; }
 }
 
 /// <summary>

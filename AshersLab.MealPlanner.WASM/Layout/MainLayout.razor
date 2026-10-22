@@ -1,9 +1,10 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 
-@* The fridge-door pad in the kitchen bench's colours: Design/AppTheme.cs. Light only, said outright: a phone in dark mode
-   otherwise got MudBlazor's own dark palette - dark selects, faint labels, fields invisible until tapped. *@
-<MudThemeProvider Theme="AppTheme.Theme" IsDarkMode="false" ObserveSystemDarkModeChange="false"/>
+@* The fridge-door pad in the kitchen bench's colours: Design/AppTheme.cs. Light or dark is the planner's choice
+   (Design/AppearanceState.cs), never the phone's: left to the phone, one in dark mode got MudBlazor's own dark palette -
+   dark selects, faint labels, fields invisible until tapped. *@
+<MudThemeProvider Theme="AppTheme.Theme" IsDarkMode="Appearance.IsDark" ObserveSystemDarkModeChange="false"/>
 <MudPopoverProvider/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
@@ -96,13 +97,25 @@
 
     [Inject] private NavigationManager Navigation { get; set; } = null!;
 
+    [Inject] private AppearanceState Appearance { get; set; } = null!;
+
     // The bar and the back arrow follow every navigation, wherever it came from - a tab, a row on More, a link
     // inside a page, the browser's own back button.
     protected override void OnInitialized()
     {
         Locate();
         Navigation.LocationChanged += Moved;
+        Appearance.Changed += Recoloured;
     }
+
+    // Once the page is up: the account's choice, if another phone changed it, or this one's, if it was waiting to go.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await Appearance.ReconcileAsync();
+    }
+
+    private void Recoloured() => InvokeAsync(StateHasChanged);
 
     private void Moved(object? sender, LocationChangedEventArgs e)
     {
@@ -122,5 +135,9 @@
     // path, under the add-on).
     private static string Link(NavDestination d) => d.Route.Length == 0 ? "./" : d.Route;
 
-    public void Dispose() => Navigation.LocationChanged -= Moved;
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= Moved;
+        Appearance.Changed -= Recoloured;
+    }
 }

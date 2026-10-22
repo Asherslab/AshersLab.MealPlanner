@@ -7,7 +7,8 @@ using Microsoft.JSInterop;
 namespace AshersLab.MealPlanner.WASM.Account;
 
 /// <summary>Who is signed in, as the server says: <c>Available</c> false where the app has no sign-in of its own.</summary>
-public sealed record AccountState(bool Available, bool SignedIn, string? Name);
+/// <param name="Appearance">"light" or "dark" as the account last chose; null never chose (Shared.Domain/Appearance).</param>
+public sealed record AccountState(bool Available, bool SignedIn, string? Name, string? Appearance = null);
 
 public sealed record PasskeyView(string Id, string? Name, DateTimeOffset CreatedAt, bool Synced);
 
@@ -24,7 +25,8 @@ public sealed record AccountResult(bool Ok, string? Problem, bool Cancelled = fa
     public static readonly AccountResult Cancel = new(false, null, Cancelled: true);
 }
 
-public sealed record MeBody(bool SignedIn, string? Name);
+public sealed record MeBody(bool SignedIn, string? Name, string? Appearance);
+public sealed record AppearanceBody(string Appearance);
 public sealed record ProblemBody(string Message);
 public sealed record EmptyBody;
 public sealed record TokenBody(string Token);
@@ -47,6 +49,7 @@ public sealed record PasskeyBody(Guid MemberId, string PasskeyId);
 [JsonSerializable(typeof(InviteBody))]
 [JsonSerializable(typeof(MemberBody))]
 [JsonSerializable(typeof(PasskeyBody))]
+[JsonSerializable(typeof(AppearanceBody))]
 [JsonSerializable(typeof(InvitationView))]
 [JsonSerializable(typeof(InvitationCreated))]
 [JsonSerializable(typeof(List<MemberView>))]
@@ -76,7 +79,7 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
             if (response.StatusCode == HttpStatusCode.NotFound || response.Content.Headers.ContentType?.MediaType != "application/json")
                 return new AccountState(false, false, null);
             MeBody? me = await response.Content.ReadFromJsonAsync(AccountJson.Default.MeBody);
-            return new AccountState(true, me?.SignedIn == true, me?.Name);
+            return new AccountState(true, me?.SignedIn == true, me?.Name, me?.Appearance);
         }
         catch (HttpRequestException)
         {
@@ -126,7 +129,19 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
         // A passkey the server does not know (its member removed): stop going straight to the prompt on this device.
         if (result.Ok || result.Problem?.Contains("not one this app knows", StringComparison.Ordinal) == true)
             await (await Passkeys()).InvokeVoidAsync("remember", result.Ok);
+        if (result.Ok)
+            await Announce();
         return result;
+    }
+
+    /// <summary>Someone has just signed in on this device - by passkey or a new member's invitation.</summary>
+    public event Func<Task>? SignedIn;
+
+    private async Task Announce()
+    {
+        if (SignedIn is { } handlers)
+            foreach (Func<Task> handler in handlers.GetInvocationList().Cast<Func<Task>>())
+                await handler();
     }
 
     private async Task Remember() => await (await Passkeys()).InvokeVoidAsync("remember", true);
@@ -156,7 +171,10 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
             return AccountResult.Cancel;
         AccountResult result = await Post("account/invitation/accept", new AcceptBody(token, name, credential), AccountJson.Default.AcceptBody);
         if (result.Ok)
+        {
             await Remember();
+            await Announce();
+        }
         return result;
     }
 
@@ -208,6 +226,10 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
     public Task<AccountResult> RemoveMemberAsync(Guid member) => Post("account/members/remove", new MemberBody(member), AccountJson.Default.MemberBody);
 
     public Task<AccountResult> SignOutAsync() => Post("account/sign-out", new EmptyBody(), AccountJson.Default.EmptyBody);
+
+    /// <summary>Keeps "light" or "dark" with the signed-in account (Design/AppearanceState.cs).</summary>
+    public Task<AccountResult> SetAppearanceAsync(string appearance) =>
+        Post("account/appearance", new AppearanceBody(appearance), AccountJson.Default.AppearanceBody);
 
     public Task<AccountResult> SignOutEverywhereAsync() => Post("account/sign-out-everywhere", new EmptyBody(), AccountJson.Default.EmptyBody);
 

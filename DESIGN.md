@@ -17,6 +17,24 @@ colors:
   sage: "#6FA27A"
   info-blue: "#2F6E8A"
   success-green: "#3F7A4E"
+  band: "#2F5D50"
+  band-deep: "#264C41"
+  on-band: "#FBFBF6"
+  night-print: "#8CC4AE"
+  night-band: "#2A5246"
+  night-band-deep: "#224338"
+  night-on-band: "#EEF1EA"
+  night-laminate: "#121A17"
+  night-enamel: "#1C2622"
+  night-ink: "#E9EEE8"
+  night-ink-soft: "#A5B4AD"
+  night-chrome: "#64766F"
+  night-rule: "#2C3833"
+  night-tomato: "#E5664E"
+  night-tomato-ink: "#F49B85"
+  night-butter: "#E9BD57"
+  night-sky: "#86BBD3"
+  night-sage: "#7DAE88"
 typography:
   display:
     fontFamily: "Atkinson Hyperlegible, system-ui, -apple-system, Segoe UI, sans-serif"
@@ -76,8 +94,8 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.pad}"
   pad-head:
-    backgroundColor: "{colors.bottle}"
-    textColor: "{colors.enamel}"
+    backgroundColor: "{colors.band}"
+    textColor: "{colors.on-band}"
     typography: "{typography.display}"
     rounded: "{rounded.pad-top}"
     padding: "16px 18px 14px"
@@ -110,8 +128,8 @@ components:
     textColor: "{colors.enamel}"
     rounded: "{rounded.control}"
   app-bar:
-    backgroundColor: "{colors.bottle}"
-    textColor: "{colors.enamel}"
+    backgroundColor: "{colors.band}"
+    textColor: "{colors.on-band}"
     height: "56px"
   bottom-nav-tab:
     backgroundColor: "{colors.enamel}"
@@ -140,7 +158,7 @@ The week is the planner pad stuck to the fridge: a printed grid the household wr
 
 The world refuses the category default of identical grey cards in a list. Content sits on ruled paper, divided by hairlines, not boxed. Density is phone-first and thumb-sized: rows are at least 64px tall, controls at least 44px, and on a wide screen a day or a list keeps a phone-ish 640px column, centred, while only the week grid spreads out.
 
-The app is light only; it is used in a lit kitchen and a supermarket aisle. Controls stay standard MudBlazor components, re-themed into this world through `Design/AppTheme.cs`; the pad is never costumed with a fake paper "interface".
+By day the app is light: it is used in a lit kitchen and a supermarket aisle. At night it can be **the pad at night** (see Night below) - the same kitchen with the bench lights off and the rangehood on - which is the planner's own choice on Settings → Colours, kept with their sign-in, and never the phone's dark mode. Controls stay standard MudBlazor components, re-themed into this world through `Design/AppTheme.cs`; the pad is never costumed with a fake paper "interface".
 
 **Key Characteristics:**
 - White-enamel sheets on a sage laminate ground, with a perforated tear along the top sheet.
@@ -155,7 +173,7 @@ The app is light only; it is used in a lit kitchen and a supermarket aisle. Cont
 A muted kitchen-bench palette: two greens and two whites carry the page; the canister set (tomato, butter, sky, sage) does the marker jobs.
 
 ### Primary
-- **Bottle Green** (bottle): the pad's printed ink. App bar, sheet head bands, slot and category labels, the shop tick box, focus outlines, the primary filled button, link text on a sheet. It is MudBlazor's `Primary`.
+- **Bottle Green** (bottle): the pad's printed ink. Slot and category labels, the shop tick box, focus outlines, the primary filled button, link text on a sheet. It is MudBlazor's `Primary`. The app bar and head bands are the same green by day, through the band token (below).
 - **Bottle Deep** (bottle-deep): a bottle-green control pressed or hovered where MudBlazor does not do it for us (the
   file-pick labels on Receipts and Import). Never a surface.
 
@@ -177,8 +195,25 @@ A muted kitchen-bench palette: two greens and two whites carry the page; the can
 
 Tints are bottle at 5-7% for row hover and today's column, bottle at 10% for press, tomato at 14% for the active tab's pill and the active drawer link. Enamel at 62% outlines a button on the head band, at 86% sets the band's subtitle.
 
+### Band
+- **Band, Band Deep, On Band** (band, band-deep, on-band): the printed band as a *fill* - head bands, the app bar, the file-pick button - its pressed shade, and what is printed on it. By day the band is the same bottle green as the print and on-band is enamel; they are separate tokens because at night they part. Anything sitting on a band (its title, subtitle at 86%, an outline at 62%, a 12% hover tint) is on-band, never enamel.
+
+### Night
+The pad at night: the same sheets and the same rules in a dim kitchen. Every token keeps its job and changes its value under `:root[data-theme="dark"]` in `app.css`, with `AppTheme.PaletteDark` (and `AppTheme.Night`) beside it.
+- **Night Laminate** (#121A17) and **Night Enamel** (#1C2622): a near-black green bench and a dark enamel sheet on it; the sheet still sits a step lighter than the ground.
+- **Night Ink** (#E9EEE8) and **Night Ink Soft** (#A5B4AD): the household's ink becomes the colour the paper was. 13.2:1 and 7.2:1 on the sheet.
+- **Night Print** (#8CC4AE) is `--bottle` at night: labels, links, outlines, the tick box, and MudBlazor's Primary - so a filled primary button is pale green with dark ink on it. 7.9:1 on the sheet.
+- **Night Band** (#2A5246, deep #224338) stays a deep bottle green under on-band #EEF1EA (7.7:1): the print has lifted, the band has not, which is why they are two tokens.
+- **Night Tomato** (#E5664E) for strikes and rings; **Night Tomato Ink** (#F49B85, 7.3:1) for attention text.
+- **The canisters only soften** (butter #E9BD57, sky #86BBD3, sage #7DAE88): a person's magnet is still their colour.
+- **Hairlines** are night chrome (#64766F, 3.2:1 on the sheet, so an input's outline still reads in a dark room) and night rule (#2C3833); shadows are cast in black, heavier, since a 10% ink shadow vanishes on a dark bench.
+
+Tints are written as `color-mix(in srgb, var(--token) N%, transparent)`, never an rgba of a fixed colour, so a bottle-green hover is a pale-green hover at night without a second rule.
+
 ### Named Rules
-**The Two Places Rule.** Every colour lives in both `wwwroot/css/app.css` (custom properties on `:root`) and `Design/AppTheme.cs` (the MudBlazor palette). Change one, change both.
+**The Two Places Rule.** Every colour lives in both `wwwroot/css/app.css` (custom properties on `:root`, and again under `:root[data-theme="dark"]`) and `Design/AppTheme.cs` (`PaletteLight` and `PaletteDark`). Change one, change all four.
+
+**The Planner's Choice Rule.** Light or dark is chosen on Settings → Colours and kept with the planner's sign-in. The phone's own dark mode is never followed (`ObserveSystemDarkModeChange="false"`): left to the phone, MudBlazor put its own dark palette under the light pad and fields vanished.
 
 **The One Attention Colour Rule.** Anything that needs seeing to (unpriced, short of serves, running low, an error) reads in tomato ink. There is no amber warning and no separate error red.
 
@@ -317,4 +352,6 @@ A sheet lifted off the pad: enamel, 14px radius, the lifted-sheet shadow, title 
 - **Don't** show a person as a coloured text background; show their magnet.
 - **Don't** repeat the household's magnets on every row; they sit once on the band, and a row carries magnets only when it is not for everyone.
 - **Don't** uppercase labels, overlines or buttons.
-- **Don't** add a dark theme without a decision; the world is light only.
+- **Don't** follow the phone's dark mode; light or dark is the planner's choice (Settings → Colours).
+- **Don't** write a colour as a literal in a page's CSS. Use a token, or `color-mix` of one for a tint, so the night gets it too. The only literals are the palettes themselves and the Colours sheet's little picture of each.
+- **Don't** fill with `--bottle` where the band is meant; the band is `--band`, and at night the two are different greens.

@@ -4,6 +4,7 @@ using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
 using AshersLab.MealPlanner.WASM;
 using AshersLab.MealPlanner.WASM.Account;
 using AshersLab.MealPlanner.WASM.Data;
+using AshersLab.MealPlanner.WASM.Design;
 using AshersLab.MealPlanner.WASM.Extensions;
 using AshersLab.MealPlanner.WASM.Sync;
 using Microsoft.AspNetCore.Components.Web;
@@ -44,4 +45,10 @@ builder.Services.AddScoped<SyncLoop>();
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = api });
 builder.Services.AddScoped<AccountClient>();
 
-await builder.Build().RunAsync();
+// Light or dark (Design/AppearanceState.cs): this device's copy read before the first render, so MudBlazor's palette
+// agrees with what js/appearance.js already put on the page.
+builder.Services.AddScoped<AppearanceState>();
+
+WebAssemblyHost host = builder.Build();
+await host.Services.GetRequiredService<AppearanceState>().LoadAsync();
+await host.RunAsync();

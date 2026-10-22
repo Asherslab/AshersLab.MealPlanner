@@ -50,7 +50,7 @@
 }
 
 .ingredients-row:hover {
-    background: rgba(47, 93, 80, 0.05);
+    background: color-mix(in srgb, var(--bottle) 5%, transparent);
 }
 
 .ingredients-rows:last-child > .ingredients-row:last-child {
@@ -84,7 +84,7 @@
     display: inline-block;
     padding: 2px 8px;
     border-radius: 6px;
-    background: rgba(47, 93, 80, 0.09);
+    background: color-mix(in srgb, var(--bottle) 9%, transparent);
     color: var(--bottle);
     font: 700 0.75rem/1.4 var(--font-body);
     white-space: nowrap;

@@ -1,0 +1,56 @@
+@using AshersLab.MealPlanner.Shared.Domain.Appearance
+@implements IDisposable
+@inject AppearanceState Colours
+
+@*
+    Settings → Colours: the pad by day or at night, a ruled row each with a little sheet of it, the chosen one ticked.
+    The planner's own choice, kept with their sign-in (Design/AppearanceState.cs) - not the phone's dark mode.
+*@
+
+<div class="appearance-group">
+    <PadSheet Title="Colours">
+        <div role="radiogroup" aria-label="Colours">
+            @foreach ((Appearance value, string title, string description) in Choices)
+            {
+                bool chosen = Colours.Current == value;
+                <button type="button" role="radio" aria-checked="@(chosen ? "true" : "false")"
+                        class="appearance-row @(chosen ? "chosen" : "")" data-testid="@($"appearance-{AppearanceRules.Name(value)}")"
+                        @onclick="() => Colours.ChooseAsync(value)">
+                    <span class="appearance-sheet @AppearanceRules.Name(value)" aria-hidden="true"><span></span></span>
+                    <span class="appearance-text">
+                        <span class="appearance-title">@title</span>
+                        <span class="appearance-description">@description</span>
+                    </span>
+                    <span class="appearance-tick" aria-hidden="true">
+                        @if (chosen)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small"/>
+                        }
+                    </span>
+                </button>
+            }
+        </div>
+    </PadSheet>
+    @if (Colours.WithAccount is { } withAccount)
+    {
+        <p class="pad-aside" data-testid="appearance-kept">
+            @(!withAccount ? "Kept on this device."
+                : Colours.Unsent ? "Kept on this phone for now. It goes to your sign-in, and your other phones, next time you are signed in and online."
+                : "Kept with your sign-in: your other phones change too.")
+        </p>
+    }
+</div>
+
+@code {
+    private static readonly (Appearance, string, string)[] Choices =
+    [
+        (Appearance.Light, "Light", "White paper on the sage bench. For the kitchen and the shop."),
+        (Appearance.Dark, "Dark", "The same pad, dimmed. For the evening, and a dark room."),
+    ];
+
+    protected override void OnInitialized() => Colours.Changed += Changed;
+
+    private void Changed() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Colours.Changed -= Changed;
+}

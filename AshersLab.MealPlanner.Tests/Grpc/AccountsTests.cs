@@ -64,9 +64,37 @@ public class AccountsTests
     {
         await using MealPlannerHost host = Signing();
         HttpClient http = host.CreateClient();
-        Assert.Equal("""{"signedIn":false,"name":null}""", await http.GetStringAsync("account/me", Ct));
+        Assert.Equal("""{"signedIn":false,"name":null,"appearance":null}""", await http.GetStringAsync("account/me", Ct));
         using HttpResponseMessage members = await http.GetAsync("account/members", Ct);
         Assert.Equal(HttpStatusCode.Unauthorized, members.StatusCode);
+    }
+
+    [Fact]
+    public async Task Light_or_dark_is_kept_only_for_someone_signed_in()
+    {
+        await using MealPlannerHost host = Signing();
+        HttpClient http = host.CreateClient();
+        using HttpRequestMessage request = new(HttpMethod.Post, "account/appearance") { Content = JsonContent.Create(new { appearance = "dark" }) };
+        request.Headers.Add("Origin", Url);
+        using HttpResponseMessage response = await http.SendAsync(request, Ct);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_member_who_never_chose_has_no_appearance_and_the_column_takes_one()
+    {
+        await using MealPlannerHost host = Signing();
+        _ = host.CreateClient();
+        using IServiceScope scope = host.Services.CreateScope();
+        AccountsDbContext db = scope.ServiceProvider.GetRequiredService<AccountsDbContext>();
+        Member member = new() { Id = Guid.CreateVersion7(), UserName = "a", DisplayName = "Sam", JoinedAt = DateTimeOffset.UtcNow };
+        db.Users.Add(member);
+        await db.SaveChangesAsync(Ct);
+        Assert.Null((await db.Users.AsNoTracking().SingleAsync(m => m.Id == member.Id, Ct)).Appearance);
+
+        member.Appearance = "dark";
+        await db.SaveChangesAsync(Ct);
+        Assert.Equal("dark", (await db.Users.AsNoTracking().SingleAsync(m => m.Id == member.Id, Ct)).Appearance);
     }
 
     [Fact]

@@ -39,7 +39,7 @@
 }
 
 .bottom-nav-tab.active ::deep .mud-icon-root {
-    background-color: rgba(217, 83, 60, 0.14);
+    background-color: color-mix(in srgb, var(--tomato) 14%, transparent);
 }
 
 .bottom-nav-tab:focus-visible {

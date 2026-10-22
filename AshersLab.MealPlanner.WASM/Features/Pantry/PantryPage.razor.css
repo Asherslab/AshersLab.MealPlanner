@@ -28,7 +28,7 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
-.pantry-row:active { background: rgba(47, 93, 80, 0.06); }
+.pantry-row:active { background: color-mix(in srgb, var(--bottle) 6%, transparent); }
 .pantry-row:focus-visible { outline-offset: -3px; border-radius: 8px; }
 .pantry-staple { cursor: default; flex-wrap: wrap; row-gap: 6px; }
 .pantry-staple:active { background: none; }

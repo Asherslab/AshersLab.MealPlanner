@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using AshersLab.MealPlanner.Grpc.Data;
 using AshersLab.MealPlanner.Grpc.Features.Auth;
 using AshersLab.MealPlanner.Grpc.Features.Ingress;
+using AshersLab.MealPlanner.Shared.Domain.Appearance;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
@@ -152,8 +153,8 @@ public static class Accounts
 
         account.MapGet("/me", async (HttpContext http, UserManager<Member> users) =>
             await users.GetUserAsync(http.User) is { } me
-                ? Results.Ok(new MeResponse(true, me.DisplayName))
-                : Results.Ok(new MeResponse(false, null)));
+                ? Results.Ok(new MeResponse(true, me.DisplayName, me.Appearance))
+                : Results.Ok(new MeResponse(false, null, null)));
 
         // --- Signing in ---------------------------------------------------------------------------------------------------
         account.MapPost("/sign-in/options", async (SignInManager<Member> signIn) =>
@@ -166,7 +167,7 @@ public static class Accounts
                 return Results.Json(new Problem("That passkey is not one this app knows."), statusCode: StatusCodes.Status401Unauthorized);
             await users.AddOrUpdatePasskeyAsync(result.User, result.Passkey);   // its sign count: a cloned key is caught next time
             await signIn.SignInAsync(result.User, isPersistent: true);
-            return Results.Ok(new MeResponse(true, result.User.DisplayName));
+            return Results.Ok(new MeResponse(true, result.User.DisplayName, result.User.Appearance));
         }).RequireRateLimiting(RateLimit);
 
         // --- An invitation: a new member and their first passkey ------------------------------------------------------------
@@ -210,7 +211,7 @@ public static class Accounts
             invitation.UsedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
             await signIn.SignInAsync(member, isPersistent: true);
-            return Results.Ok(new MeResponse(true, member.DisplayName));
+            return Results.Ok(new MeResponse(true, member.DisplayName, member.Appearance));
         }).RequireRateLimiting(RateLimit);
 
         // --- Signed in: the household's members, invitations, passkeys, signing out ------------------------------------------
@@ -283,6 +284,20 @@ public static class Accounts
             return Results.Ok();
         });
 
+        // Light or dark: yours, on every device of yours (Shared.Domain/Appearance).
+        members.MapPost("/appearance", async (AppearanceRequest request, HttpContext http, UserManager<Member> users) =>
+        {
+            if (!AppearanceRules.Valid(request.Appearance))
+                return Results.Json(new Problem("Choose light or dark."), statusCode: StatusCodes.Status400BadRequest);
+            if (await users.GetUserAsync(http.User) is not { } me)
+                return Results.Unauthorized();
+            me.Appearance = request.Appearance;
+            IdentityResult saved = await users.UpdateAsync(me);
+            return saved.Succeeded
+                ? Results.Ok()
+                : Results.Json(new Problem(string.Join(" ", saved.Errors.Select(e => e.Description))), statusCode: StatusCodes.Status409Conflict);
+        });
+
         members.MapPost("/sign-out", async (SignInManager<Member> signIn) =>
         {
             await signIn.SignOutAsync();
@@ -319,7 +334,8 @@ public static class Accounts
         catch (FormatException) { return null; }
     }
 
-    public sealed record MeResponse(bool SignedIn, string? Name);
+    public sealed record MeResponse(bool SignedIn, string? Name, string? Appearance);
+    public sealed record AppearanceRequest(string? Appearance);
     public sealed record Problem(string Message);
     public sealed record CredentialRequest(string CredentialJson);
     public sealed record TokenRequest(string? Token);

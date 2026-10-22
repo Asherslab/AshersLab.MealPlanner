@@ -52,7 +52,7 @@
 }
 
 .meals-row:hover {
-    background: rgba(47, 93, 80, 0.05);
+    background: color-mix(in srgb, var(--bottle) 5%, transparent);
 }
 
 .meals-row:hover .marker {

@@ -11,6 +11,12 @@ code:
   - AshersLab.MealPlanner.Grpc/Program.cs
   - AshersLab.MealPlanner.WASM/Account
   - AshersLab.MealPlanner.WASM/wwwroot/js/passkeys.js
+  - AshersLab.MealPlanner.WASM/wwwroot/js/appearance.js
+  - AshersLab.MealPlanner.WASM/Design/AppearanceState.cs
+  - AshersLab.MealPlanner.WASM/Components/AppearanceChoice.razor
+  - AshersLab.MealPlanner.Shared.Domain/Appearance
+  - AshersLab.MealPlanner.Tests/Domain/AppearanceRulesTests.cs
+  - .claude/tools/chrome-appearance-check.mjs
   - AshersLab.MealPlanner.LocalData/Sync/SyncSchedule.cs
   - AshersLab.MealPlanner.Tests/Grpc/AccountsTests.cs
   - AshersLab.MealPlanner.Tests/Grpc/AddOnOptionsTests.cs
@@ -114,6 +120,27 @@ nobody), the sign-in and invitation endpoints, and the health probes. **Every gR
   (never the last one); **Make an invitation link** and *Send it* (the phone's share sheet); **Add a passkey on this device**,
   **Sign out on this device**, **Sign out on all my devices**.
 
+## Light or dark
+
+The one thing a member keeps besides their name: **Settings → Colours**, *Light* or *Dark* ([DESIGN.md](../../../DESIGN.md),
+"Night"). It is the planner's choice, kept with their sign-in so every phone of theirs follows - **never the phone's own dark
+mode**, which is ignored outright (`MainLayout`: `ObserveSystemDarkModeChange="false"`).
+
+- **Where it lives.** `Member.Appearance`, `"light"`, `"dark"` or null (never chose - the light), in the accounts tables;
+  not an op, not synced data, so no sync protocol change. `/account/me` and the sign-in and invitation answers carry it;
+  `POST /account/appearance` sets it (signed in, this origin, `"light"` or `"dark"` - anything else a 400). Rules:
+  `Shared.Domain/Appearance/AppearanceRules.cs`.
+- **The device's copy.** `js/appearance.js`, loaded in `<head>`, keeps the choice in `localStorage` and puts
+  `data-theme` on `<html>` before the stylesheets paint - so a phone left on dark never flashes the light while Blazor
+  starts, and the status bar's colour follows. `Design/AppearanceState.cs` reads it before the first render, so
+  MudBlazor's palette agrees.
+- **Offline, signed out, two phones.** A choice is shown at once and kept on the device marked *unsent*; it goes to the
+  account when it can - at once, at the app's next start, or on signing in. Unsent, the device's choice wins (it is the
+  newer); otherwise the account's does, so a change on one phone reaches another when it next opens or signs in
+  (`AppearanceRules.Reconcile`). An account that never chose leaves a device as it is.
+- **No sign-in of the app's own** (Home Assistant's frame, a sign-in proxy, development): `/account` is a 404, the choice is
+  the device's alone, and Settings says *Kept on this device*.
+
 ## As seen
 
 2026-10-23. `Tests/Grpc/AccountsTests.cs` through the real host in Production: before anyone signs in a gRPC-Web call is
@@ -122,6 +149,14 @@ gets request options naming the host as relying party; `/account/me` says nobody
 install makes one setup link, stored as a 64-character hash; a code that is not one is refused; the address rules; links
 random, hashed, single-use and expiring. `AddOnOptionsTests`: only `public_url` and `reset_access` are read - an option
 naming the mode is ignored.
+
+Light or dark, 2026-10-23: `Tests/Domain/AppearanceRulesTests.cs` (stored values, and an unsent choice against the
+account's) and two `AccountsTests` (the endpoint refused signed out; the column). `.claude/tools/chrome-appearance-check.mjs`
+against the published image, one headless Chrome with a virtual authenticator, `/data` on a Docker volume: signed up, Dark
+shown at once and the member row `dark`; the phone's own copy wiped, it opened light and turned dark from the account;
+signed out, Light shown at once, *kept on this phone for now*, the account still `dark`; signed in with the passkey, the
+account `light` and nothing waiting; reloaded, light from the first paint; with the phone's own dark mode on, still light.
+In development (no sign-in) Settings says *Kept on this device*, and a reload is dark before Blazor starts.
 
 `.claude/tools/chrome-pwa-check.mjs` against the published image in `.claude/tools/addon-sim` (the hassio-like network,
 `options.json`, plain nginx as the proxy), two headless Chromes with virtual platform authenticators - see the check's own

@@ -38,11 +38,11 @@
 }
 
 .cal-head-actions ::deep .mud-button-outlined {
-    border-color: rgba(251, 251, 246, 0.62);
+    border-color: color-mix(in srgb, var(--on-band) 62%, transparent);
 }
 
 .cal-head-actions ::deep .mud-button-root:hover {
-    background-color: rgba(251, 251, 246, 0.12);
+    background-color: color-mix(in srgb, var(--on-band) 12%, transparent);
 }
 
 /* ---- A desktop: slots printed down the side, days across. Scrolls sideways rather than squeezing a day. ---- */
@@ -122,11 +122,11 @@
 
 .cal-cell.is-today,
 .cal-dayhead.is-today {
-    background: rgba(47, 93, 80, 0.07);
+    background: color-mix(in srgb, var(--bottle) 7%, transparent);
 }
 
 .cal-cell.is-past {
-    background: rgba(29, 43, 39, 0.025);
+    background: color-mix(in srgb, var(--ink) 2.5%, transparent);
 }
 
 .cal-grid tbody tr:last-child > .cal-cell {
@@ -147,7 +147,7 @@
 }
 
 .cal-entry:hover {
-    background: rgba(47, 93, 80, 0.06);
+    background: color-mix(in srgb, var(--bottle) 6%, transparent);
 }
 
 .cal-grid .cal-meal {
@@ -204,7 +204,7 @@
 .cal-add:focus-visible {
     opacity: 1;
     color: var(--bottle);
-    background: rgba(47, 93, 80, 0.07);
+    background: color-mix(in srgb, var(--bottle) 7%, transparent);
 }
 
 /* ---- A phone: the week's days in a strip, then one day's slots ruled down the sheet. ---- */
@@ -327,13 +327,13 @@
 }
 
 .cal-replan-row:hover {
-    background: rgba(47, 93, 80, 0.05);
+    background: color-mix(in srgb, var(--bottle) 5%, transparent);
 }
 
 /* ---- Week or month: a two-way switch printed on the band, the one on screen in enamel. ---- */
 .cal-views {
     display: inline-flex;
-    border: 1px solid rgba(251, 251, 246, 0.62);
+    border: 1px solid color-mix(in srgb, var(--on-band) 62%, transparent);
     border-radius: 999px;
     overflow: hidden;
 }
@@ -344,17 +344,18 @@
     min-height: 40px;
     padding: 0 16px;
     font: 700 0.875rem/1 var(--font-body);
-    color: var(--enamel);
+    color: var(--on-band);
     text-decoration: none;
 }
 
 .cal-views a:hover {
-    background-color: rgba(251, 251, 246, 0.12);
+    background-color: color-mix(in srgb, var(--on-band) 12%, transparent);
 }
 
+/* The band's own colours turned over, so the view on screen stands out at night as by day. */
 .cal-views a.is-on {
-    background: var(--enamel);
-    color: var(--bottle);
+    background: var(--on-band);
+    color: var(--band);
 }
 
 /* ---- The month: whole weeks, Monday first; each day its date and a pip per slot. ---- */
@@ -397,7 +398,7 @@
 }
 
 .mon-day:hover {
-    background: rgba(47, 93, 80, 0.07);
+    background: color-mix(in srgb, var(--bottle) 7%, transparent);
 }
 
 .mon-dnum {
@@ -413,11 +414,11 @@
 
 /* A day with every slot planned: a faint bottle wash, so a planned stretch reads at a glance. */
 .mon-day.is-full {
-    background: rgba(111, 162, 122, 0.16);
+    background: color-mix(in srgb, var(--sage) 16%, transparent);
 }
 
 .mon-day.is-full:hover {
-    background: rgba(111, 162, 122, 0.26);
+    background: color-mix(in srgb, var(--sage) 26%, transparent);
 }
 
 .mon-day.is-today .mon-dnum {

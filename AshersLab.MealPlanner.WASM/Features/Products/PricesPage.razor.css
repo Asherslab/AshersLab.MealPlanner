@@ -133,11 +133,11 @@
 }
 
 .price-product:hover {
-    background-color: rgba(47, 93, 80, 0.05);
+    background-color: color-mix(in srgb, var(--bottle) 5%, transparent);
 }
 
 .price-product:active {
-    background-color: rgba(47, 93, 80, 0.10);
+    background-color: color-mix(in srgb, var(--bottle) 10%, transparent);
 }
 
 .price-product:focus-visible {

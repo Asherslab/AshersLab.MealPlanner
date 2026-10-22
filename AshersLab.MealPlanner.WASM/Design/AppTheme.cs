@@ -8,8 +8,9 @@ namespace AshersLab.MealPlanner.WASM.Design;
 /// The same values are CSS custom properties in <c>wwwroot/css/app.css</c>; change one, change both.
 /// </summary>
 /// <remarks>
-/// Light only: the app is used in a lit kitchen and a supermarket aisle. Tomato as text is the darker
-/// <see cref="TomatoInk"/> - plain tomato on enamel is 3.85:1, below body-text contrast; plain tomato stays for
+/// By day it is used in a lit kitchen and a supermarket aisle; at night (<see cref="Night"/>, the planner's choice on
+/// Settings → Colours, never the phone's own setting) the same pad under the rangehood light. Tomato as text is the
+/// darker <see cref="TomatoInk"/> - plain tomato on enamel is 3.85:1, below body-text contrast; plain tomato stays for
 /// fills, the active tab's mark and strike-throughs.
 /// </remarks>
 public static class AppTheme
@@ -25,6 +26,25 @@ public static class AppTheme
     public const string Butter    = "#F2C14E";
     public const string Sky       = "#7FB6CF";
     public const string Sage      = "#6FA27A";
+
+    /// <summary>
+    /// The pad at night - css/app.css's <c>:root[data-theme="dark"]</c>; change one, change both. The print lifts to a
+    /// pale bottle green so it reads on the dark sheet, and parts from the band, which stays a deep bottle green; tomato
+    /// ink lifts for text. Contrast on the sheet: ink 13.2:1, ink soft 7.2:1, print 7.9:1, tomato ink 7.3:1.
+    /// </summary>
+    public static class Night
+    {
+        public const string Print     = "#8CC4AE";
+        public const string Band      = "#2A5246";
+        public const string OnBand    = "#EEF1EA";
+        public const string Laminate  = "#121A17";
+        public const string Enamel    = "#1C2622";
+        public const string Ink       = "#E9EEE8";
+        public const string InkSoft   = "#A5B4AD";
+        public const string Chrome    = "#64766F";
+        public const string Rule      = "#2C3833";
+        public const string TomatoInk = "#F49B85";
+    }
 
     private static readonly string[] Body = ["Atkinson Hyperlegible", "system-ui", "-apple-system", "Segoe UI", "sans-serif"];
 
@@ -60,6 +80,47 @@ public static class AppTheme
             Divider              = "#D6DED9",
             TableLines           = "#D6DED9",
             Skeleton             = "rgba(47,93,80,0.10)",
+        },
+        PaletteDark = new PaletteDark
+        {
+            // A filled green button is the print's pale green with the sheet's dark ink on it: the band's deep green
+            // would vanish into the dark sheet.
+            Primary               = Night.Print,
+            PrimaryContrastText   = Night.Enamel,
+            Secondary             = Night.TomatoInk,
+            SecondaryContrastText = Night.Enamel,
+            Tertiary              = "#8DC0DA",
+            Info                  = "#8DC0DA",
+            Success               = "#8CC79A",
+            Warning               = Night.TomatoInk,
+            Error                 = Night.TomatoInk,
+            Dark                  = Night.Laminate,
+            Black                 = "#0B110F",
+            White                 = Night.Ink,
+            Background            = Night.Laminate,
+            BackgroundGray        = "#18211E",
+            Surface               = Night.Enamel,
+            AppbarBackground      = Night.Band,
+            AppbarText            = Night.OnBand,
+            DrawerBackground      = Night.Enamel,
+            DrawerText            = Night.Ink,
+            DrawerIcon            = Night.Print,
+            TextPrimary           = Night.Ink,
+            TextSecondary         = Night.InkSoft,
+            TextDisabled          = "rgba(233,238,232,0.40)",
+            ActionDefault         = Night.InkSoft,
+            ActionDisabled        = "rgba(233,238,232,0.30)",
+            ActionDisabledBackground = "rgba(233,238,232,0.10)",
+            LinesDefault          = Night.Rule,
+            LinesInputs           = Night.Chrome,
+            Divider               = Night.Rule,
+            DividerLight          = "rgba(233,238,232,0.06)",
+            TableLines            = Night.Rule,
+            TableStriped          = "rgba(233,238,232,0.03)",
+            TableHover            = "rgba(140,196,174,0.06)",
+            Skeleton              = "rgba(140,196,174,0.10)",
+            OverlayDark           = "rgba(0,0,0,0.6)",
+            OverlayLight          = "rgba(18,26,23,0.5)",
         },
         Typography = new Typography
         {

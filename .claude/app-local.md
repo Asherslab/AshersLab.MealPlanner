@@ -346,6 +346,12 @@ DATA_DIR=<scratch>/addon-data sh .claude/tools/addon-sim/run.sh mealplanner:loca
 node .claude/tools/chrome-pwa-check.mjs <scratch>/pwa      # passkeys, invitations, offline open, signed out, removal
 ```
 
+**`DATA_DIR` is a bind mount from macOS, and SQLite's WAL does not survive it.** Its shared memory is not shared between
+the host and the Linux container, so a committed write can be lost or unseen: on 2026-10-23 the first member update after
+signing up vanished every run, with EF reporting it written. For anything that writes and reads back, run the app container
+on a Docker volume instead (`.claude/tools/chrome-appearance-check.mjs` has the commands) and read the database by copying
+it out of the container, not through the mount. The Pi's `/data` is a Linux filesystem and is not affected.
+
 `http://localhost:18410/` is "Nginx Proxy Manager" and the `public_url`; the setup link is in
 `docker logs mealplanner-addon-app`. Headless Chrome makes passkeys with a **virtual authenticator** (the DevTools
 `WebAuthn` domain: `addVirtualAuthenticator` with `transport: internal`, resident keys and user verification) - the check
