@@ -12,6 +12,7 @@
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
 @using AshersLab.MealPlanner.WASM.Features.Meals
 @using AshersLab.MealPlanner.Shared.Domain.Meals
+@using System.Globalization
 @using Microsoft.EntityFrameworkCore
 @inherits LocalDataPage
 @inject IDialogService Dialogs
@@ -26,6 +27,11 @@
     in small print under them; magnets only when an entry is for some of the household, not everyone. A skipped entry
     stays, struck through, and waits under "To replan" until it is put on another day or removed; one not yet on the
     server has a dashed edge. Under the sheet, the week's two costs as tiles.
+
+    Or the month at a glance (?month=2026-10), for planning a month ahead: a sheet of whole weeks, each day its date and
+    a pip per slot - filled where something is planned, tomato where only a skipped entry is, an empty ring where nothing
+    is - the days gone by quieter, today circled. On a desktop each day also lists its meals. A day opens the week view
+    on that day. The band says what is left to plan of the days to come; under the sheet, those days and the month's food.
 *@
 
 <PageTitle>Calendar - Meal Planner</PageTitle>
@@ -40,21 +46,47 @@
 
     <PadSheet Class="cal-pad">
         <Head>
-            <h2 data-testid="cal-week">@CalendarText.Week(_monday)</h2>
-            @if (WeeksOnScreen() is { Length: > 0 } weeks)
+            @if (_month is { } month)
             {
-                <p data-testid="cal-plan-weeks">@weeks</p>
+                <h2 data-testid="cal-month-title">@month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</h2>
+                <p data-testid="cal-month-summary">@MonthSummary()</p>
+                <div class="cal-step">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The month before"
+                                   OnClick="() => GoToMonth(month.AddMonths(-1))" data-testid="cal-prev"/>
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The month after"
+                                   OnClick="() => GoToMonth(month.AddMonths(1))" data-testid="cal-next"/>
+                </div>
             }
-            <div class="cal-step">
-                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The week before"
-                               OnClick="() => GoToWeek(_monday.AddDays(-7))" data-testid="cal-prev"/>
-                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The week after"
-                               OnClick="() => GoToWeek(_monday.AddDays(7))" data-testid="cal-next"/>
-            </div>
+            else
+            {
+                <h2 data-testid="cal-week">@CalendarText.Week(_monday)</h2>
+                @if (WeeksOnScreen() is { Length: > 0 } weeks)
+                {
+                    <p data-testid="cal-plan-weeks">@weeks</p>
+                }
+                <div class="cal-step">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The week before"
+                                   OnClick="() => GoToWeek(_monday.AddDays(-7))" data-testid="cal-prev"/>
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The week after"
+                                   OnClick="() => GoToWeek(_monday.AddDays(7))" data-testid="cal-next"/>
+                </div>
+            }
             <div class="cal-head-actions">
+                @* Week or month: two links, so the view is in the address and a reload keeps it. *@
+                <nav class="cal-views" aria-label="View">
+                    <a href="@WeekLink()" class="@(_month is null ? "is-on" : null)" aria-current="@(_month is null ? "page" : null)"
+                       data-testid="cal-view-week">Week</a>
+                    <a href="@MonthLink()" class="@(_month is not null ? "is-on" : null)" aria-current="@(_month is not null ? "page" : null)"
+                       data-testid="cal-view-month">Month</a>
+                </nav>
                 <MudButton Variant="Variant.Outlined" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.EventRepeat" OnClick="ApplyPlan"
                            data-testid="cal-apply">Fill from a plan</MudButton>
-                @if (_monday != Rotation.MondayOf(Today))
+                @if (_month is { } shown && shown != MonthGrid.MonthOf(Today))
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
+                               OnClick="() => GoToMonth(MonthGrid.MonthOf(Today))" data-testid="cal-this-month">This month</MudButton>
+                }
+                else if (_month is null && _monday != Rotation.MondayOf(Today))
                 {
                     <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
                                OnClick="() => GoToWeek(Rotation.MondayOf(Today))" data-testid="cal-this-week">This week</MudButton>
@@ -76,6 +108,52 @@
                 </p>
             }
 
+            @if (_month is { } monthShown)
+            {
+                @* The month: whole weeks, Monday first; each day a button opening the week view on it. *@
+                <div class="mon" data-testid="cal-month">
+                    <div class="mon-dows" aria-hidden="true">
+                        @foreach (string dow in new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" })
+                        {
+                            <span>@dow</span>
+                        }
+                    </div>
+                    <div class="mon-grid">
+                        @foreach (MonthDay day in _monthDays)
+                        {
+                            <button type="button" class="@MonthDayClass(day, monthShown)" @key="day.Date" @onclick="() => OpenDay(day.Date)"
+                                    aria-label="@MonthDayLabel(day)" aria-current="@(day.Date == Today ? "date" : null)"
+                                    data-testid="cal-month-day" data-date="@OpValues.FormatDate(day.Date)" data-cover="@day.Cover">
+                                <span class="mon-dnum">@day.Date.Day</span>
+                                <span class="mon-pips" aria-hidden="true">
+                                    @foreach (SlotMark mark in day.Slots)
+                                    {
+                                        <i class="@($"pip pip-{mark.ToString().ToLowerInvariant()}")" data-testid="cal-month-pip" data-state="@mark"></i>
+                                    }
+                                </span>
+                                <span class="mon-meals" aria-hidden="true">
+                                    @foreach (PlannedEntry entry in DayMeals(day.Date).Take(3))
+                                    {
+                                        <span class="@(entry.Skipped ? "struck" : null)">@MealName(entry.MealId)</span>
+                                    }
+                                    @if (DayMeals(day.Date).Count() > 3)
+                                    {
+                                        <span class="mon-more">+@(DayMeals(day.Date).Count() - 3) more</span>
+                                    }
+                                </span>
+                            </button>
+                        }
+                    </div>
+                    <p class="mon-key" aria-hidden="true">
+                        <span><i class="pip pip-planned"></i> planned</span>
+                        <span><i class="pip pip-empty"></i> nothing yet</span>
+                        <span><i class="pip pip-skipped"></i> skipped</span>
+                        <span class="mon-key-slots">A dot per slot: @string.Join(", ", _slots.Select(s => s.Name))</span>
+                    </p>
+                </div>
+            }
+            else
+            {
             @* A desktop: the whole week, slots printed down the side, days across. *@
             <MudHidden Breakpoint="Breakpoint.SmAndDown">
                 <div class="cal-grid-scroll">
@@ -179,9 +257,26 @@
                     }
                 </div>
             </MudHidden>
+            }
         </ChildContent>
     </PadSheet>
 
+    @if (_month is not null)
+    {
+        @* The month's two numbers: how many of the days to come are planned, and what its food is worth. *@
+        <div class="week-tiles cal-tiles" data-testid="cal-month-tiles">
+            <div class="week-tile">
+                <b data-testid="cal-month-planned">@_toCome.Full of @_toCome.Days</b>
+                <span>@(_toCome.Days == 0 ? "days to come - this month has gone" : "days to come fully planned")</span>
+            </div>
+            <div class="week-tile">
+                <b data-testid="cal-month-eaten">@Big(_monthFood)</b>
+                <span>@Small(_monthFood, "food this month")</span>
+            </div>
+        </div>
+    }
+    else
+    {
     @*
         The week's two costs, as the week tiles: what the shop costs (whole packs after the pantry) - which opens the
         week's shopping list - and what the food eaten was worth. An incomplete cost keeps its unpriced count right under
@@ -213,6 +308,7 @@
             }
         </PadSheet>
     }
+    }
 
     @if (_calendar.ToReplan.Count > 0)
     {
@@ -237,6 +333,12 @@
     /// <summary>"2026-10-26": the week shown, so a link or a reload keeps it.</summary>
     [SupplyParameterFromQuery(Name = "week")] public string? WeekParameter { get; set; }
 
+    /// <summary>"2026-10-29": the day the phone's week view opens on - a day tapped on the month.</summary>
+    [SupplyParameterFromQuery(Name = "day")] public string? DayParameter { get; set; }
+
+    /// <summary>"2026-10": the month at a glance instead of the week.</summary>
+    [SupplyParameterFromQuery(Name = "month")] public string? MonthParameter { get; set; }
+
     private CalendarBook             _calendar = null!;
     private ServesBook               _serves   = null!;
     private MealCostBook             _costs    = null!;
@@ -247,9 +349,15 @@
     private List<MealGroup>          _groups   = [];
     private HashSet<Guid>            _unsent   = [];
 
-    private DateOnly _monday = Rotation.MondayOf(Today);
-    private DateOnly _day    = Today;
-    private string?  _applied;
+    private DateOnly  _monday = Rotation.MondayOf(Today);
+    private DateOnly  _day    = Today;
+    private DateOnly? _month;   // the first of the month shown, in the month view
+    private string?   _applied;
+
+    // The month view's days, what is left to plan of them, and the month's food.
+    private List<MonthDay> _monthDays = [];
+    private MonthToCome    _toCome    = new(0, 0, 0, 0);
+    private Cost           _monthFood;
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
@@ -257,30 +365,101 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        DateOnly? month = DateOnly.TryParseExact(MonthParameter, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly m) ? m : null;
         DateOnly monday = OpValues.TryParseDate(WeekParameter, out DateOnly week) ? Rotation.MondayOf(week) : Rotation.MondayOf(Today);
-        if (monday != _monday)
-        {
-            _monday = monday;
-            _day    = monday == Rotation.MondayOf(Today) ? Today : monday;
-            if (Ready)
-                await Reload();
-        }
+        bool changed = month != _month || monday != _monday;
+        if (OpValues.TryParseDate(DayParameter, out DateOnly day) && Rotation.MondayOf(day) == monday)
+            _day = day;
+        else if (monday != _monday)
+            _day = monday == Rotation.MondayOf(Today) ? Today : monday;
+        (_month, _monday) = (month, monday);
+        if (changed && Ready)
+            await Reload();
     }
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
-        _calendar = await CalendarBook.LoadAsync(db, _monday, _monday.AddDays(6));
-        _serves   = await ServesBook.LoadAsync(db, _monday, _monday.AddDays(6));
-        _costs    = await MealCostBook.LoadAsync(db);
-        _week     = await ShoppingBook.LoadAsync(db, _monday, _monday.AddDays(6));
         _slots    = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _meals    = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id);
         _groups   = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
         _unsent   = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
+
+        if (_month is { } month)
+        {
+            IReadOnlyList<DateOnly> days = MonthGrid.Days(month);
+            _calendar  = await CalendarBook.LoadAsync(db, days[0], days[^1]);
+            // "To replan" opens the entry sheet here too, which offers a leftovers entry its batches.
+            _serves    = await ServesBook.LoadAsync(db, days[0], days[^1]);
+            _costs     = await MealCostBook.LoadAsync(db);
+            List<Guid> slots = [.. _slots.Select(s => s.Id)];
+            _monthDays = [.. days.Select(d => MonthGrid.Mark(d, slots, _calendar.On(d).Select(e => (e.SlotId, e.Skipped))))];
+            _toCome    = MonthGrid.ToCome(month, _monthDays, Today);
+            _monthFood = (await ShoppingBook.LoadAsync(db, month, MonthGrid.LastOf(month))).Eaten;
+            return;
+        }
+
+        _calendar = await CalendarBook.LoadAsync(db, _monday, _monday.AddDays(6));
+        _serves   = await ServesBook.LoadAsync(db, _monday, _monday.AddDays(6));
+        _costs    = await MealCostBook.LoadAsync(db);
+        _week     = await ShoppingBook.LoadAsync(db, _monday, _monday.AddDays(6));
     }
 
     private void GoToWeek(DateOnly monday) => Navigation.NavigateTo($"calendar?week={OpValues.FormatDate(monday)}");
+
+    private void GoToMonth(DateOnly month) => Navigation.NavigateTo(MonthLink(month));
+
+    private static string MonthLink(DateOnly month) => $"calendar?month={month.ToString("yyyy-MM", CultureInfo.InvariantCulture)}";
+
+    /// <summary>From the week: the month of the day on screen. From the month: itself.</summary>
+    private string MonthLink() => MonthLink(_month ?? MonthGrid.MonthOf(_day));
+
+    /// <summary>From the month: this week when it is this month, else the week of its 1st. From the week: itself.</summary>
+    private string WeekLink() =>
+        _month is { } month && month != MonthGrid.MonthOf(Today)
+            ? $"calendar?week={OpValues.FormatDate(Rotation.MondayOf(month))}&day={OpValues.FormatDate(month)}"
+            : _month is null ? $"calendar?week={OpValues.FormatDate(_monday)}&day={OpValues.FormatDate(_day)}" : "calendar";
+
+    /// <summary>A day tapped on the month: the week view, on that day.</summary>
+    private void OpenDay(DateOnly date) =>
+        Navigation.NavigateTo($"calendar?week={OpValues.FormatDate(Rotation.MondayOf(date))}&day={OpValues.FormatDate(date)}");
+
+    /// <summary>
+    /// A day's meals for the month's list on a desktop: what is cooked first - what a month's planning is mostly about -
+    /// then the rest, each in slot order.
+    /// </summary>
+    private IEnumerable<PlannedEntry> DayMeals(DateOnly date) =>
+        _slots.SelectMany(s => _calendar.On(date, s.Id))
+            .Where(e => e.MealId is not null)
+            .OrderBy(e => _meals.GetValueOrDefault(e.MealId!.Value)?.Kind == MealKind.Cooked ? 0 : 1);
+
+    /// <summary>The band under the month's name: "10 days to come: 4 planned, 2 with gaps, 4 with nothing yet."</summary>
+    private string MonthSummary() => _toCome switch
+    {
+        { Days: 0 } => "All gone by.",
+        var c       => $"{c.Days} {(c.Days == 1 ? "day" : "days")} to come: " + string.Join(", ", new[]
+        {
+            $"{(c.Full == c.Days ? "all" : c.Full.ToString(CultureInfo.InvariantCulture))} planned",
+            c.Partial > 0 ? $"{c.Partial} with gaps" : null,
+            c.Empty > 0 ? $"{c.Empty} with nothing yet" : null,
+        }.Where(p => p is not null)) + ".",
+    };
+
+    private static string MonthDayClass(MonthDay day, DateOnly month) =>
+        string.Join(' ', new[]
+        {
+            "mon-day",
+            $"is-{day.Cover.ToString().ToLowerInvariant()}",
+            day.Date == Today ? "is-today" : day.Date < Today ? "is-past" : null,
+            MonthGrid.MonthOf(day.Date) != month ? "is-other" : null,
+        }.Where(c => c is not null));
+
+    /// <summary>"Tuesday 27 October: 2 of 3 planned, 1 skipped".</summary>
+    private static string MonthDayLabel(MonthDay day)
+    {
+        int planned = day.Slots.Count(s => s == SlotMark.Planned), skipped = day.Slots.Count(s => s == SlotMark.Skipped);
+        return $"{CalendarText.LongDay(day.Date)}: {planned} of {day.Slots.Count} planned{(skipped > 0 ? $", {skipped} skipped" : "")}";
+    }
 
     /// <summary>"Spreadsheet plan: week 3" for each plan this week's entries came from.</summary>
     private string WeeksOnScreen() =>
@@ -444,17 +623,27 @@
 
     private async Task ApplyPlan()
     {
+        // From the week on screen; from the month, its first week - or this week, for this month: filling the days gone by
+        // would count meals nobody planned as eaten. The month offers its remaining weeks.
+        DateOnly from = _monday;
+        int offer = 1;
+        if (_month is { } month)
+        {
+            from = Rotation.MondayOf(month) < Rotation.MondayOf(Today) && MonthGrid.LastOf(month) >= Today ? Rotation.MondayOf(Today) : Rotation.MondayOf(month);
+            offer = (Rotation.MondayOf(MonthGrid.LastOf(month)).DayNumber - from.DayNumber) / 7 + 1;
+        }
+
         // The week this one was, by the rotation it had then - an earlier one's, for a week before the plan last changed.
         List<ApplyPlanOption> plans = [.. _calendar.Plans.Templates.Select(t => new ApplyPlanOption(t.Id, t.Name, t.WeekCount,
-            t.RotationOn(_monday) is ({ } starts, int weeks) ? Math.Min(Rotation.WeekOf(starts, weeks, _monday), t.WeekCount) : 1))];
-        if (await PlanDialogs.ApplyPlanAsync(Dialogs, Viewport, plans, _monday) is not { } answer)
+            t.RotationOn(from) is ({ } starts, int weeks) ? Math.Min(Rotation.WeekOf(starts, weeks, from), t.WeekCount) : 1))];
+        if (await PlanDialogs.ApplyPlanAsync(Dialogs, Viewport, plans, from, Math.Max(1, offer)) is not { } answer)
             return;
 
         PlanTemplate template = _calendar.Plans.Template(answer.Plan)!;
-        DateOnly starts = Rotation.StartFor(_monday, answer.Week, template.WeekCount);
+        DateOnly starts = Rotation.StartFor(from, answer.Week, template.WeekCount);
         CalendarApplyPlan? plan;
         await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
-            plan = await CalendarApply.PlanAsync(db, answer.Plan, starts, _monday, _monday.AddDays(7 * answer.Count - 1));
+            plan = await CalendarApply.PlanAsync(db, answer.Plan, starts, from, from.AddDays(7 * answer.Count - 1));
         if (plan is null)
             return;
 

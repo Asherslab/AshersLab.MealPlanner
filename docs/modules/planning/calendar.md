@@ -8,6 +8,9 @@ code:
   - AshersLab.MealPlanner.Shared.Domain/Planning/Rotation.cs
   - AshersLab.MealPlanner.Shared.Domain/Planning/RotationPhases.cs
   - AshersLab.MealPlanner.Tests/Domain/RotationPhasesTests.cs
+  - AshersLab.MealPlanner.Shared.Domain/Planning/MonthGrid.cs
+  - AshersLab.MealPlanner.Tests/Domain/MonthGridTests.cs
+  - .claude/tools/chrome-month-check.mjs
   - AshersLab.MealPlanner.Shared.Domain/Planning/CalendarEntryRules.cs
   - AshersLab.MealPlanner.Shared.Domain/Planning/PlanTemplateRules.cs
   - AshersLab.MealPlanner.Shared.Data/Planning/CalendarEntry.cs
@@ -130,6 +133,19 @@ address (`?week=2026-10-26`), so a reload stays on it.
 - **A skipped entry** stays on its day, struck through, saying "skipped", and is listed under **To replan** below the
   week ("Noodles · Tue 27 Oct · Lunch").
 
+**The month at a glance** (Week / Month on the band; `?month=2026-10`). Planning is mostly done a month at a time, so the
+month is a view of its own, on a phone as much as a desktop. Whole weeks, Monday to Sunday, from the week of the 1st to the
+week of the last day (`MonthGrid.Days`: four to six weeks; the neighbours' days faint). Each day: its date (today circled,
+days gone by quieter) and a **pip per slot**, in slot order - filled where something is planned, a tomato struck ring where
+only a skipped entry is, an empty ring where nothing is (`MonthGrid.Mark`; a skip beside something planned is planned). A
+day whose every slot is planned has a sage wash. On a desktop each day also lists its meals, cooked ones first, three and
+"+2 more". The band: "10 days to come: 4 planned, 1 with gaps, 5 with nothing yet" (`MonthGrid.ToCome` - only days from
+today on, since only they can still be planned); under the sheet, "4 of 10 days to come fully planned" and the month's
+Eaten. A day opens the week view on that day (`?week=...&day=...`). **Fill from a plan** from the month fills from this
+week (this month) or the month's first week (a month to come) - never the days gone by, which would count meals nobody
+planned as eaten - and offers the weeks left in the month. "To replan" is under the month too. The household's toddler
+slots are slots like any other: a pip each.
+
 **Fill from a plan**: the plan, "The week of Mon 26 Oct is Week [n]" (from the plan's start when it has one), and "this
 week" or 2-12 weeks; Fill. It says "Rotation: added 34 entries; 2 already on the calendar, left as they are." **Planning
 next week on a phone: the arrow, Fill from a plan, Fill - three taps** once the plan has a start.
@@ -161,7 +177,16 @@ server's rows are unchanged. Both go offline and each fills the week after next 
 server holds each of that week's entries once. The six rows (one a tombstone) are identical in the server's SQLite and both
 profiles', outboxes empty. Screenshots of the desktop week, the phone day and the phone entry sheet.
 
-The in-process tests: `Tests/Domain/RotationTests.cs` (Mondays across years and a leap day, week numbers wrapping forwards
+`.claude/tools/chrome-month-check.mjs` (2026-10-22, against the demo data, A desktop, B phone): B switches Plan to Month -
+the address says the month, whole weeks Monday to Sunday, today marked, a pip per slot on every day; B taps the first empty
+day to come and the week view opens on it; B plans a meal in its first slot and the month shows that day partial, its first
+pip planned, and one fewer day "with nothing yet"; A's desktop month lists the meal on that day; A skips it and B's month
+shows the day empty, its pip skipped; A removes it from "To replan" under the month. Fill from a plan offers the 2 weeks left;
+the month after shows "This month", which comes back; Week returns to the week view.
+
+The in-process tests: `Tests/Domain/MonthGridTests.cs` (a month's grid in whole weeks - a month of exactly four, five, six,
+a leap February, across a year; each slot's mark; a day full only when every slot is; what is left to plan, from today,
+none of the neighbours' days), `Tests/Domain/RotationTests.cs` (Mondays across years and a leap day, week numbers wrapping forwards
 and backwards, a rotation across two daylight-saving dates - which only documents that `DateOnly` has no time to shift;
 the one real conversion, "today" from `DateTime.Now` in the pages, is untested - the start from "this week is week n",
 generation from mid-week and before the start, the day limit, ids, applying again), `Tests/Domain/RotationPhasesTests.cs`

@@ -146,7 +146,8 @@ table, .num { font-variant-numeric: tabular-nums; }
    a layout's scoped CSS cannot reach. The app bar is the pad's printed band - flat bottle green, the name in bold. */
 .app-bar .mud-typography-h6 { font-weight: 700; letter-spacing: -0.01em; }
 .app-drawer { border-right: 1px solid var(--chrome); }
-.app-drawer .mud-nav-link { border-radius: 10px; margin: 1px 8px; width: auto; }
+/* Every link the drawer's full width less its margins, so the hover and active tints are one size, not each label's. */
+.app-drawer .mud-nav-link { border-radius: 10px; margin: 1px 8px; width: calc(100% - 16px); box-sizing: border-box; }
 /* The current page in tomato, as the bottom bar marks its tab - and none of MudBlazor's side stripe. MudBlazor's own
    active rule sits under .mud-navmenu.mud-navmenu-default with :not(.mud-nav-link-disabled); this repeats that and adds
    the drawer, to outrank it in every state. */

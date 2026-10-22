@@ -121,7 +121,8 @@ week's list). They answer different questions; skipped entries count in neither.
   serve per eater; a leftovers entry is the serves it got at the per-serve cost of the batch it eats.
 
 Both are a `Cost` that may be incomplete: an unpriced line, an extra with no price, or an entry whose per-serve cost is
-incomplete or unknown is **one missing each** ("from $3.12 + 1 unpriced"), never a silently low total.
+incomplete or unknown is **one missing each** ("from $3.12 + 1 unpriced"), never a silently low total. A Spend of nothing
+at all - no packs, no extras, no fixed-cost meal - is shown on the list as "Nothing to spend on these days", not "$0.00".
 
 ## As seen
 

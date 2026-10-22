@@ -330,6 +330,214 @@
     background: rgba(47, 93, 80, 0.05);
 }
 
+/* ---- Week or month: a two-way switch printed on the band, the one on screen in enamel. ---- */
+.cal-views {
+    display: inline-flex;
+    border: 1px solid rgba(251, 251, 246, 0.62);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.cal-views a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 16px;
+    font: 700 0.875rem/1 var(--font-body);
+    color: var(--enamel);
+    text-decoration: none;
+}
+
+.cal-views a:hover {
+    background-color: rgba(251, 251, 246, 0.12);
+}
+
+.cal-views a.is-on {
+    background: var(--enamel);
+    color: var(--bottle);
+}
+
+/* ---- The month: whole weeks, Monday first; each day its date and a pip per slot. ---- */
+.mon {
+    padding: 8px 8px 4px;
+}
+
+.mon-dows,
+.mon-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.mon-dows {
+    padding: 2px 0 6px;
+    font: 700 0.75rem/1 var(--font-body);
+    color: var(--bottle);
+    text-align: center;
+}
+
+.mon-grid {
+    gap: 2px;
+}
+
+.mon-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    min-height: 62px;
+    padding: 5px 2px 7px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.mon-day:hover {
+    background: rgba(47, 93, 80, 0.07);
+}
+
+.mon-dnum {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    font: 700 0.9375rem/1 var(--font-body);
+    font-variant-numeric: tabular-nums;
+}
+
+/* A day with every slot planned: a faint bottle wash, so a planned stretch reads at a glance. */
+.mon-day.is-full {
+    background: rgba(111, 162, 122, 0.16);
+}
+
+.mon-day.is-full:hover {
+    background: rgba(111, 162, 122, 0.26);
+}
+
+.mon-day.is-today .mon-dnum {
+    border-color: var(--tomato);
+}
+
+.mon-day.is-past {
+    color: var(--ink-soft);
+}
+
+.mon-day.is-past .pip {
+    opacity: 0.55;
+}
+
+/* The neighbouring months' days fill out the first and last weeks, printed faint. */
+.mon-day.is-other {
+    opacity: 0.4;
+}
+
+.mon-pips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3px;
+    max-width: 34px;
+}
+
+.pip {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.pip-planned {
+    background: var(--bottle);
+}
+
+.pip-empty {
+    box-shadow: inset 0 0 0 1.5px var(--chrome);
+}
+
+/* Skipped: tomato, struck through like a skipped entry. */
+.pip-skipped {
+    box-shadow: inset 0 0 0 1.5px var(--tomato);
+    background: linear-gradient(135deg, transparent 42%, var(--tomato) 42% 58%, transparent 58%);
+}
+
+/* The meals themselves only where there is room for them. */
+.mon-meals {
+    display: none;
+}
+
+.mon-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin: 0;
+    padding: 12px 8px 10px;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    color: var(--ink-soft);
+}
+
+.mon-key > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mon-key-slots {
+    flex-basis: 100%;
+}
+
+@media (min-width: 960px) {
+    .mon {
+        padding: 10px 14px 4px;
+    }
+
+    .mon-dows {
+        text-align: left;
+        padding-left: 8px;
+    }
+
+    .mon-day {
+        align-items: flex-start;
+        min-height: 112px;
+        padding: 6px 8px 8px;
+        border-top: 1px solid var(--rule);
+        border-radius: 0;
+    }
+
+    .mon-pips {
+        max-width: none;
+        justify-content: flex-start;
+    }
+
+    .mon-meals {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        width: 100%;
+        font-size: 0.75rem;
+        line-height: 1.3;
+        text-align: left;
+    }
+
+    .mon-meals > span {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .mon-more {
+        color: var(--ink-soft);
+    }
+}
+
 /* Constrain the phone's sheet like Today's; the desktop grid takes the page's width. */
 @media (max-width: 959.98px) {
     .cal {

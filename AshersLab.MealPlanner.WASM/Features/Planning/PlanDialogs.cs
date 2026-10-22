@@ -75,11 +75,12 @@ public static class PlanDialogs
         IDialogService                 dialogs,
         IBrowserViewportService        viewport,
         IReadOnlyList<ApplyPlanOption> plans,
-        DateOnly                       monday
+        DateOnly                       monday,
+        int                            weeks = 1
     )
     {
         bool phone = await viewport.GetCurrentBreakpointAsync() < Breakpoint.Sm;
-        DialogParameters<ApplyPlanDialog> parameters = new() { { d => d.Plans, plans }, { d => d.Monday, monday } };
+        DialogParameters<ApplyPlanDialog> parameters = new() { { d => d.Plans, plans }, { d => d.Monday, monday }, { d => d.Weeks, weeks } };
         DialogOptions options = new() { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall, FullScreen = phone, CloseOnEscapeKey = true };
 
         IDialogReference dialog = await dialogs.ShowAsync<ApplyPlanDialog>("Fill from a plan", parameters, options);

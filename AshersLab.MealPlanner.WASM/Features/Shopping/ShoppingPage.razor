@@ -76,15 +76,27 @@
             <div class="week-tile">
                 <div class="shop-figure" data-testid="shop-progress"><b>@left</b><span>@(" " + ShoppingText.ProgressLabel(left, done))</span></div>
             </div>
+            @*
+                Nothing to spend - no packs, no extras, no takeaway - says so in words: "$0.00" reads like a price that was
+                worked out, beside counts of things unpriced elsewhere.
+            *@
             <div class="week-tile">
-                <div class="shop-figure" data-testid="shop-spend">@if (before.Length > 0)
-                    {
-                        <span class="shop-figure-from">@before</span>
-                    }<b>@figure</b>@if (after.Length > 0)
-                    {
-                        <span class="shop-figure-more">@after</span>
-                    }</div>
-                <span>to spend on this list</span>
+                @if (_book.Spend is { Cents: 0, Missing: 0 })
+                {
+                    <div class="shop-figure" data-testid="shop-spend"><b>Nothing</b></div>
+                    <span>to spend on these days</span>
+                }
+                else
+                {
+                    <div class="shop-figure" data-testid="shop-spend">@if (before.Length > 0)
+                        {
+                            <span class="shop-figure-from">@before</span>
+                        }<b>@figure</b>@if (after.Length > 0)
+                        {
+                            <span class="shop-figure-more">@after</span>
+                        }</div>
+                    <span>to spend on this list</span>
+                }
             </div>
         </div>
 

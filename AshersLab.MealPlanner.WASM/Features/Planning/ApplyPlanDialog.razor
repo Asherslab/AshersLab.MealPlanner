@@ -40,7 +40,7 @@
             <label class="native-select mt-4">
                 <span>Fill</span>
                 <select @bind="_count" data-testid="apply-count">
-                    @foreach (int n in new[] { 1, 2, 3, 4, 6, 8, 12 })
+                    @foreach (int n in Counts)
                     {
                         <option value="@n">@(n == 1 ? "this week" : $"{n} weeks from this one")</option>
                     }
@@ -67,6 +67,12 @@
     /// <summary>The Monday of the week on screen.</summary>
     [Parameter] public DateOnly Monday { get; set; }
 
+    /// <summary>How many weeks to offer first: one from the week view, the rest of the month from the month view.</summary>
+    [Parameter] public int Weeks { get; set; } = 1;
+
+    /// <summary>Up to six weeks, enough for any month, then longer plans' lengths.</summary>
+    private static readonly int[] Counts = [1, 2, 3, 4, 5, 6, 8, 12];
+
     private Guid _plan;
     private int  _week = 1;
     private int  _count = 1;
@@ -75,6 +81,7 @@
 
     protected override void OnInitialized()
     {
+        _count = Counts.FirstOrDefault(n => n >= Weeks, Counts[^1]);
         if (Plans.Count == 0)
             return;
         _plan = Plans[0].Id;

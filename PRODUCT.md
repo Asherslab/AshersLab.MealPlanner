@@ -9,12 +9,15 @@ web
 ## Users
 
 One real user: the household's main planner, not a developer. The owner built it and will rarely open it. The
-household is two adults and a toddler; the planner plans for all three.
+household is two adults and a toddler; the planner plans for all three. The toddler mostly shares the main meals but
+eats differently for snacks and some slots, so every feature must work for an entry that is only the toddler's, and for
+a shared meal the toddler eats a share of.
 
 The planner's day with it, in order of frequency:
 
 1. **Today** - what's on for today, what's left over.
-2. **This week's plan** - the calendar: view, swap, skip.
+2. **The plan** - the calendar: view, swap, skip. Planning is done mostly a month at a time, so the month at a glance
+   (what is planned, what has gaps, what has gone by) matters as much as the week.
 3. **The shopping list, in the shop** - one-handed, often with poor reception, ticking lines off.
 4. **Meals** - browsing and editing meals and their ingredients.
 
@@ -26,8 +29,8 @@ separate one.
 
 Replaces a Google Sheet meal plan: a rotating 4-week plan laid onto a calendar, batch cooking with serves eaten as
 leftovers, a shopping list per store less what is already in the pantry, and what each meal and week costs, priced
-from imported Woolworths and Costco receipts. Success: the planner stops opening the sheet, and the weekly shop comes
-from the app.
+from imported Woolworths and Costco receipts. Success: **all planning happens in the app** - the planner stops opening
+the sheet, or any spreadsheet beside it, and the weekly shop comes from the app.
 
 ## Positioning
 

@@ -257,6 +257,14 @@ The week at a glance, from the kitchen bench: two tiles side by side, each a big
 - **Style:** enamel, 1px chrome border, 14px radius, 14px 16px padding; the number in Headline, the label in 0.8125rem ink soft.
 - **Incomplete cost:** the unpriced count sits right under the number, never the number alone; with nothing priced at all the number is "$?", not "$0.00". On Shop, a "from" prefix and a tomato-ink "+ N unpriced" line mark an incomplete total.
 - **Hover:** border turns bottle green.
+- **Nothing:** a spend of nothing at all reads "Nothing", not "$0.00".
+
+### Month Grid
+The calendar's month at a glance, on its pad sheet: whole weeks, Monday first, each day a button with its date and a pip per slot.
+- **Pips:** 8px circles in slot order - bottle filled (planned), a 1.5px chrome ring (nothing yet), a tomato ring struck through (only skipped). They wrap three to a row on a phone.
+- **Days:** a fully planned day has a sage wash (rgba of --sage at 16%); today's date circled in tomato like the week's; days gone by in ink soft with their pips faded; the neighbouring months' days at 40% opacity.
+- **Desktop:** ruled rows 112px tall, each day listing up to three meals in 0.75rem (cooked first) and "+n more".
+- **Week / Month switch:** a pill on the head band, the view on screen in enamel with bottle text, the other enamel text on the band.
 
 ### Person Magnets
 The signature move. Round, coloured, with a darker lip along the bottom.

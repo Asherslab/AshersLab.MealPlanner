@@ -52,7 +52,7 @@ Present tense, kept current, no dates.
   rotation of weeks: an entry per thing eaten, its meal choices as rows, who eats it, the week grid and the day view.
 - [The calendar](modules/planning/calendar.md) — a plan laid onto real dates (safe to repeat, and from two phones at
   once: derived ids, creates that carry only what never changes), choosing an alternative, overriding, skipping and
-  replanning, and what a serve costs on each day.
+  replanning, what a serve costs on each day, and the month at a glance.
 - [Batches and serves](modules/planning/batches-and-serves.md) — a cooked entry's batch, leftovers eating it oldest first
   or by choice, what a skip does, and why serves are counted from the calendar instead of stored (no counter op).
 - [The pantry](modules/pantry/pantry.md) — stock on hand: a ledger of bought / adjusted / counted movements, what the
