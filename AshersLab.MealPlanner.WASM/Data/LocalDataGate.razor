@@ -2,7 +2,11 @@
 @inject LocalDatabase Database
 @inject IDialogService Dialogs
 
-@* What a LocalDataPage shows until the browser database has opened, or when it could not - with the way out. *@
+@*
+    What a LocalDataPage shows until the browser database has opened, or when it could not - with the way out. The
+    failure is a sheet of its own, said plainly in big print with the technical reason small under it, and the reset
+    on the same sheet: nothing else on the page works until it is dealt with.
+*@
 
 @if (Start is null)
 {
@@ -10,34 +14,45 @@
 }
 else if (Start.State != DbInitState.READY)
 {
-    <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="local-db-state">
-        This browser could not open its copy of the data (@Start.State): @Start.Failure
-    </MudAlert>
-    @if (Start.CanReset)
-    {
-        <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="local-db-reset-offer">
-            @if (_resetting)
+    <div class="db-failure">
+        <PadSheet>
+            <div class="db-failure-body">
+                <h2 class="db-failure-title">
+                    <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Class="db-failure-icon"/>
+                    The meal planner can't open its data on this device
+                </h2>
+                <p class="db-failure-state" data-testid="local-db-state">
+                    This browser could not open its copy of the data.
+                    <span class="db-failure-detail">(@Start.State): @Start.Failure</span>
+                </p>
+            </div>
+            @if (Start.CanReset)
             {
-                <MudText Class="mb-2">Resetting this device's copy…</MudText>
-                <MudProgressLinear Indeterminate="true" Color="Color.Error"/>
+                <div class="db-reset" data-testid="local-db-reset-offer">
+                    @if (_resetting)
+                    {
+                        <p class="db-reset-text">Resetting this device's copy…</p>
+                        <MudProgressLinear Indeterminate="true" Color="Color.Error"/>
+                    }
+                    else
+                    {
+                        <p class="db-reset-text">
+                            Try reloading the page first. If that doesn't help, reset this device's copy: it is deleted and
+                            everything is downloaded again from the server.
+                        </p>
+                        @if (_resetFailure is not null)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3" data-testid="local-db-reset-failure">
+                                @_resetFailure
+                            </MudAlert>
+                        }
+                        <MudButton Color="Color.Error" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RestartAlt"
+                                   Disabled="_asking" OnClick="AskToReset" data-testid="local-db-reset">Reset this device's copy</MudButton>
+                    }
+                </div>
             }
-            else
-            {
-                <MudText Class="mb-3">
-                    If reloading doesn't help, reset this device's copy: it is deleted and everything is downloaded again
-                    from the server.
-                </MudText>
-                @if (_resetFailure is not null)
-                {
-                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3" data-testid="local-db-reset-failure">
-                        @_resetFailure
-                    </MudAlert>
-                }
-                <MudButton Color="Color.Error" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RestartAlt"
-                           Disabled="_asking" OnClick="AskToReset" data-testid="local-db-reset">Reset this device's copy</MudButton>
-            }
-        </MudPaper>
-    }
+        </PadSheet>
+    </div>
 }
 else
 {

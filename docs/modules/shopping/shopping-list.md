@@ -80,8 +80,8 @@ opens on the list covering today (the latest started), else this week Monday to 
 5. **Staples** are never needed by amount: a staple is on the list only when `Running low` or `Out` (one pack of its
    cheapest product), or once ticked.
 
-Grouped by usual store (named stores A-Z, then "No usual store"), then category in the categories' order. Extra items sit
-under their store, or under "No usual store" when they have none.
+Grouped by usual store (named stores A-Z, then "Anywhere" for ingredients with none), then category in the categories'
+order. Each store is its own pad sheet. Extra items sit under their store, or under "Anywhere" when they have none.
 
 | | Shown as | Spend |
 |---|---|---|

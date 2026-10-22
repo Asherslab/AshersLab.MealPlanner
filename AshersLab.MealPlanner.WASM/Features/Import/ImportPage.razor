@@ -17,70 +17,90 @@
 
 <PageTitle>Import the spreadsheet - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Import the spreadsheet</MudText>
+@*
+    A tool in steps, each its own sheet: 1, pick the file (the page's main action until a file is read); 2, what it
+    would add, with Import; 3, the questions the sheet cannot answer, grouped under small green print.
+*@
 
 <LocalDataGate Start="Start">
-    <MudText Class="mt-2 mud-text-secondary">
-        Pick the meal-plan spreadsheet as an .xlsx (in Google Sheets: File, Download, Microsoft Excel). It is read on
-        this device only. Everything it adds is a draft to check - and importing it again later adds only what is new,
-        such as prices filled in since.
-    </MudText>
-
-    <label class="import-file mt-4 d-block">
-        <InputFile OnChange="Picked" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                   data-testid="import-file"/>
-    </label>
+<div class="sheet-import">
+    <PadSheet Title="Import the spreadsheet" Subtitle="The old meal-plan sheet, brought in once.">
+        <div class="pick">
+            <p class="pick-help">
+                Pick the meal-plan spreadsheet as an .xlsx (in Google Sheets: File, Download, Microsoft Excel). It is read on
+                this device only. Everything it adds is a draft to check - and importing it again later adds only what is
+                new, such as prices filled in since.
+            </p>
+            <label class="@($"file-pick{(_import is null ? "" : " secondary")}")">
+                <MudIcon Icon="@Icons.Material.Filled.UploadFile"/>
+                <span>@(_import is null ? "Choose the spreadsheet" : "Choose another file")</span>
+                <InputFile OnChange="Picked" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                           class="file-input" data-testid="import-file"/>
+            </label>
+        </div>
+    </PadSheet>
 
     @if (_error is not null)
     {
-        <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="import-error">@_error</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mt-3" data-testid="import-error">@_error</MudAlert>
     }
 
     @if (_done is { } done)
     {
-        <MudAlert Severity="Severity.Success" Class="mt-4" data-testid="import-done">
+        <MudAlert Severity="Severity.Success" Class="mt-3" data-testid="import-done">
             Imported @Summary(done). Check the units on the Ingredients page (marked "check unit") and the quantities on
             each meal's page.
         </MudAlert>
-        <div class="d-flex gap-2 mt-2">
-            <MudButton Href="ingredients" Variant="Variant.Outlined">Ingredients</MudButton>
-            <MudButton Href="meals" Variant="Variant.Outlined">Meals</MudButton>
-            <MudButton Href="prices" Variant="Variant.Outlined">Prices</MudButton>
+        <div class="done-links">
+            <MudButton Href="ingredients" Variant="Variant.Outlined" Color="Color.Primary">Ingredients</MudButton>
+            <MudButton Href="meals" Variant="Variant.Outlined" Color="Color.Primary">Meals</MudButton>
+            <MudButton Href="prices" Variant="Variant.Outlined" Color="Color.Primary">Prices</MudButton>
             @if (done.PlanCounts.Weeks > 0)
             {
-                <MudButton Href="@($"plans/{SheetImport.PlanTemplateId}")" Variant="Variant.Outlined" data-testid="import-plan-link">Plan</MudButton>
+                <MudButton Href="@($"plans/{SheetImport.PlanTemplateId}")" Variant="Variant.Outlined" Color="Color.Primary" data-testid="import-plan-link">Plan</MudButton>
             }
         </div>
     }
 
     @if (_import is not null && _review is not null && _plan is not null)
     {
-        <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="import-summary">
-            @if (_plan.NothingToDo)
-            {
-                <MudText data-testid="import-nothing">
-                    Nothing new to import: everything in this sheet is already here (@_plan.AlreadyHere things).
-                </MudText>
-            }
-            else
-            {
-                <MudText>This adds @Summary(_plan).</MudText>
-                @if (_plan.AlreadyHere > 0)
+        <PadSheet Title="What it adds" Class="mt-4" TestId="import-summary">
+            <div class="summary-body">
+                @if (_plan.NothingToDo)
                 {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@_plan.AlreadyHere already here, left as they are.</MudText>
+                    <p class="summary-text" data-testid="import-nothing">
+                        Nothing new to import: everything in this sheet is already here (@_plan.AlreadyHere things).
+                    </p>
                 }
-            }
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="_plan.NothingToDo || _running"
-                       OnClick="Run" data-testid="import-run">
-                @(_running ? "Importing…" : "Import")
-            </MudButton>
-        </MudPaper>
+                else
+                {
+                    <p class="summary-text">This adds @Summary(_plan).</p>
+                    @if (_plan.AlreadyHere > 0)
+                    {
+                        <p class="summary-aside">@_plan.AlreadyHere already here, left as they are.</p>
+                    }
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="_plan.NothingToDo || _running"
+                           StartIcon="@Icons.Material.Filled.Download" OnClick="Run" data-testid="import-run">
+                    @(_running ? "Importing…" : "Import")
+                </MudButton>
+                @if (HasQuestions)
+                {
+                    <p class="summary-aside">Check the answers below first - each one changes what is imported.</p>
+                }
+            </div>
+        </PadSheet>
+
+        @if (HasQuestions)
+        {
+        <PadSheet Title="Check before importing" Subtitle="What the sheet cannot tell on its own." Class="mt-4">
 
         @if (_review.Ingredients.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Which ingredient is it?</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">A meal names something that is not exactly an ingredient in the list.</MudText>
-            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+            <section class="q-group">
+            <h3 class="q-heading">Which ingredient is it?</h3>
+            <p class="q-help">A meal names something that is not exactly an ingredient in the list.</p>
+            <div class="q-body q-stack">
                 @foreach (IngredientQuestion q in _review.Ingredients)
                 {
                     <label class="native-select" data-testid="import-ingredient-question" data-key="@q.Key">
@@ -94,14 +114,16 @@
                         </select>
                     </label>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
 
         @if (_review.PlanMeals.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Which meal is it?</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">The plan names something that is not exactly a meal in the list.</MudText>
-            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+            <section class="q-group">
+            <h3 class="q-heading">Which meal is it?</h3>
+            <p class="q-help">The plan names something that is not exactly a meal in the list.</p>
+            <div class="q-body q-stack">
                 @foreach (PlanMealQuestion q in _review.PlanMeals)
                 {
                     <label class="native-select" data-testid="import-plan-meal-question" data-key="@q.Key">
@@ -115,33 +137,37 @@
                         </select>
                     </label>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
 
         @if (_review.Serves.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">How many serves?</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Leave it empty for a single-serve meal.</MudText>
-            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-2">
+            <section class="q-group">
+            <h3 class="q-heading">How many serves?</h3>
+            <p class="q-help">Leave it empty for a single-serve meal.</p>
+            <div class="q-body">
                 @foreach (ServesQuestion q in _review.Serves)
                 {
-                    <div class="d-flex align-center gap-3" data-testid="import-serves-question" data-key="@q.Key">
-                        <div class="flex-grow-1">
-                            <MudText>@q.Meal</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@q.Why</MudText>
+                    <div class="q-row" data-testid="import-serves-question" data-key="@q.Key">
+                        <div class="q-row-text">
+                            <span class="marker q-meal">@q.Meal</span>
+                            <span class="q-caption">@q.Why</span>
                         </div>
                         <input class="import-small-input" type="number" inputmode="numeric" min="1" max="99"
                                value="@(Serves(q)?.ToString() ?? "")" @onchange="e => SetServes(q, e)"/>
                     </div>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
 
         @if (_review.MealGroups.Count > 0 || _review.Categories.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Headings</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">The sheet's column headings that are not exactly a group or category here.</MudText>
-            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+            <section class="q-group">
+            <h3 class="q-heading">Headings</h3>
+            <p class="q-help">The sheet's column headings that are not exactly a group or category here.</p>
+            <div class="q-body q-stack">
                 @foreach (HeadingQuestion q in _review.MealGroups)
                 {
                     <label class="native-select" data-testid="import-group-question">
@@ -168,16 +194,18 @@
                         </select>
                     </label>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
 
         @if (_review.Prices.Count > 0 || _review.HouseholdItems.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Prices</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+            <section class="q-group">
+            <h3 class="q-heading">Prices</h3>
+            <p class="q-help">
                 Each is saved as typed in, seen today. A price needs the store and what it is for - "2kg", "24".
-            </MudText>
-            <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-4">
+            </p>
+            <div class="q-body q-stack">
                 @if (_review.Prices.Any(p => !p.Household && p.Store is null))
                 {
                     <label class="native-select" data-testid="import-price-store-all">
@@ -207,13 +235,13 @@
                 @foreach (PriceQuestion q in _review.Prices)
                 {
                     string? why = _plan.LeftOut.FirstOrDefault(l => l.Contains($"({q.Place})"));
-                    <div data-testid="import-price" data-id="@q.Id">
-                        <MudText><b>@q.Item</b> @Money.Format(q.Cents) <span class="mud-text-secondary">· @q.Place</span></MudText>
+                    <div class="q-price" data-testid="import-price" data-id="@q.Id">
+                        <p class="q-price-head"><b>@q.Item</b> <span class="num">@Money.Format(q.Cents)</span> <span class="q-caption">· @q.Place</span></p>
                         @if (q.Note is not null && PricePack(q) is null)
                         {
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="import-price-note">
+                            <p class="q-caption" data-testid="import-price-note">
                                 The sheet says "@q.Note" - type what that is, like 500g or 6.
-                            </MudText>
+                            </p>
                         }
                         <div class="d-flex gap-2 mt-1">
                             <label class="native-select flex-grow-1">
@@ -233,85 +261,98 @@
                                        @onchange="e => Set(_choices.PricePacks, q.Id, Empty(e))" data-testid="import-price-pack"/>
                             </label>
                         </div>
-                        <MudText Typo="Typo.caption" Color="@(why is null ? Color.Success : Color.Warning)" data-testid="import-price-state">
+                        <MudText Typo="Typo.caption" Color="@(why is null ? Color.Success : Color.Warning)" Class="d-block mt-1" data-testid="import-price-state">
                             @(why is not null ? "Left out: " + why[(why.IndexOf("):", StringComparison.Ordinal) + 3)..]
                               : _plan.PricesAlreadyHere.Contains(q.Id) ? "Already here - the same as its latest price."
                               : "Will be imported.")
                         </MudText>
                     </div>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
 
         @if (_plan.Units.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Units the prices disagree with</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+            <section class="q-group">
+            <h3 class="q-heading">Units the prices disagree with</h3>
+            <p class="q-help">
                 These were guessed by an earlier import and nobody has checked them. Their price is counted another way;
                 change the unit to import it, or leave it and the price is left out.
-            </MudText>
-            <MudPaper Outlined="true">
+            </p>
+            <div class="q-body">
                 @foreach (UnitQuestion q in _plan.Units)
                 {
                     BaseUnit chosen = _choices.Units.TryGetValue(q.Key, out BaseUnit u) ? u : q.Unit;
-                    <div class="d-flex align-center gap-2 px-4 py-1 import-unit-row" data-testid="import-unit-question" data-key="@q.Key" data-says="@q.PriceSays">
-                        <div class="flex-grow-1">
-                            <MudText>@q.Name</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">guessed as @q.Unit.Symbol() · the sheet says @q.Why</MudText>
+                    <div class="q-row" data-testid="import-unit-question" data-key="@q.Key" data-says="@q.PriceSays">
+                        <div class="q-row-text">
+                            <span class="q-name">@q.Name</span>
+                            <span class="q-caption">guessed as @q.Unit.Symbol() · the sheet says @q.Why</span>
                         </div>
-                        @foreach (BaseUnit unit in Enum.GetValues<BaseUnit>())
-                        {
-                            <MudButton Size="Size.Small" Variant="@(chosen == unit ? Variant.Filled : Variant.Text)"
-                                       Color="Color.Primary" OnClick="() => SetUnit(q.Key, unit)"
-                                       data-testid="@($"import-unit-{unit}")">@unit.Symbol()</MudButton>
-                        }
+                        <div class="q-units" role="group" aria-label="@($"What {q.Name} is counted in")">
+                            @foreach (BaseUnit unit in Enum.GetValues<BaseUnit>())
+                            {
+                                <MudButton Variant="@(chosen == unit ? Variant.Filled : Variant.Outlined)"
+                                           Color="Color.Primary" OnClick="() => SetUnit(q.Key, unit)"
+                                           data-testid="@($"import-unit-{unit}")">@unit.Symbol()</MudButton>
+                            }
+                        </div>
                     </div>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
 
         @if (_plan.NewIngredients.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">New ingredients - what each is counted in</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+            <section class="q-group">
+            <h3 class="q-heading">New ingredients - what each is counted in</h3>
+            <p class="q-help">
                 The sheet never says, so these are guesses. Fix any that are wrong here, or later: each is marked "check unit"
                 until it is saved on the Ingredients page.
-            </MudText>
-            <MudPaper Outlined="true">
+            </p>
+            <div class="q-body">
                 @foreach (NewIngredientLine line in _plan.NewIngredients)
                 {
-                    <div class="d-flex align-center gap-2 px-4 py-1 import-unit-row" data-testid="import-new-ingredient" data-key="@line.Key">
-                        <div class="flex-grow-1">
-                            <MudText>@line.Name</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@(line.Category ?? "no category")@(line.Guessed ? " · guessed" : "")</MudText>
+                    <div class="q-row" data-testid="import-new-ingredient" data-key="@line.Key">
+                        <div class="q-row-text">
+                            <span class="q-name">@line.Name</span>
+                            <span class="q-caption">@(line.Category ?? "no category")@(line.Guessed ? " · guessed" : "")</span>
                         </div>
-                        @foreach (BaseUnit unit in Enum.GetValues<BaseUnit>())
-                        {
-                            <MudButton Size="Size.Small" Variant="@(line.Unit == unit ? Variant.Filled : Variant.Text)"
-                                       Color="Color.Primary" OnClick="() => SetUnit(line.Key, unit)"
-                                       data-testid="@($"import-unit-{unit}")">@unit.Symbol()</MudButton>
-                        }
+                        <div class="q-units" role="group" aria-label="@($"What {line.Name} is counted in")">
+                            @foreach (BaseUnit unit in Enum.GetValues<BaseUnit>())
+                            {
+                                <MudButton Variant="@(line.Unit == unit ? Variant.Filled : Variant.Outlined)"
+                                           Color="Color.Primary" OnClick="() => SetUnit(line.Key, unit)"
+                                           data-testid="@($"import-unit-{unit}")">@unit.Symbol()</MudButton>
+                            }
+                        </div>
                     </div>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
 
         @if (_plan.LeftOut.Count > 0 || _review.Unread.Count > 0)
         {
-            <MudText Typo="Typo.overline" Component="h2" Class="mt-6 d-block">Not imported</MudText>
-            <MudPaper Outlined="true" Class="pa-4" data-testid="import-left-out">
+            <section class="q-group">
+            <h3 class="q-heading">Not imported</h3>
+            <div class="q-body q-left-out" data-testid="import-left-out">
                 @foreach (string line in _plan.LeftOut)
                 {
-                    <MudText Typo="Typo.body2">@line</MudText>
+                    <p>@line</p>
                 }
                 @foreach (UnreadCell cell in _review.Unread)
                 {
-                    <MudText Typo="Typo.body2">@cell.Place "@cell.Text": @cell.Why</MudText>
+                    <p>@cell.Place "@cell.Text": @cell.Why</p>
                 }
-            </MudPaper>
+            </div>
+            </section>
         }
-
+        </PadSheet>
+        }
     }
+</div>
 </LocalDataGate>
 
 @code {
@@ -319,6 +360,12 @@
     private const long MaxFileBytes = 5 * 1024 * 1024;
 
     private sealed record Loaded(ParsedSheet Sheet, int PlanWeeks);
+
+    /// <summary>Whether the review has anything to ask or report - the "Check before importing" sheet.</summary>
+    private bool HasQuestions => _review is { } r && _plan is { } p
+        && (r.Ingredients.Count > 0 || r.PlanMeals.Count > 0 || r.Serves.Count > 0 || r.MealGroups.Count > 0
+            || r.Categories.Count > 0 || r.Prices.Count > 0 || r.HouseholdItems.Count > 0 || r.Unread.Count > 0
+            || p.Units.Count > 0 || p.NewIngredients.Count > 0 || p.LeftOut.Count > 0);
 
     private Loaded?        _import;
     private ImportKnown?   _known;

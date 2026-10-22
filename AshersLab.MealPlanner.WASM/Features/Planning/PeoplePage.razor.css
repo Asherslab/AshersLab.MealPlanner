@@ -1,0 +1,136 @@
+/* The household is a pad's width: on a wide screen a phone-ish column rather than the whole page. */
+.people {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+/* The line to write someone new on: the box and its button side by side. */
+.person-add {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 14px 12px;
+    border-bottom: 1px solid var(--rule);
+}
+
+.person-add ::deep .person-field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.person-add ::deep .person-add-button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    margin-top: 6px;
+}
+
+.person-row {
+    border-top: 1px solid var(--rule);
+}
+
+.person-row:first-of-type {
+    border-top: 0;
+}
+
+.person-row:last-child,
+.person-row:last-child .person-line {
+    border-radius: 0 0 var(--pad-radius) var(--pad-radius);
+}
+
+/* A person: their magnet, their name, the whole row a tap. */
+.person-line {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 64px;
+    padding: 8px 10px 8px 18px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.person-line:hover {
+    background-color: rgba(47, 93, 80, 0.05);
+}
+
+.person-line:active {
+    background-color: rgba(47, 93, 80, 0.10);
+}
+
+.person-line:focus-visible {
+    outline: 2px solid var(--bottle);
+    outline-offset: -3px;
+    border-radius: 8px;
+}
+
+/* Bigger than the magnets on a plan entry: here the magnet is the person. */
+.person-magnet {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22), 0 1px 2px rgba(29, 43, 39, 0.25);
+}
+
+.person-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+.person-unsent {
+    flex: 0 0 auto;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+}
+
+.person-line ::deep .person-chevron {
+    flex: 0 0 auto;
+    color: var(--chrome);
+}
+
+.person-line:hover ::deep .person-chevron {
+    color: var(--bottle);
+}
+
+/* Open for editing: the name, the magnets to pick from, then Delete at the left and Cancel/Save at the right. */
+.person-edit {
+    padding: 14px 14px 12px 18px;
+}
+
+.person-colour-label {
+    display: block;
+    margin: 14px 0 8px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--bottle);
+}
+
+.person-colours {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 2px 0 4px 2px;
+}
+
+/* A thumb's worth: the shared swatch is 34px, a little small to pick one-handed. */
+.person-colours .colour-swatch {
+    width: 42px;
+    height: 42px;
+}
+
+.person-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .person-line {
+        transition: none;
+    }
+}

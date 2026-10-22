@@ -10,7 +10,9 @@
     <DialogContent>
         @if (Plans.Count == 0)
         {
-            <MudAlert Severity="Severity.Info" data-testid="apply-no-plans">There are no plans yet - make one on the Plans page.</MudAlert>
+            <p class="apply-note" data-testid="apply-no-plans">
+                There are no plans yet. Make one on Plans - a week or more of meals that repeats - and fill the calendar from it here.
+            </p>
         }
         else
         {
@@ -44,12 +46,14 @@
                     }
                 </select>
             </label>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
-                Anything already on the calendar stays as it is - only what is missing is added.
-            </MudText>
+            <p class="apply-note">Anything already on the calendar stays as it is - only what is missing is added.</p>
         }
     </DialogContent>
     <DialogActions>
+        @if (Plans.Count == 0)
+        {
+            <MudButton Href="plans" Variant="Variant.Text" Color="Color.Primary" Class="mr-auto">Go to Plans</MudButton>
+        }
         <MudButton OnClick="() => Dialog.Cancel()" data-testid="apply-cancel">Cancel</MudButton>
         <MudButton OnClick="Apply" Disabled="Plans.Count == 0" Color="Color.Primary" Variant="Variant.Filled" data-testid="apply-run">Fill</MudButton>
     </DialogActions>

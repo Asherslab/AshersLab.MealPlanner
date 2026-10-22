@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Today - The Fridge-Door Pad</title>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --paper: #FFFFFF; --grid: #3E5C76; --rule: #C9D6E2; --marker: #1D1D1F; --red: #E0453A; --blue: #2E7DCB; --green: #3D9A5B; --fridge: #E9ECEF; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 390px; height: 844px; overflow: hidden; }
+  body { background: var(--fridge); color: var(--marker); font: 400 15px/1.4 'Atkinson Hyperlegible', system-ui, sans-serif; position: relative; }
+  .bar { height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
+  .bar h1 { font: 700 18px/1 'Atkinson Hyperlegible'; color: var(--grid); }
+  .sync { font-size: 13px; color: var(--grid); }
+  .pad { position: absolute; top: 62px; left: 14px; right: 14px; bottom: 96px; background: var(--paper); border-radius: 4px; box-shadow: 0 1px 0 #d5dbe0; }
+  .pad::before { content: ""; position: absolute; top: -6px; left: 0; right: 0; height: 12px; background: repeating-linear-gradient(90deg, transparent 0 10px, var(--fridge) 10px 14px); }
+  .head { background: var(--grid); color: #fff; padding: 16px 18px 14px; }
+  .head h2 { font: 700 26px/1 'Atkinson Hyperlegible'; }
+  .head p { font-size: 13px; opacity: .85; margin-top: 4px; }
+  .slot { display: grid; grid-template-columns: 82px 1fr; border-bottom: 1px solid var(--rule); min-height: 92px; }
+  .slot .k { border-right: 1px solid var(--rule); padding: 12px; font: 700 12px/1 'Atkinson Hyperlegible'; color: var(--grid); text-transform: none; }
+  .slot .v { padding: 10px 14px; }
+  .slot .v b { font: 700 24px/1.1 Kalam, cursive; display: block; }
+  .slot .v .who { display: flex; gap: 6px; margin-top: 8px; }
+  .mag { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 -2px 0 rgba(0,0,0,.2); }
+  .slot.done b { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; color: #777; }
+  nav { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: var(--paper); border-top: 1px solid var(--rule); display: grid; grid-template-columns: repeat(5, 1fr); padding: 10px 6px 22px; }
+  nav a { display: flex; flex-direction: column; align-items: center; gap: 5px; font: 700 12px/1 'Atkinson Hyperlegible'; color: #6b7785; text-decoration: none; }
+  nav a i { font-style: normal; font-size: 18px; }
+  nav a.on { color: var(--red); }
+</style>
+</head>
+<body>
+  <header class="bar"><h1>Meal Planner</h1><span class="sync">Synced</span></header>
+  <section class="pad">
+    <div class="head"><h2>Thursday 22</h2><p>Week of 19 October · 12 things to buy</p></div>
+    <div class="slot done"><span class="k">Breakfast</span><div class="v"><b>Overnight oats</b><div class="who"><i class="mag" style="background:var(--blue)"></i><i class="mag" style="background:var(--green)"></i></div></div></div>
+    <div class="slot"><span class="k">Snack</span><div class="v"><b>Fruit &amp; yoghurt</b><div class="who"><i class="mag" style="background:var(--red)"></i></div></div></div>
+    <div class="slot"><span class="k">Lunch</span><div class="v"><b>Leftover bolognese</b><div class="who"><i class="mag" style="background:var(--blue)"></i><i class="mag" style="background:var(--green)"></i></div></div></div>
+    <div class="slot"><span class="k">Dinner</span><div class="v"><b>Chicken traybake</b><div class="who"><i class="mag" style="background:var(--blue)"></i><i class="mag" style="background:var(--green)"></i><i class="mag" style="background:var(--red)"></i></div></div></div>
+  </section>
+  <nav>
+    <a class="on" href="#"><i>☀</i>Today</a><a href="#"><i>▦</i>Plan</a><a href="#"><i>✓</i>Shop</a><a href="#"><i>◍</i>Meals</a><a href="#"><i>≡</i>More</a>
+  </nav>
+</body>
+</html>

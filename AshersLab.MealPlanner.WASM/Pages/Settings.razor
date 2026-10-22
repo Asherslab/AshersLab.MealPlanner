@@ -1,12 +1,17 @@
 @page "/settings"
 
-@* The lists set up once a season, and Diagnostics last - it is only for when something is wrong. *@
+@*
+    The lists set up once a season, a sheet per group, and Diagnostics last - it is only for when something is wrong.
+    On a phone the app bar already names the page, so the page's own title shows only on a wide screen.
+*@
 
 <PageTitle>Settings - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Settings</MudText>
+<div class="drawer-page">
+    <h1 class="page-title">Settings</h1>
 
-<DestinationList Heading="Household" Destinations="NavModel.In(NavGroup.Household)" TestIdPrefix="settings"/>
-<DestinationList Heading="Shopping" Destinations="NavModel.In(NavGroup.Shopping)" TestIdPrefix="settings"/>
-<DestinationList Heading="Data" Destinations="NavModel.In(NavGroup.Data)" TestIdPrefix="settings"/>
-<DestinationList Heading="Diagnostics" Destinations="NavModel.In(NavGroup.Diagnostics)" TestIdPrefix="settings"/>
+    <DestinationList Heading="Household" Destinations="NavModel.In(NavGroup.Household)" TestIdPrefix="settings"/>
+    <DestinationList Heading="Shopping" Destinations="NavModel.In(NavGroup.Shopping)" TestIdPrefix="settings"/>
+    <DestinationList Heading="Data" Destinations="NavModel.In(NavGroup.Data)" TestIdPrefix="settings"/>
+    <DestinationList Heading="Something wrong?" Destinations="NavModel.In(NavGroup.Diagnostics)" TestIdPrefix="settings"/>
+</div>

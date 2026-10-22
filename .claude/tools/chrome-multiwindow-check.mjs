@@ -126,7 +126,7 @@ async function card(w, until = c => c.count || c.state, label = 'card') {
     throw new Error(`CLASS boot-download (${label}): a download was dropped\n  failed loads: ${w.page.failedLoads.join(' | ')}`);
   }
   // Blazor rendered the server card but the database never came: that, and only that, is the shim's fault.
-  const rendered = await evaluate(w, '!!document.querySelector("[data-testid=server-version], .mud-card")');
+  const rendered = await evaluate(w, '!!document.querySelector("[data-testid=server-version], [data-testid=device-sheet]")');
   const events = await evaluate(w, 'JSON.stringify(globalThis.mealPlannerDatabase?.events ?? null)');
   const locks = await evaluate(w, 'navigator.locks.query().then(q => JSON.stringify(q))');
   const body = await evaluate(w, 'location.href + " | " + (document.body?.innerText ?? "").slice(0, 160)');

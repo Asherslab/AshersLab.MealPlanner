@@ -1,0 +1,12 @@
+.drawer-page {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+/* The bar above says "Meal Planner" on this tab, so the page names itself - in plain bold print, not a band. */
+.page-title {
+    margin: 4px 4px 12px;
+    font: 700 1.5rem/1.15 var(--font-body);
+    letter-spacing: -0.01em;
+    color: var(--ink);
+}

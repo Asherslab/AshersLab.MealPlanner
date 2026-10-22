@@ -14,56 +14,75 @@
 @inject NavigationManager Navigation
 
 @*
-    Every meal, under its group in the household's order. Type a name and tap Add (or Enter) to open the editor with
-    it filled in; saving opens the new meal's page, where its ingredients go. Tap a meal for its page. Each meal shows
-    what a serve costs (MealCosting), or "from $X a serve + N unpriced" while an ingredient has no quantity or price.
+    The household's recipe box: one pad sheet of every meal, under its group in the household's order. The box at
+    the top of the sheet both searches and starts a new one - type a name and tap Add (or Enter) to open the editor
+    with it filled in; saving opens the new meal's page, where its ingredients go. Each meal is written in marker, with
+    what it makes and what a serve costs (MealCosting) under it, or "from $X a serve + N unpriced" while an ingredient
+    has no quantity or price. A meal not yet on the server has a dashed edge.
+
+    Each group's rows sit in a "mud-paper" block straight after the group's heading: the check scripts find a meal's
+    group as the heading before its block (.claude/tools, `closest('.mud-paper').previousElementSibling`).
 *@
 
 <PageTitle>Meals - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Meals</MudText>
+<div class="meals">
+    <LocalDataGate Start="Start">
+        <PadSheet Title="Meals" Subtitle="@CountText()" TestId="meals-sheet">
+            <form class="meals-find" @onsubmit="Add" @onsubmit:preventDefault>
+                <MudTextField T="string" @bind-Value="_newName" Label="New meal, or search" Variant="Variant.Outlined"
+                              Immediate="true" MaxLength="Names.MaxLength"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              InputId="meal-new-name" data-testid="meal-new-name"/>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" Class="meals-add" data-testid="meal-add">Add</MudButton>
+            </form>
 
-<LocalDataGate Start="Start">
-    <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
-        <MudTextField T="string" @bind-Value="_newName" Label="New meal, or search" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                      InputId="meal-new-name" data-testid="meal-new-name"/>
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
-                   data-testid="meal-add">Add</MudButton>
-    </form>
-
-    @if (_meals.Count == 0)
-    {
-        <MudText Class="pa-4 mud-text-secondary" data-testid="meals-empty">No meals yet.</MudText>
-    }
-    else if (!Groups().Any())
-    {
-        <MudText Class="pa-4 mud-text-secondary" data-testid="meals-none-match">
-            None match "@Names.Normalise(_newName)". Tap Add to add it.
-        </MudText>
-    }
-
-    @foreach ((string heading, List<Meal> items) in Groups())
-    {
-        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="meal-list-group">@heading</MudText>
-        <MudPaper Outlined="true">
-            @foreach (Meal meal in items)
+            @if (_meals.Count == 0)
             {
-                <a class="meal-row d-block px-4 py-2" @key="meal.Id" href="@($"meals/{meal.Id}")"
-                   data-testid="meal-row" data-id="@meal.Id">
-                    <MudText data-testid="meal-name">@meal.Name</MudText>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="meal-detail">@MealText.Detail(meal, _costs.CostOf(meal))</MudText>
-                </a>
+                <p class="pad-note" data-testid="meals-empty">
+                    No meals yet. Type the first one's name above and tap Add - or bring them all in from the old
+                    spreadsheet on <a href="import">Import spreadsheet</a>.
+                </p>
             }
-        </MudPaper>
-    }
-</LocalDataGate>
+            else if (!Groups().Any())
+            {
+                <p class="pad-note" data-testid="meals-none-match">
+                    No meal is called "@Names.Normalise(_newName)". Tap Add to make it.
+                </p>
+            }
+
+            @foreach ((string heading, List<Meal> items) in Groups())
+            {
+                <h3 class="meals-group" data-testid="meal-list-group">@heading</h3>
+                <div class="mud-paper meals-rows">
+                    @foreach (Meal meal in items)
+                    {
+                        <a class="@(_unsent.Contains(meal.Id) ? "meals-row unsent" : "meals-row")" @key="meal.Id"
+                           href="@($"meals/{meal.Id}")" data-testid="meal-row" data-id="@meal.Id">
+                            <span class="meals-row-text">
+                                <span class="marker" data-testid="meal-name">@meal.Name</span>
+                                <span class="meals-row-detail" data-testid="meal-detail">@MealText.Detail(meal, _costs.CostOf(meal))</span>
+                            </span>
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="meals-row-go" aria-hidden="true"/>
+                        </a>
+                    }
+                </div>
+            }
+        </PadSheet>
+
+        <p class="pad-aside">
+            Groups and their order are on <a href="meal-groups">Meal groups</a>; ingredients are on
+            <a href="ingredients">Ingredients</a>.
+        </p>
+    </LocalDataGate>
+</div>
 
 @code {
     private List<Meal>      _meals  = [];
     private List<MealGroup> _groups = [];
     private MealCostBook    _costs  = null!;
+    private HashSet<Guid>   _unsent = [];
 
     private string? _newName;
 
@@ -72,7 +91,15 @@
         _meals  = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToListAsync();
         _groups = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
         _costs  = await MealCostBook.LoadAsync(db);
+        _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
     }
+
+    private string CountText() => _meals.Count switch
+    {
+        0 => "Your recipe box",
+        1 => "1 meal, by group",
+        _ => $"{_meals.Count} meals, by group",
+    };
 
     /// <summary>The meals matching the box, under their group in group order; "No group" (none, or one deleted) last.</summary>
     private IEnumerable<(string Heading, List<Meal> Items)> Groups()

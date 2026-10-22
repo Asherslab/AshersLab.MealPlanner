@@ -1,0 +1,70 @@
+/* Pantry: one quiet ruled sheet of what is on hand, in the same row language as Shop. Shared pieces (.pad, .pad-head,
+   .pad-note) are in wwwroot/css/app.css. */
+
+.pantry {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.pantry-search { padding: 14px 14px 6px; }
+
+.pantry-empty { padding-top: 10px; }
+
+/* A category: small bottle-green print over its lines. */
+.pantry-group {
+    margin: 0;
+    padding: 16px 14px 6px;
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+
+.pantry-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--rule);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.pantry-row:active { background: rgba(47, 93, 80, 0.06); }
+.pantry-row:focus-visible { outline-offset: -3px; border-radius: 8px; }
+.pantry-staple { cursor: default; flex-wrap: wrap; row-gap: 6px; }
+.pantry-staple:active { background: none; }
+
+.pantry-what {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.pantry-name {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+.pantry-detail {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    color: var(--ink-soft);
+}
+.pantry-detail:empty { display: none; }
+
+.pantry-level {
+    white-space: nowrap;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+/* Out, or probably out: the attention colour. */
+.pantry-level.low { color: var(--tomato-ink); }
+
+.pantry-add { display: inline-flex; color: var(--bottle); }
+
+.pantry-states { display: flex; gap: 6px; }
+.pantry-states ::deep .pantry-state { min-height: 40px; }

@@ -101,8 +101,10 @@ can use the app while it runs.
 ## Driving the app
 
 Chrome (`mcp__claude-in-chrome__*`) works against `https://localhost:7283` with no sign-in. The home
-page is where the planner lands: `home-today` (today's entries `home-today-entry`, or `home-today-empty`), `home-no-people`
-while nobody is on People, and the buttons `home-calendar`, `home-shopping`, `home-meals`, `home-receipts`. The wiring
+page is where the planner lands: `home-today`, today's pad sheet - a row per slot, each planned entry a
+`home-today-entry` (`data-id`, `.struck` when skipped, `.unsent` before the server has it), `home-today-empty` only when
+there are no slots at all; `home-no-people` while nobody is on People; the week tiles `week-to-get` and `week-spend`;
+and `home-receipts`. The wiring
 check is on **Diagnostics** (`/settings/diagnostics`): its Server card calls `IServerInfoService.Get` over gRPC-Web and
 shows the server version, server time and the newest applied migration. The refresh icon (aria-label "Check the
 server again") repeats the call — the server time changing is the evidence that it went to the server.

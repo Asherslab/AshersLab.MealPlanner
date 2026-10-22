@@ -20,11 +20,12 @@ public static partial class PersonRules
     public const string Noun = "A person";
 
     /// <summary>
-    /// What the editor offers, in order: distinct from each other and readable as a chip's background with white text.
-    /// The first unused one is a new person's.
+    /// What the editor offers, in order: fridge magnets in the kitchen's canister colours, distinct from each other.
+    /// Never a text background - a person shows as a magnet beside their name in ink. The first unused one is a new
+    /// person's.
     /// </summary>
     public static readonly IReadOnlyList<string> Palette =
-        ["#1e88e5", "#e53935", "#43a047", "#8e24aa", "#fb8c00", "#00897b", "#6d4c41", "#546e7a"];
+        ["#d9533c", "#f2c14e", "#7fb6cf", "#6fa27a", "#8e5b8c", "#e8893a", "#3e8e8a", "#8b6a4e"];
 
     public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal) { NameField, ColourField };
 

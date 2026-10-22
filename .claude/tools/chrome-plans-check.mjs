@@ -35,14 +35,14 @@ let personId;
   const first = server(`select Colour from Person where Id = '${up(personId)}'`);
   const others = server(`select count(*) from Person where not Deleted and Id <> '${up(personId)}'`);
   const taken = server(`select count(*) from Person where not Deleted and Id <> '${up(personId)}' and Colour = '${first}'`);
-  check(others === '0' ? first === '#1e88e5' : Number(others) >= 8 || taken === '0',
+  check(others === '0' ? first === '#d9533c' : Number(others) >= 8 || taken === '0',
     `a new person gets the first free colour (${first}, ${others} others)`);
 
   await a.evaluate(`${row(person)}.querySelector('[role=button]').click()`);
   await until(a, `!!document.querySelector('[data-testid=person-colour]')`);
-  await click(a, '[data-testid=person-colour][data-colour="#8e24aa"]'); await sleep(100);
+  await click(a, '[data-testid=person-colour][data-colour="#8e5b8c"]'); await sleep(100);
   await click(a, '[data-testid=person-save]');
-  check(await until(b, `${row(person)}?.querySelector('.person-dot')?.style.background.includes('142, 36, 170')`),
+  check(await until(b, `${row(person)}?.querySelector('.magnet')?.style.background.includes('142, 91, 140')`),
     'A changes the colour; B shows it');
   console.log(`  phone screenshot: ${await screenshot(b, 'people')}`);
 }
@@ -115,7 +115,7 @@ let planId, entryId;
   const cell = `document.querySelector('[data-testid=plan-grid] [data-testid=plan-cell][data-day=Tuesday][data-slot="${DINNER}"]')`;
   check(await until(a, `${cell}?.querySelector('[data-testid=plan-entry-meals]')?.textContent.trim() === ${JSON.stringify(`${noodles} / ${soup}`)}`),
     `the cell shows "${noodles} / ${soup}"`);
-  check(await a.evaluate(`!!${cell}.querySelector('[data-testid=plan-entry-people] .person-dot')`), 'with the person\'s dot');
+  check(await a.evaluate(`!!${cell}.querySelector('[data-testid=plan-entry-people] .magnet')`), 'with the person\'s magnet');
   entryId = await a.evaluate(`${cell}.querySelector('[data-testid=plan-entry]').dataset.id`);
   console.log(`  desktop screenshot: ${await screenshot(a, 'plan-grid')}`);
 

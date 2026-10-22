@@ -1,0 +1,26 @@
+@*
+    A ruled row of a PadSheet: the printed label down the left in bottle green, what was written on the right.
+    Struck keeps a done or skipped row in place under a tomato marker line; Unsent gives it the dashed edge of an edit
+    not yet on the server.
+*@
+
+<div class="@RowClass" data-testid="@TestId" data-id="@DataId">
+    <span class="pad-label">@Label</span>
+    <div class="pad-entry">@ChildContent</div>
+</div>
+
+@code {
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public bool Struck { get; set; }
+
+    [Parameter] public bool Unsent { get; set; }
+
+    [Parameter] public string? TestId { get; set; }
+
+    [Parameter] public string? DataId { get; set; }
+
+    private string RowClass => "pad-row" + (Struck ? " struck" : "") + (Unsent ? " unsent" : "");
+}

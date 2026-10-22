@@ -1,0 +1,35 @@
+@using AshersLab.MealPlanner.Shared.Domain.Meals
+@using AshersLab.MealPlanner.Shared.Domain.Prices
+
+@*
+    The week at a glance, from the kitchen bench: what is left to buy and what the week costs, each a big number over
+    what it counts. An incomplete cost keeps its unpriced count right under the number - never the number alone - and
+    with nothing priced at all the number is a question mark, not "$0.00".
+*@
+
+<div class="week-tiles" data-testid="week-tiles">
+    <a class="week-tile" href="shopping" data-testid="week-to-get">
+        <b>@ToGet</b>
+        <span>@(ToGet == 0 && Done > 0 ? "all bought this week" : "to get this week")</span>
+    </a>
+    <a class="week-tile" href="calendar" data-testid="week-spend">
+        <b>@(Spend.Cents == 0 && Spend.Missing > 0 ? "$?" : Money.Format(Spend.Cents))</b>
+        <span>@SpendLabel</span>
+    </a>
+</div>
+
+@code {
+    [Parameter] public int ToGet { get; set; }
+
+    /// <summary>Lines already ticked, so a finished list says so rather than "0 to get".</summary>
+    [Parameter] public int Done { get; set; }
+
+    [Parameter] public Cost Spend { get; set; }
+
+    private string SpendLabel => Spend.Missing switch
+    {
+        0 => "to spend this week",
+        1 => "to spend this week · 1 unpriced",
+        _ => $"to spend this week · {Spend.Missing} unpriced",
+    };
+}

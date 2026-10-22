@@ -14,63 +14,69 @@
 @inject IBrowserViewportService Viewport
 
 @*
-    Every ingredient, grouped by category in the household's order. Type a name and tap Add (or Enter) to open the
-    editor with it filled in; tap a row to edit or delete it. Reads and writes only this browser's database - every
+    Every ingredient on one dense ruled pad sheet, grouped by category in the household's order, with a quiet green
+    "Staple" tag where it is one. Type a name and tap Add (or Enter) to open the editor with it filled in; tap a row to
+    edit or delete it. Each category's rows sit in a "mud-paper" block straight after its heading: the check scripts
+    find an ingredient's category as the heading before its block (.claude/tools/lib/profiles.mjs). Reads and writes only this browser's database - every
     edit is an op, synced by the sync loop, and works the same offline.
 *@
 
 <PageTitle>Ingredients - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Ingredients</MudText>
+<div class="ingredients">
+    <LocalDataGate Start="Start">
+        <PadSheet Title="Ingredients" Subtitle="@CountText()" TestId="ingredients-sheet">
+            <form class="ingredients-find" @onsubmit="Add" @onsubmit:preventDefault>
+                <MudTextField T="string" @bind-Value="_newName" Label="New ingredient, or search" Variant="Variant.Outlined"
+                              Immediate="true" MaxLength="Names.MaxLength"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              InputId="ingredient-new-name" data-testid="ingredient-new-name"/>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" Class="ingredients-add" data-testid="ingredient-add">Add</MudButton>
+            </form>
 
-<LocalDataGate Start="Start">
-    <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
-        <MudTextField T="string" @bind-Value="_newName" Label="New ingredient, or search" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                      InputId="ingredient-new-name" data-testid="ingredient-new-name"/>
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
-                   data-testid="ingredient-add">Add</MudButton>
-    </form>
-
-    @if (_ingredients.Count == 0)
-    {
-        <MudText Class="pa-4 mud-text-secondary" data-testid="ingredients-empty">No ingredients yet.</MudText>
-    }
-    else if (!Groups().Any())
-    {
-        <MudText Class="pa-4 mud-text-secondary" data-testid="ingredients-none-match">
-            None match "@Names.Normalise(_newName)". Tap Add to add it.
-        </MudText>
-    }
-
-    @foreach ((string heading, List<Ingredient> items) in Groups())
-    {
-        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="ingredient-group">@heading</MudText>
-        <MudPaper Outlined="true">
-            @foreach (Ingredient ingredient in items)
+            @if (_ingredients.Count == 0)
             {
-                <div class="ingredient-row px-4 py-2" @key="ingredient.Id" role="button" tabindex="0"
-                     @onclick="() => Edit(ingredient)" data-testid="ingredient-row" data-id="@ingredient.Id">
-                    <div class="d-flex align-center gap-2">
-                        <MudText Class="flex-grow-1" data-testid="ingredient-name">@ingredient.Name</MudText>
-                        @if (ingredient.UnitGuessed)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" data-testid="ingredient-unit-guessed">Check unit</MudChip>
-                        }
-                        @if (ingredient.IsStaple)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" data-testid="ingredient-staple-chip">Staple</MudChip>
-                        }
-                    </div>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="ingredient-detail">
-                        @Detail(ingredient)
-                    </MudText>
+                <p class="pad-note" data-testid="ingredients-empty">
+                    No ingredients yet. Type the first one's name above and tap Add - or add them as you write a meal's
+                    ingredients on <a href="meals">Meals</a>.
+                </p>
+            }
+            else if (!Groups().Any())
+            {
+                <p class="pad-note" data-testid="ingredients-none-match">
+                    No ingredient is called "@Names.Normalise(_newName)". Tap Add to make it.
+                </p>
+            }
+
+            @foreach ((string heading, List<Ingredient> items) in Groups())
+            {
+                <h3 class="ingredients-group" data-testid="ingredient-group">@heading</h3>
+                <div class="mud-paper ingredients-rows">
+                    @foreach (Ingredient ingredient in items)
+                    {
+                        <div class="@(_unsent.Contains(ingredient.Id) ? "ingredients-row unsent" : "ingredients-row")" @key="ingredient.Id"
+                             role="button" tabindex="0" @onclick="() => Edit(ingredient)" @onkeydown="e => OnRowKey(e, ingredient)"
+                             data-testid="ingredient-row" data-id="@ingredient.Id">
+                            <div class="ingredients-row-text">
+                                <span class="ingredients-row-name" data-testid="ingredient-name">@ingredient.Name</span>
+                                <span class="ingredients-row-detail" data-testid="ingredient-detail">@Detail(ingredient)</span>
+                            </div>
+                            @if (ingredient.UnitGuessed)
+                            {
+                                <span class="tag tag-check" data-testid="ingredient-unit-guessed">Check unit</span>
+                            }
+                            @if (ingredient.IsStaple)
+                            {
+                                <span class="tag" data-testid="ingredient-staple-chip">Staple</span>
+                            }
+                        </div>
+                    }
                 </div>
             }
-        </MudPaper>
-    }
-</LocalDataGate>
+        </PadSheet>
+    </LocalDataGate>
+</div>
 
 @code {
     private List<Ingredient>          _ingredients = [];
@@ -78,6 +84,8 @@
     private Dictionary<Guid, string>  _stores      = [];
     private ILookup<Guid?, string>    _products    = Array.Empty<string>().ToLookup(_ => (Guid?)null);
     private ILookup<Guid?, string>    _meals       = Array.Empty<string>().ToLookup(_ => (Guid?)null);
+
+    private HashSet<Guid>             _unsent      = [];
 
     private string? _newName;
 
@@ -99,6 +107,21 @@
             .Distinct()
             .OrderBy(l => l.Meal, StringComparer.CurrentCultureIgnoreCase)
             .ToLookup(l => l.Ingredient, l => l.Meal);
+        _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
+    }
+
+    private string CountText() => _ingredients.Count switch
+    {
+        0 => "What meals are made from",
+        1 => "1 ingredient, by category",
+        _ => $"{_ingredients.Count} ingredients, by category",
+    };
+
+    /// <summary>A row is a button to the keyboard too: Enter or Space opens it.</summary>
+    private async Task OnRowKey(KeyboardEventArgs e, Ingredient ingredient)
+    {
+        if (e.Key is "Enter" or " ")
+            await Edit(ingredient);
     }
 
     /// <summary>

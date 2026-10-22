@@ -1,15 +1,8 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 
-@*
-    The components' scoped CSS (*.razor.css). index.html has no link to the bundle, so it is added here; it belongs in
-    index.html beside css/app.css, and this goes when it is there.
-*@
-<HeadContent>
-    <link href="AshersLab.MealPlanner.WASM.styles.css" rel="stylesheet"/>
-</HeadContent>
-
-<MudThemeProvider/>
+@* The fridge-door pad in the kitchen bench's colours: Design/AppTheme.cs. *@
+<MudThemeProvider Theme="AppTheme.Theme"/>
 <MudPopoverProvider/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
@@ -22,7 +15,7 @@
     paint is already right.
 *@
 <MudLayout>
-    <MudAppBar Elevation="1" Dense="true">
+    <MudAppBar Elevation="0" Dense="true" Class="app-bar">
         <span class="wide-only">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                            aria-label="Menu" OnClick="() => _drawerOpen = !_drawerOpen" data-testid="nav-menu"/>
@@ -47,7 +40,7 @@
         <ServerReplacedPrompt/>
     </MudAppBar>
     @* Responsive: open beside the page from Md up, and closed below it - where nothing opens it. *@
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1"
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Class="app-drawer"
                Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md">
         <MudNavMenu>
             @foreach (NavDestination d in NavModel.In(NavGroup.Main))

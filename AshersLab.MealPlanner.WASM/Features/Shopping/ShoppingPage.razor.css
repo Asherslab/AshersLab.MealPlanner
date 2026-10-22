@@ -1,0 +1,227 @@
+/* Shop: a ruled list pad torn into one sheet per store, worked down with a thumb in an aisle. Shared pieces (.pad,
+   .pad-head, .week-tiles, .struck, .unsent, .marker) are in wwwroot/css/app.css; this is only what the list adds. */
+
+.shop {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+/* Sheets stack with the laminate showing between them, so each store reads as its own torn-off sheet. */
+.shop ::deep .pad { margin-top: 18px; }
+.shop-head { margin-top: 6px; }
+
+/* ---- The head sheet: the days on the band, then (when changing them) two dates ------------------------------------ */
+.shop-head .pad-head h1 {
+    font-size: 1.375rem;
+    line-height: 1.15;
+    text-wrap: balance;
+}
+.shop-eaten-line { white-space: normal; }
+.shop-head .pad-head ::deep .shop-range-edit {
+    min-height: 44px;
+    color: var(--enamel);
+}
+
+.shop-range-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: end;
+    padding: 14px;
+}
+.shop-range-form ::deep .shop-tall {
+    grid-column: 1 / -1;
+    min-height: 48px;
+}
+@media (min-width: 600px) {
+    .shop-range-form { grid-template-columns: 1fr 1fr auto; }
+    .shop-range-form ::deep .shop-tall { grid-column: auto; }
+}
+
+.shop-error {
+    margin: 0;
+    padding: 0 14px 14px;
+    color: var(--tomato-ink);
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+/* ---- The two figures: what is left, and what it costs ------------------------------------------------------------ */
+.shop-tiles { margin-top: 12px; }
+.shop-figure b { display: inline; }
+.shop-figure > span { display: block; margin-top: 6px; font-size: 0.8125rem; color: var(--ink-soft); }
+.shop-figure .shop-figure-from {
+    display: inline;
+    margin: 0 2px 0 0;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--ink-soft);
+}
+/* An incomplete total says so right under the number, in the attention colour. */
+.shop-figure .shop-figure-more {
+    font-weight: 700;
+    color: var(--tomato-ink);
+}
+
+/* ---- A store's sheet ------------------------------------------------------------------------------------------- */
+.shop-store {
+    margin: 0;
+    padding: 14px 18px 12px;
+    background: var(--bottle);
+    color: var(--enamel);
+    border-radius: 4px 4px 0 0;
+    font: 700 1.375rem/1.15 var(--font-body);
+    letter-spacing: -0.01em;
+}
+
+/* A category: small bottle-green print, ruled off from the lines above it. */
+.shop-category {
+    margin: 0;
+    padding: 16px 14px 6px;
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+.shop-store + .shop-category { padding-top: 12px; }
+
+/* The bare MudPaper the shopping check walks back from: no fill, no edge of its own. */
+.shop-sheet ::deep .shop-lines,
+.shop ::deep .shop-lines {
+    background: transparent;
+    color: inherit;
+}
+
+/* ---- A line: the printed tick box down the left, what to get, its cost, then Have under the thumb ---------------- */
+.shop-line {
+    display: flex;
+    align-items: stretch;
+    border-top: 1px solid var(--rule);
+    min-height: 64px;
+}
+
+.shop-tap {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 64px;
+}
+.shop-tap:active { background: rgba(47, 93, 80, 0.06); }
+.shop-tap:focus-visible { outline-offset: -3px; border-radius: 8px; }
+
+/* The printed column: a ruled margin with the tick box in it, like the pad's slot labels. */
+.shop-box-col {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid var(--rule);
+}
+.shop-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 2px solid var(--bottle);
+    border-radius: 6px;
+    background: var(--enamel);
+    color: var(--bottle);
+}
+.shop-box.bought { background: var(--bottle); color: var(--enamel); }
+.shop-box.have { background: var(--laminate); }
+
+.shop-what {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    min-width: 0;
+}
+.shop-name {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+.shop-detail {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    color: var(--ink-soft);
+}
+.shop-what.struck .shop-name { color: var(--ink-soft); }
+.shop-what .marker { font-size: 1.375rem; overflow-wrap: anywhere; }
+
+.shop-cost {
+    padding-right: 12px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink);
+}
+.shop-cost.unpriced { font-weight: 400; color: var(--ink-soft); }
+
+.shop-side {
+    display: flex;
+    align-items: center;
+    padding: 0 10px 0 2px;
+}
+.shop-side ::deep .shop-have {
+    min-height: 44px;
+    min-width: 72px;
+}
+.shop-side ::deep .shop-have.on { background: var(--laminate); }
+.shop-side ::deep .mud-icon-button { width: 44px; height: 44px; }
+
+/* ---- Add something: a small scrap of the pad, not a form page ----------------------------------------------------- */
+.shop-add-title {
+    margin: 0;
+    padding: 14px 14px 8px;
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+.shop-add-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+        "name  name  go"
+        "store price price";
+    gap: 10px;
+    align-items: end;
+    padding: 0 14px 14px;
+}
+.shop-add-name { grid-area: name; }
+.shop-add-store { grid-area: store; }
+.shop-add-price { grid-area: price; }
+.shop-add-go { grid-area: go; }
+.shop-add-store > select { min-height: 56px; }
+.shop-add-go ::deep .shop-add-button { min-height: 56px; min-width: 72px; }
+
+@media (min-width: 600px) {
+    .shop-add-form {
+        grid-template-columns: minmax(0, 1fr) 10rem 8rem auto;
+        grid-template-areas: "name store price go";
+    }
+}
+
+/* ---- Other lists: ruled links to the other weeks ------------------------------------------------------------------ */
+.shop-list-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 56px;
+    padding: 0 10px 0 18px;
+    border-top: 1px solid var(--rule);
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 700;
+}
+.shop ::deep .pad-head + .shop-list-link { border-top: 0; }
+.shop-list-link:hover { color: var(--bottle); }
+.shop-list-link ::deep .mud-icon-root { color: var(--bottle); }

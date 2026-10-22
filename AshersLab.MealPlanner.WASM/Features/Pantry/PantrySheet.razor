@@ -12,66 +12,75 @@
 
 <MudDialog data-testid="pantry-sheet">
     <DialogContent>
-        <MudText Typo="Typo.subtitle1" data-testid="pantry-sheet-now">@NowText</MudText>
+        <div class="pantry-sheet-body">
+            <p class="sheet-now" data-testid="pantry-sheet-now">@NowText</p>
 
-        <MudText Typo="Typo.overline" Class="d-block mt-3">What's left?</MudText>
-        <div class="d-flex flex-wrap gap-2">
-            <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="() => Count(0)" data-testid="pantry-out">Out</MudButton>
-            @if (Pack is { } pack)
+            <h3 class="sheet-heading">What's left?</h3>
+            <div class="sheet-buttons">
+                <MudButton Variant="Variant.Outlined" OnClick="() => Count(0)" data-testid="pantry-out">Out</MudButton>
+                @if (Pack is { } pack)
+                {
+                    <MudButton Variant="Variant.Outlined" OnClick="() => Count(PantryText.Of(pack, 0.25m))" data-testid="pantry-quarter">¼ pack</MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="() => Count(PantryText.Of(pack, 0.5m))" data-testid="pantry-half">½ pack</MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="() => Count(pack)" data-testid="pantry-pack">1 pack</MudButton>
+                }
+            </div>
+            @if (Pack is { } size)
             {
-                <MudButton Variant="Variant.Outlined" OnClick="() => Count(PantryText.Of(pack, 0.25m))" data-testid="pantry-quarter">¼ pack</MudButton>
-                <MudButton Variant="Variant.Outlined" OnClick="() => Count(PantryText.Of(pack, 0.5m))" data-testid="pantry-half">½ pack</MudButton>
-                <MudButton Variant="Variant.Outlined" OnClick="() => Count(pack)" data-testid="pantry-pack">1 pack</MudButton>
+                <h3 class="sheet-heading">Bought</h3>
+                <div class="sheet-buttons">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(StockReason.Bought, size)"
+                               data-testid="pantry-bought-1">+1 pack (@Quantity.Format(size, Unit))</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(StockReason.Bought, size * 2)"
+                               data-testid="pantry-bought-2">+2 packs</MudButton>
+                </div>
+            }
+
+            <h3 class="sheet-heading">An amount</h3>
+            <MudTextField T="string" @bind-Value="_amount" Label="@($"How much? {Quantity.Example(Unit)}")" Variant="Variant.Outlined"
+                          Immediate="true" InputMode="@(InputMode.@decimal)" Error="_error is not null" ErrorText="@_error"
+                          InputId="pantry-amount" data-testid="pantry-amount"/>
+            <div class="sheet-buttons sheet-buttons-after">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Typed(StockReason.Counted)"
+                           data-testid="pantry-amount-count">That's what's left</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="() => Typed(StockReason.Bought)" data-testid="pantry-amount-bought">Bought this</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="() => Typed(StockReason.Adjusted)" data-testid="pantry-amount-threw">Threw this out</MudButton>
+            </div>
+
+            @if (Coming.Count > 0)
+            {
+                <h3 class="sheet-heading sheet-heading-gap">Coming up</h3>
+                <div class="sheet-rows">
+                    @foreach (string use in Coming)
+                    {
+                        <div class="sheet-row" data-testid="pantry-sheet-use">@use</div>
+                    }
+                </div>
+            }
+
+            <h3 class="sheet-heading sheet-heading-gap">History</h3>
+            @if (History.Count == 0)
+            {
+                <p class="sheet-empty" data-testid="pantry-history-empty">Nothing yet.</p>
+            }
+            else
+            {
+                <div class="sheet-rows">
+                    @foreach (PickerOption movement in History)
+                    {
+                        <div class="sheet-row" @key="movement.Id" data-testid="pantry-history-row" data-id="@movement.Id">
+                            <span class="sheet-row-text">@movement.Name</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" aria-label="@($"Delete: {movement.Name}")"
+                                           OnClick="() => Dialog.Close(DialogResult.Ok(new PantrySheetResult(null, movement.Id)))"
+                                           data-testid="pantry-history-delete"/>
+                        </div>
+                    }
+                </div>
             }
         </div>
-        @if (Pack is { } size)
-        {
-            <MudText Typo="Typo.overline" Class="d-block mt-3">Bought</MudText>
-            <div class="d-flex flex-wrap gap-2">
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(StockReason.Bought, size)"
-                           data-testid="pantry-bought-1">+1 pack (@Quantity.Format(size, Unit))</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(StockReason.Bought, size * 2)"
-                           data-testid="pantry-bought-2">+2 packs</MudButton>
-            </div>
-        }
-
-        <MudText Typo="Typo.overline" Class="d-block mt-3">An amount</MudText>
-        <MudTextField T="string" @bind-Value="_amount" Label="@($"How much? {Quantity.Example(Unit)}")" Variant="Variant.Outlined"
-                      Immediate="true" InputMode="@(InputMode.@decimal)" Error="_error is not null" ErrorText="@_error"
-                      InputId="pantry-amount" data-testid="pantry-amount"/>
-        <div class="d-flex flex-wrap gap-2 mt-2">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Typed(StockReason.Counted)"
-                       data-testid="pantry-amount-count">That's what's left</MudButton>
-            <MudButton Variant="Variant.Outlined" OnClick="() => Typed(StockReason.Bought)" data-testid="pantry-amount-bought">Bought this</MudButton>
-            <MudButton Variant="Variant.Outlined" OnClick="() => Typed(StockReason.Adjusted)" data-testid="pantry-amount-threw">Threw this out</MudButton>
-        </div>
-
-        @if (Coming.Count > 0)
-        {
-            <MudText Typo="Typo.overline" Class="d-block mt-4">Coming up</MudText>
-            @foreach (string use in Coming)
-            {
-                <MudText Typo="Typo.body2" Class="list-row" data-testid="pantry-sheet-use">@use</MudText>
-            }
-        }
-
-        <MudText Typo="Typo.overline" Class="d-block mt-4">History</MudText>
-        @if (History.Count == 0)
-        {
-            <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="pantry-history-empty">Nothing yet.</MudText>
-        }
-        @foreach (PickerOption movement in History)
-        {
-            <div class="d-flex align-center list-row" @key="movement.Id" data-testid="pantry-history-row" data-id="@movement.Id">
-                <MudText Class="flex-grow-1" Typo="Typo.body2">@movement.Name</MudText>
-                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" aria-label="@($"Delete: {movement.Name}")"
-                               OnClick="() => Dialog.Close(DialogResult.Ok(new PantrySheetResult(null, movement.Id)))"
-                               data-testid="pantry-history-delete"/>
-            </div>
-        }
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="() => Dialog.Cancel()" data-testid="pantry-cancel">Close</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => Dialog.Cancel()" data-testid="pantry-cancel">Close</MudButton>
     </DialogActions>
 </MudDialog>
 

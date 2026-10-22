@@ -74,6 +74,24 @@ public sealed class SyncEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_round_that_sends_this_browsers_own_edit_says_pages_should_re_read()
+    {
+        // Pages mark an edit not yet on the server (the dashed edge); the round that confirms it must make them look
+        // again, though the edit coming back changes no row.
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await a.SyncAsync();
+
+        await a.CreateIngredientAsync("beef mince");
+        SyncRoundResult sent = await a.SyncAsync();
+
+        Assert.Equal(0, await a.PendingAsync());
+        Assert.True(sent.Changed);
+
+        SyncRoundResult quiet = await a.SyncAsync();
+        Assert.False(quiet.Changed);
+    }
+
+    [Fact]
     public async Task Overlapping_writes_and_a_round_in_one_window_do_not_collide()
     {
         // In the browser every context in a window shares one connection, as TestBrowser's do. Without

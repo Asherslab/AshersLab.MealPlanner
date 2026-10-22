@@ -22,9 +22,10 @@
         }
         else
         {
-            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense="true" Class="mb-3">
+            <p class="reset-final">
+                <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Class="reset-final-icon"/>
                 This can't be undone.
-            </MudAlert>
+            </p>
             <MudText Class="mb-3" data-testid="device-reset-warning">
                 Changes made on this device that haven't reached the server are deleted for good. Everything else comes
                 back from the server.

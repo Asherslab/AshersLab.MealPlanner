@@ -1,13 +1,174 @@
-.boot {
-    font-family: Roboto, sans-serif;
-    padding: 2rem;
-    color: #666;
+/* ---- The fridge-door pad, in the kitchen bench's colours ------------------------------------------------------
+   Design/AppTheme.cs holds the same values for MudBlazor; change one, change both. Fonts are self-hosted (OFL,
+   licences beside them) because the app works offline. Direction: .impeccable/brief-app.md (not shipped). */
+
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 400; font-style: normal; font-display: swap;
+             src: url("../fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 700; font-style: normal; font-display: swap;
+             src: url("../fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Kalam"; font-weight: 400; font-style: normal; font-display: swap;
+             src: url("../fonts/kalam-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Kalam"; font-weight: 700; font-style: normal; font-display: swap;
+             src: url("../fonts/kalam-latin-700-normal.woff2") format("woff2"); }
+
+:root {
+    --bottle: #2F5D50;
+    --laminate: #DDE9DF;
+    --enamel: #FBFBF6;
+    --ink: #1D2B27;
+    --ink-soft: #4E5F59;
+    --chrome: #B7C1BD;
+    --rule: #D6DED9;
+    --tomato: #D9533C;
+    --tomato-ink: #B8412C;
+    --butter: #F2C14E;
+    --sky: #7FB6CF;
+    --sage: #6FA27A;
+    --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-marker: "Kalam", "Atkinson Hyperlegible", cursive;
+    --pad-radius: 14px;
 }
 
-.ingredient-row + .ingredient-row,
-.list-row + .list-row {
-    border-top: 1px solid var(--mud-palette-lines-default);
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--laminate); color: var(--ink); font-family: var(--font-body); }
+::selection { background: rgba(242, 193, 78, 0.55); color: var(--ink); }
+:focus-visible { outline: 2px solid var(--bottle); outline-offset: 2px; }
+* { scrollbar-color: var(--chrome) transparent; }
+input, textarea { caret-color: var(--bottle); }
+table, .num { font-variant-numeric: tabular-nums; }
+
+.boot {
+    font-family: var(--font-body);
+    padding: 2rem;
+    color: var(--ink-soft);
 }
+
+/* A pad sheet: white enamel paper, a bottle-green printed head band, a perforated tear along its top. */
+.pad {
+    position: relative;
+    background: var(--enamel);
+    border-radius: 4px 4px var(--pad-radius) var(--pad-radius);
+    box-shadow: 0 1px 0 rgba(29, 43, 39, 0.10), 0 2px 6px -2px rgba(29, 43, 39, 0.12);
+    margin-top: 6px;
+}
+.pad::before {
+    /* The perforation: the sheet's top edge torn off the block, punched every 14px. */
+    content: "";
+    position: absolute;
+    top: -5px; left: 0; right: 0; height: 10px;
+    background: radial-gradient(circle at 7px 5px, var(--laminate) 3px, transparent 3.5px) 0 0 / 14px 10px repeat-x;
+}
+.pad-head {
+    background: var(--bottle);
+    color: var(--enamel);
+    padding: 16px 18px 14px;
+    border-radius: 4px 4px 0 0;
+}
+.pad-head h1, .pad-head h2 { font: 700 1.625rem/1.1 var(--font-body); letter-spacing: -0.01em; margin: 0; }
+.pad-head p { margin: 4px 0 0; font-size: 0.875rem; color: rgba(251, 251, 246, 0.86); }
+.pad-head { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; }
+.pad-head > :not(h1):not(h2):not(p) { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.pad-head h1, .pad-head h2, .pad-head p { grid-column: 1; }
+
+/* A ruled row of the pad: the printed label down the left, what was written on the right. */
+.pad-row {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    border-top: 1px solid var(--rule);
+    min-height: 64px;
+}
+.pad-row:first-child { border-top: 0; }
+.pad-row > .pad-label {
+    border-right: 1px solid var(--rule);
+    padding: 12px 10px 12px 14px;
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+.pad-row > .pad-entry { padding: 10px 14px; min-width: 0; }
+
+.pad-entry-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+}
+.pad-entry-meta:empty { display: none; }
+
+/* An empty ruled line: the slot is printed, nothing is written yet. A link to fill it. */
+.pad-blank {
+    display: inline-block;
+    padding: 8px 0;
+    color: var(--ink-soft);
+    text-decoration: none;
+}
+.pad-blank:hover { color: var(--bottle); text-decoration: underline; text-underline-offset: 3px; }
+
+/* A sentence on the sheet itself - an empty sheet's direction - and one on the fridge beside it. */
+.pad-note { margin: 0; padding: 18px; color: var(--ink-soft); }
+.pad-aside { margin: 12px 4px 0; color: var(--ink-soft); font-size: 0.9375rem; }
+.pad-note a, .pad-aside a { color: var(--bottle); font-weight: 700; text-underline-offset: 3px; }
+
+/* Words the household wrote - meal names, extra shopping lines. Only at 20px and up; never labels or numbers. */
+.marker { font-family: var(--font-marker); font-weight: 700; font-size: 1.375rem; line-height: 1.15; color: var(--ink); }
+
+/* Struck, not removed: done and skipped things keep their place under a tomato marker line. */
+.struck, .struck .marker {
+    text-decoration: line-through;
+    text-decoration-color: var(--tomato);
+    text-decoration-thickness: 2px;
+    color: var(--ink-soft);
+}
+
+/* Not yet on the server: a dashed edge, never a new colour. */
+.unsent { outline: 1.5px dashed var(--ink-soft); outline-offset: -3px; border-radius: 8px; }
+
+/* Person magnets: round, coloured, with a lip along the bottom. A person's colour is theirs everywhere. */
+.magnet {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22), 0 1px 1px rgba(29, 43, 39, 0.25);
+    vertical-align: middle;
+}
+.magnets { display: inline-flex; gap: 6px; align-items: center; }
+
+/* The shell (MainLayout). Here rather than in MainLayout.razor.css: the bar and drawer are MudBlazor components, which
+   a layout's scoped CSS cannot reach. The app bar is the pad's printed band - flat bottle green, the name in bold. */
+.app-bar .mud-typography-h6 { font-weight: 700; letter-spacing: -0.01em; }
+.app-drawer { border-right: 1px solid var(--chrome); }
+.app-drawer .mud-nav-link { border-radius: 10px; margin: 1px 8px; width: auto; }
+.app-drawer .mud-nav-link.active { background-color: var(--laminate); color: var(--bottle); font-weight: 700; }
+.app-drawer .mud-nav-link.active .mud-nav-link-icon { color: var(--bottle); }
+
+/* Dialogs are a sheet lifted off the pad: enamel, the title in printed green, sentence-case actions with room for a
+   thumb. Every MudDialog (message boxes included); .pad-dialog for the editors that ask for it by name. */
+.mud-dialog { border-radius: var(--pad-radius); box-shadow: 0 1px 0 rgba(29, 43, 39, 0.10), 0 12px 32px -8px rgba(29, 43, 39, 0.30); }
+.mud-dialog .mud-dialog-title { color: var(--bottle); font-weight: 700; padding: 18px 24px 8px; }
+.mud-dialog .mud-dialog-actions { padding: 8px 16px 16px; gap: 8px; }
+.mud-dialog .mud-dialog-actions .mud-button-root { min-height: 44px; }
+
+/* A button on a pad's green head band (Change days, Fill from a plan, Edit): enamel outline on the band. */
+.pad-head .mud-button-outlined { border-color: rgba(251, 251, 246, 0.62); color: var(--enamel); }
+.pad-head .mud-button-root:hover { background-color: rgba(251, 251, 246, 0.12); }
+.pad-head .mud-button-text, .pad-head .mud-icon-button { color: var(--enamel); }
+
+/* Today, circled in tomato marker - a day's date in a strip or a column head. */
+.pad-today { border: 2px solid var(--tomato); border-radius: 50%; }
+
+/* The week at a glance: two tiles, a big number and what it counts. */
+.week-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.week-tile {
+    background: var(--enamel);
+    border: 1px solid var(--chrome);
+    border-radius: var(--pad-radius);
+    padding: 14px 16px;
+    color: var(--ink);
+    text-decoration: none;
+}
+.week-tile b { display: block; font: 700 1.75rem/1 var(--font-body); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.week-tile span { display: block; margin-top: 6px; font-size: 0.8125rem; color: var(--ink-soft); }
 
 /* A plain <select> dressed as an outlined field: on a phone it opens the phone's own picker (IngredientEditor). */
 .native-select {
@@ -38,11 +199,6 @@
     outline-offset: -1px;
 }
 
-.ingredient-row,
-.price-product {
-    cursor: pointer;
-}
-
 /* The import review's small boxes - serves, a price's pack - as tall as the native selects beside them. */
 .import-small-input {
     width: 5.5rem;
@@ -60,34 +216,13 @@
     flex: 0 0 auto;
 }
 
-.import-unit-row + .import-unit-row {
-    border-top: 1px solid var(--mud-palette-lines-default);
-}
-
-.import-file input {
-    max-width: 100%;
-}
-
 /* The strip of a Costco receipt's picture a line was read from (ReceiptsPage), drawn by receipt-pdf.js strips(). */
 .receipt-strips canvas {
     display: block;
     width: 100%;
     height: auto;
-    border-left: 3px solid var(--mud-palette-lines-default);
-}
-
-/* A meal in the list is a link to its page (MealsPage), dressed as a row. */
-.meal-row {
-    color: inherit;
-    text-decoration: none;
-}
-
-.meal-row + .meal-row {
-    border-top: 1px solid var(--mud-palette-lines-default);
-}
-
-.meal-notes {
-    white-space: pre-wrap;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
 }
 
 /* Each kind's explanation sits under its label, not under the radio button (MealEditor). */
@@ -96,116 +231,10 @@
     margin: -8px 0 4px 42px;
 }
 
-.price-ingredient + .price-ingredient {
-    border-top: 1px solid var(--mud-palette-lines-default);
-}
-
-/* A product sits under its ingredient's name (PricesPage). */
-.price-product {
-    padding-left: 32px !important;
-}
-
 /* "Grams (g)", not "GRAMS (G)": the symbol's case is the point. */
 .unit-toggle,
 .unit-toggle * {
     text-transform: none;
-}
-
-/* A plan's week (PlanPage): slots down, days across. Scrolls sideways rather than squeezing a day to nothing. */
-.plan-grid-scroll {
-    overflow-x: auto;
-}
-
-.plan-grid {
-    border-collapse: collapse;
-    width: 100%;
-    table-layout: fixed;
-    min-width: 760px;
-    font-size: 0.85rem;
-}
-
-.plan-grid th,
-.plan-grid td {
-    border: 1px solid var(--mud-palette-lines-default);
-    padding: 4px;
-    vertical-align: top;
-    text-align: left;
-}
-
-.plan-grid thead th {
-    font-weight: 500;
-}
-
-.plan-grid-slot {
-    width: 84px;
-    font-weight: 500;
-}
-
-.plan-entry {
-    cursor: pointer;
-    border-radius: 4px;
-    padding: 2px 4px;
-    margin-bottom: 2px;
-    background: var(--mud-palette-action-default-hover);
-}
-
-.plan-day-slot .plan-entry {
-    padding: 8px;
-    margin-bottom: 4px;
-}
-
-.plan-day-slot + .plan-day-slot {
-    border-top: 1px solid var(--mud-palette-lines-default);
-}
-
-.plan-add {
-    width: 100%;
-    border: 1px dashed var(--mud-palette-lines-default);
-    border-radius: 4px;
-    background: none;
-    color: var(--mud-palette-text-secondary);
-    cursor: pointer;
-}
-
-/* The day buttons fit seven across a phone. */
-.plan-day {
-    min-width: 0 !important;
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-}
-
-/* The calendar (CalendarPage) reuses the plan's grid. A skipped entry stays where it was, struck through. */
-.cal-skipped {
-    text-decoration: line-through;
-    opacity: 0.6;
-}
-
-.cal-past {
-    background: var(--mud-palette-background-gray);
-}
-
-.cal-today {
-    color: var(--mud-palette-primary);
-}
-
-.cal-cost {
-    font-size: 0.75rem;
-}
-
-/* A batch's serves, or what a leftovers entry eats; in the error colour when it has less than it needs. */
-.cal-serves {
-    font-size: 0.75rem;
-}
-
-.cal-serves-problem {
-    color: var(--mud-palette-error);
-}
-
-/* "Tue" over "27" on a phone's day buttons. */
-.cal-day-label {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.2;
 }
 
 .native-select > input[type=date] {
@@ -221,34 +250,31 @@
     box-sizing: border-box;
 }
 
-.person-dot {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    margin-left: 2px;
-    vertical-align: middle;
-}
-
+/* A named person: their magnet beside their name, in ink. */
 .person-chip {
-    display: inline-block;
-    color: #fff;
-    border-radius: 10px;
-    padding: 0 8px;
-    font-size: 0.75rem;
-    margin-left: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--ink);
 }
 
+.person-chip .magnet { width: 14px; height: 14px; }
+
+/* The People editor's colour choice: the magnets themselves, the chosen one ringed in bottle green. */
 .colour-swatch {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    border: 3px solid transparent;
+    border: 0;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22), 0 1px 2px rgba(29, 43, 39, 0.25);
     cursor: pointer;
 }
 
 .colour-swatch.chosen {
-    border-color: var(--mud-palette-text-primary);
+    outline: 3px solid var(--bottle);
+    outline-offset: 2px;
 }
 
 #blazor-error-ui {
@@ -268,42 +294,4 @@
     position: absolute;
     right: 0.75rem;
     top: 0.5rem;
-}
-
-/* The shopping list is used one-handed in a shop: every row and button is a big target (ShoppingPage). */
-.shop-row {
-    min-height: 60px;
-}
-
-.shop-tap {
-    cursor: pointer;
-    min-height: 60px;
-    user-select: none;
-}
-
-.shop-tall {
-    min-height: 48px;
-}
-
-.shop-ticked .shop-name {
-    text-decoration: line-through;
-    color: var(--mud-palette-text-secondary);
-}
-
-/* The home page's four buttons: one column on a phone, two side by side on anything wider (Home). */
-.home-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-}
-
-@media (min-width: 600px) {
-    .home-actions {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
-/* A commit hash or a long user name wraps rather than scrolling the card sideways on a phone. */
-.home-server td {
-    overflow-wrap: anywhere;
 }

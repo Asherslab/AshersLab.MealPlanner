@@ -21,107 +21,128 @@
 @inject NavigationManager Navigation
 
 @*
-    One meal: what it is, what it costs, and - for a meal made from ingredients - its ingredients, each with what it
-    adds to the batch. Edit opens the editor for the meal's own fields (and delete); tapping an ingredient opens its
+    One meal, as one pad sheet: its name in marker on the head band, what it costs as ruled rows, then - for a meal
+    made from ingredients - its ingredients, each with what it adds to the batch, and an unpriced one said plainly. Edit opens the editor for the meal's own fields (and delete); tapping an ingredient opens its
     sheet; "Add ingredient" adds one. A page rather than a dialog because each ingredient is edited on its own, and
     each is its own op.
 *@
 
 <PageTitle>@(_meal?.Name ?? "Meal") - Meal Planner</PageTitle>
 
-<MudButton Href="meals" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2"
-           data-testid="meal-back">Meals</MudButton>
+<div class="meal">
+    @* On a phone the app bar's back arrow goes to Meals; this is the wide screen's way back. *@
+    <div class="meal-back">
+        <MudButton Href="meals" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack"
+                   data-testid="meal-back">Meals</MudButton>
+    </div>
 
-<LocalDataGate Start="Start">
-    @if (_meal is null)
-    {
-        <MudAlert Severity="Severity.Info" data-testid="meal-gone">
-            This meal is not here - it may have been deleted on another device.
-        </MudAlert>
-    }
-    else
-    {
-        MealCost cost = _costs.CostOf(_meal);
-        IReadOnlyList<MealIngredient> lines = _costs.LinesOf(_meal.Id);
-
-        <div class="d-flex align-start gap-2">
-            <div class="flex-grow-1">
-                <MudText Typo="Typo.h5" Component="h1" data-testid="meal-title">@_meal.Name</MudText>
-                <MudText Class="mud-text-secondary" data-testid="meal-summary">@Summary()</MudText>
-            </div>
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="Edit"
-                       data-testid="meal-edit">Edit</MudButton>
-        </div>
-
-        <MudPaper Outlined="true" Class="pa-3 mt-3 d-flex flex-wrap gap-x-6 gap-y-1" data-testid="meal-cost">
-            @switch (_meal.Kind)
-            {
-                case MealKind.Leftovers:
-                    <MudText Typo="Typo.body2" data-testid="meal-cost-note">Eats a serve of a batch cooked earlier - that batch is what it costs.</MudText>
-                    break;
-                case MealKind.NoCost:
-                    <MudText Typo="Typo.body2" data-testid="meal-cost-note">Costs nothing.</MudText>
-                    break;
-                case MealKind.Simple when cost.PerServe is { } serve:
-                    <div><MudText Typo="Typo.caption" Class="mud-text-secondary">A serve</MudText>
-                        <MudText Typo="Typo.h6" data-testid="meal-cost-serve">@serve.Format()</MudText></div>
-                    break;
-                case not MealKind.Simple when cost.Batch is { } batch && cost.PerServe is { } serve:
-                    <div><MudText Typo="Typo.caption" Class="mud-text-secondary">@(_meal.Kind == MealKind.FixedCost ? "All up" : "A batch")</MudText>
-                        <MudText Typo="Typo.h6" data-testid="meal-cost-batch">@batch.Format()</MudText></div>
-                    <div><MudText Typo="Typo.caption" Class="mud-text-secondary">A serve, of @_meal.ServesPerBatch</MudText>
-                        <MudText Typo="Typo.h6" data-testid="meal-cost-serve">@serve.Format()</MudText></div>
-                    break;
-                default:
-                    <MudText Typo="Typo.body2" data-testid="meal-cost-note">No ingredients yet - add them below to see what it costs.</MudText>
-                    break;
-            }
-        </MudPaper>
-
-        @if (_meal.Notes is { } notes)
+    <LocalDataGate Start="Start">
+        @if (_meal is null)
         {
-            <MudText Class="mt-3 meal-notes" data-testid="meal-notes">@notes</MudText>
+            <PadSheet Title="Meal not found">
+                <p class="pad-note" data-testid="meal-gone">
+                    This meal is not here - it may have been deleted on another device. Back to <a href="meals">Meals</a>.
+                </p>
+            </PadSheet>
         }
-
-        @if (_meal.Kind.HasIngredients())
+        else
         {
-            <div class="d-flex align-center mt-4">
-                <MudText Typo="Typo.overline" Component="h2" Class="flex-grow-1">
-                    @(_meal.Kind == MealKind.Simple ? "Ingredients, for one serve" : "Ingredients, for a batch")
-                </MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="AddLine" data-testid="meal-ingredient-add">Add ingredient</MudButton>
-            </div>
-            <MudPaper Outlined="true" Class="mt-2">
-                @if (lines.Count == 0)
-                {
-                    <MudText Class="pa-4 mud-text-secondary" data-testid="meal-ingredients-empty">None yet.</MudText>
-                }
-                @for (int i = 0; i < lines.Count; i++)
-                {
-                    MealIngredient line = lines[i];
-                    LineCost lineCost = cost.Lines[i];
-                    Ingredient? ingredient = _costs.Ingredient(line.IngredientId);
-                    <div class="list-row meal-ingredient-row d-flex align-center gap-2 px-4 py-2" @key="line.Id" role="button" tabindex="0"
-                         @onclick="() => EditLine(line)" data-testid="meal-ingredient-row" data-id="@line.Id">
-                        <div class="flex-grow-1">
-                            <MudText data-testid="meal-ingredient-name">@(ingredient?.Name ?? "ingredient removed")</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="meal-ingredient-detail">@LineDetail(line, ingredient)</MudText>
-                        </div>
-                        <MudText Typo="Typo.body2" Class="@(lineCost.State == LineState.Costed ? "text-nowrap" : "text-nowrap mud-warning-text")"
-                                 data-testid="meal-ingredient-cost">@LineCostText(lineCost)</MudText>
+            MealCost cost = _costs.CostOf(_meal);
+            IReadOnlyList<MealIngredient> lines = _costs.LinesOf(_meal.Id);
+
+            <PadSheet TestId="meal-sheet">
+                <Head>
+                    <h1 class="marker meal-title" data-testid="meal-title">@_meal.Name</h1>
+                    <p class="meal-summary" data-testid="meal-summary">@Summary()</p>
+                    <div class="meal-edit">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Edit"
+                                   OnClick="Edit" data-testid="meal-edit">Edit</MudButton>
                     </div>
-                }
-            </MudPaper>
+                </Head>
+                <ChildContent>
+                    <div data-testid="meal-cost">
+                        @switch (_meal.Kind)
+                        {
+                            case MealKind.Leftovers:
+                                <PadRow Label="Cost">
+                                    <p class="meal-cost-note" data-testid="meal-cost-note">Eats a serve of a batch cooked earlier - that batch is what it costs.</p>
+                                </PadRow>
+                                break;
+                            case MealKind.NoCost:
+                                <PadRow Label="Cost">
+                                    <p class="meal-cost-note" data-testid="meal-cost-note">Costs nothing.</p>
+                                </PadRow>
+                                break;
+                            case MealKind.Simple when cost.PerServe is { } serve:
+                                <PadRow Label="A serve">
+                                    <span class="meal-cost-figure" data-testid="meal-cost-serve">@serve.Format()</span>
+                                </PadRow>
+                                break;
+                            case not MealKind.Simple when cost.Batch is { } batch && cost.PerServe is { } serve:
+                                <PadRow Label="@(_meal.Kind == MealKind.FixedCost ? "All up" : "A batch")">
+                                    <span class="meal-cost-figure" data-testid="meal-cost-batch">@batch.Format()</span>
+                                </PadRow>
+                                <PadRow Label="A serve">
+                                    <span class="meal-cost-figure" data-testid="meal-cost-serve">@serve.Format()</span>
+                                    <div class="pad-entry-meta">one of @MealText.Serves(_meal.ServesPerBatch)</div>
+                                </PadRow>
+                                break;
+                            default:
+                                <PadRow Label="Cost">
+                                    <p class="meal-cost-note" data-testid="meal-cost-note">No ingredients yet - add them below to see what it costs.</p>
+                                </PadRow>
+                                break;
+                        }
+                    </div>
+
+                    @if (_meal.Notes is { } notes)
+                    {
+                        <PadRow Label="Notes">
+                            <p class="meal-notes-text" data-testid="meal-notes">@notes</p>
+                        </PadRow>
+                    }
+
+                    @if (_meal.Kind.HasIngredients())
+                    {
+                        <div class="meal-lines-head">
+                            <h2>@(_meal.Kind == MealKind.Simple ? "Ingredients, for one serve" : "Ingredients, for a batch")</h2>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                                       Class="meal-add-line" OnClick="AddLine" data-testid="meal-ingredient-add">Add ingredient</MudButton>
+                        </div>
+                        @if (lines.Count == 0)
+                        {
+                            <p class="pad-note meal-lines-empty" data-testid="meal-ingredients-empty">
+                                No ingredients yet. Add each one with how much a batch uses, and the cost adds up above.
+                            </p>
+                        }
+                        @for (int i = 0; i < lines.Count; i++)
+                        {
+                            MealIngredient line = lines[i];
+                            LineCost lineCost = cost.Lines[i];
+                            Ingredient? ingredient = _costs.Ingredient(line.IngredientId);
+                            <div class="@(_unsent.Contains(line.Id) ? "meal-line unsent" : "meal-line")" @key="line.Id" role="button" tabindex="0"
+                                 @onclick="() => EditLine(line)" @onkeydown="e => OnLineKey(e, line)"
+                                 data-testid="meal-ingredient-row" data-id="@line.Id">
+                                <div class="meal-line-text">
+                                    <span class="meal-line-name" data-testid="meal-ingredient-name">@(ingredient?.Name ?? "ingredient removed")</span>
+                                    <span class="meal-line-detail" data-testid="meal-ingredient-detail">@LineDetail(line, ingredient)</span>
+                                </div>
+                                <span class="@(lineCost.State == LineState.Costed ? "meal-line-cost" : "meal-line-cost incomplete")"
+                                      data-testid="meal-ingredient-cost">@LineCostText(lineCost)</span>
+                            </div>
+                        }
+                    }
+                    else if (lines.Count > 0)
+                    {
+                        <p class="pad-note meal-lines-kept" data-testid="meal-ingredients-kept">
+                            @lines.Count ingredient@(lines.Count == 1 ? " is" : "s are") kept from before, and not used while it is @_meal.Kind.Label().ToLowerInvariant().
+                        </p>
+                    }
+                </ChildContent>
+            </PadSheet>
         }
-        else if (lines.Count > 0)
-        {
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-4" data-testid="meal-ingredients-kept">
-                @lines.Count ingredient@(lines.Count == 1 ? " is" : "s are") kept from before, and not used while it is @_meal.Kind.Label().ToLowerInvariant().
-            </MudText>
-        }
-    }
-</LocalDataGate>
+    </LocalDataGate>
+</div>
 
 @code {
     [Parameter] public Guid Id { get; set; }
@@ -134,6 +155,7 @@
     private List<CalendarEntry> _coming = [];
     private List<Category>  _categories = [];
     private List<Store>     _stores     = [];
+    private HashSet<Guid>   _unsent     = [];
 
     // The same page instance shows another meal when only the id in the address changes.
     protected override async Task OnParametersSetAsync()
@@ -153,6 +175,14 @@
         _categories = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
         _stores     = [.. (await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync())
             .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)];
+        _unsent     = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
+    }
+
+    /// <summary>A line is a button to the keyboard too: Enter or Space opens it.</summary>
+    private async Task OnLineKey(KeyboardEventArgs e, MealIngredient line)
+    {
+        if (e.Key is "Enter" or " ")
+            await EditLine(line);
     }
 
     /// <summary>The plans that use the meal, and the calendar when a coming entry names it.</summary>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Today - The Kitchen Bench</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bottle: #2F5D50; --laminate: #DDE9DF; --enamel: #FBFBF6; --ink: #1D2B27; --ink-2: #4E5F59;
+    --chrome: #B7C1BD; --butter: #F2C14E; --tomato: #D9533C; --sky: #7FB6CF; --sage: #6FA27A;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 390px; height: 844px; overflow: hidden; }
+  body { background: var(--laminate); color: var(--ink); font: 400 15px/1.4 Figtree, system-ui, sans-serif; position: relative; }
+  .bar { background: var(--bottle); color: var(--enamel); height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
+  .bar h1 { font: 700 20px/1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.01em; }
+  .sync { font: 500 13px/1 Figtree; border: 1px solid rgba(251,251,246,.5); border-radius: 999px; padding: 6px 10px; }
+  .date { padding: 18px 18px 8px; font: 600 14px/1 Figtree; color: var(--ink-2); }
+  .next { margin: 0 14px; background: var(--enamel); border-radius: 18px; overflow: hidden; border: 1px solid var(--chrome); }
+  .next .lid { background: var(--tomato); height: 14px; }
+  .next .body { padding: 14px 18px 18px; }
+  .next .slot { font: 600 13px/1 Figtree; color: var(--tomato); }
+  .next h2 { font: 800 34px/1.02 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em; margin: 8px 0 10px; }
+  .next .meta { display: flex; gap: 14px; font-size: 14px; color: var(--ink-2); }
+  .next .cook { margin-top: 14px; display: flex; gap: 10px; }
+  .btn { font: 600 15px/1 Figtree; border-radius: 12px; padding: 13px 16px; border: 0; }
+  .btn.primary { background: var(--bottle); color: var(--enamel); flex: 1; }
+  .btn.ghost { background: transparent; border: 1px solid var(--chrome); color: var(--ink); }
+  .day { margin: 14px 14px 0; background: var(--enamel); border-radius: 18px; border: 1px solid var(--chrome); }
+  .row { display: grid; grid-template-columns: 10px 76px 1fr auto; gap: 12px; align-items: center; padding: 13px 16px; border-top: 1px solid #E6ECE8; }
+  .row:first-child { border-top: 0; }
+  .row .dot { width: 10px; height: 34px; border-radius: 5px; }
+  .row .s { font: 600 13px/1.1 Figtree; color: var(--ink-2); }
+  .row .m { font: 600 16px/1.2 Figtree; }
+  .row .x { font-size: 13px; color: var(--ink-2); }
+  .row.done .m { text-decoration: line-through; color: var(--ink-2); }
+  .row.pending { outline: 1.5px dashed var(--ink-2); outline-offset: -4px; border-radius: 12px; }
+  .shop { margin: 14px 14px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { background: var(--enamel); border: 1px solid var(--chrome); border-radius: 16px; padding: 14px 16px; }
+  .tile b { display: block; font: 800 28px/1 'Bricolage Grotesque'; }
+  .tile span { font-size: 13px; color: var(--ink-2); }
+  nav { position: absolute; left: 0; right: 0; bottom: 0; height: 78px; background: var(--enamel); border-top: 1px solid var(--chrome); display: grid; grid-template-columns: repeat(5, 1fr); padding: 8px 6px 20px; }
+  nav a { display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 12px/1 Figtree; color: var(--ink-2); text-decoration: none; }
+  nav a i { width: 46px; height: 28px; border-radius: 14px; display: grid; place-items: center; font-style: normal; font-size: 18px; }
+  nav a.on { color: var(--bottle); }
+  nav a.on i { background: var(--laminate); }
+</style>
+</head>
+<body>
+  <header class="bar"><h1>Meal Planner</h1><span class="sync">Synced</span></header>
+  <p class="date">Thursday 22 October</p>
+
+  <section class="next">
+    <div class="lid"></div>
+    <div class="body">
+      <p class="slot">Dinner · next</p>
+      <h2>Chicken and lemon traybake</h2>
+      <div class="meta"><span>Cook tonight</span><span>Makes 4 serves</span><span>$18.40</span></div>
+      <div class="cook"><button class="btn primary">Open recipe</button><button class="btn ghost">Skip</button></div>
+    </div>
+  </section>
+
+  <section class="day">
+    <div class="row done"><i class="dot" style="background:var(--butter)"></i><span class="s">Breakfast</span><span class="m">Overnight oats</span><span class="x">Eaten</span></div>
+    <div class="row"><i class="dot" style="background:var(--sky)"></i><span class="s">Snack</span><span class="m">Fruit and yoghurt</span><span class="x">Toddler</span></div>
+    <div class="row"><i class="dot" style="background:var(--sage)"></i><span class="s">Lunch</span><span class="m">Leftover bolognese</span><span class="x">2 left</span></div>
+    <div class="row pending"><i class="dot" style="background:var(--sky)"></i><span class="s">Snack</span><span class="m">Cheese and crackers</span><span class="x">Not sent</span></div>
+  </section>
+
+  <section class="shop">
+    <div class="tile"><b>12</b><span>to get this week</span></div>
+    <div class="tile"><b>$146</b><span>this week · 1 unpriced</span></div>
+  </section>
+
+  <nav>
+    <a class="on" href="#"><i>☀</i>Today</a>
+    <a href="#"><i>▦</i>Plan</a>
+    <a href="#"><i>✓</i>Shop</a>
+    <a href="#"><i>◍</i>Meals</a>
+    <a href="#"><i>≡</i>More</a>
+  </nav>
+</body>
+</html>

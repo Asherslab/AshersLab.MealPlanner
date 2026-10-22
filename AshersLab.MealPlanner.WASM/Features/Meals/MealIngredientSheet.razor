@@ -12,33 +12,37 @@
     Like the editors it only answers; the page writes the op.
 *@
 
-<MudDialog data-testid="meal-ingredient-sheet">
+<MudDialog Class="pad-dialog" data-testid="meal-ingredient-sheet">
+    <TitleContent>
+        <h2 class="dialog-title">@(IsNew ? "Add an ingredient" : "Ingredient")</h2>
+    </TitleContent>
     <DialogContent>
         @if (_ingredient is null)
         {
             <MudTextField T="string" @ref="_searchField" @bind-Value="_search" Label="Find an ingredient" Variant="Variant.Outlined"
                           Immediate="true" MaxLength="Names.MaxLength" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                           InputId="meal-ingredient-search" data-testid="meal-ingredient-search"/>
-            <div class="mt-2">
+            <div class="choices">
                 @foreach (IngredientOption option in Matches().Take(8))
                 {
-                    <div class="list-row meal-ingredient-choice px-2 py-3" @key="option.Id" role="button" tabindex="0"
-                         @onclick="() => Choose(option)" data-testid="meal-ingredient-choice" data-id="@option.Id">
-                        <MudText>@option.Name</MudText>
+                    <div class="choice" @key="option.Id" role="button" tabindex="0"
+                         @onclick="() => Choose(option)" @onkeydown="e => OnChoiceKey(e, option)"
+                         data-testid="meal-ingredient-choice" data-id="@option.Id">
+                        <span class="choice-name">@option.Name</span>
                     </div>
                 }
                 @if (!Matches().Any())
                 {
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2" data-testid="meal-ingredient-no-match">
+                    <p class="choices-none" data-testid="meal-ingredient-no-match">
                         @(string.IsNullOrWhiteSpace(_search)
                             ? "No ingredients yet - type a name to add one."
                             : $"No ingredient called \"{Names.Normalise(_search)}\" yet.")
-                    </MudText>
+                    </p>
                 }
                 @* A new meal often needs one new ingredient: make it here rather than on the Ingredients page and back. *@
                 @if (NewName() is { } newName)
                 {
-                    <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-1"
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="choices-new"
                                OnClick="() => Dialog.Close(DialogResult.Ok(new MealIngredientSheetResult(null, Remove: false, NewIngredient: newName)))"
                                data-testid="meal-ingredient-new">New ingredient "@newName"</MudButton>
                 }
@@ -46,11 +50,12 @@
         }
         else
         {
-            <div class="d-flex align-center gap-2">
-                <MudText Typo="Typo.subtitle1" Class="flex-grow-1" data-testid="meal-ingredient-chosen">@_ingredient.Name</MudText>
+            <div class="chosen">
+                <span class="chosen-name" data-testid="meal-ingredient-chosen">@_ingredient.Name</span>
                 @if (IsNew)
                 {
-                    <MudButton Size="Size.Small" OnClick="() => _ingredient = null" data-testid="meal-ingredient-change">Change</MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => _ingredient = null"
+                               data-testid="meal-ingredient-change">Change</MudButton>
                 }
             </div>
 
@@ -72,9 +77,10 @@
     <DialogActions>
         @if (!IsNew)
         {
-            <MudButton Color="Color.Error" OnClick="Remove" Class="mr-auto" data-testid="meal-ingredient-remove">Remove</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="Remove"
+                       Class="mr-auto" data-testid="meal-ingredient-remove">Remove</MudButton>
         }
-        <MudButton OnClick="() => Dialog.Cancel()" data-testid="meal-ingredient-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => Dialog.Cancel()" data-testid="meal-ingredient-cancel">Cancel</MudButton>
         <MudButton ButtonType="ButtonType.Submit" form="meal-ingredient-form" Color="Color.Primary" Disabled="_ingredient is null"
                    Variant="Variant.Filled" data-testid="meal-ingredient-save">Save</MudButton>
     </DialogActions>
@@ -143,6 +149,13 @@
     {
         string name = Names.Normalise(_search);
         return name.Length > 0 && !Ingredients.Any(i => string.Equals(i.Name, name, StringComparison.CurrentCultureIgnoreCase)) ? name : null;
+    }
+
+    /// <summary>A choice is a button to the keyboard too: Enter or Space picks it.</summary>
+    private void OnChoiceKey(KeyboardEventArgs e, IngredientOption option)
+    {
+        if (e.Key is "Enter" or " ")
+            Choose(option);
     }
 
     private void Choose(IngredientOption option)

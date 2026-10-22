@@ -10,49 +10,51 @@
 @inject NavigationManager Navigation
 
 @*
-    The plan templates: rotations of one or more weeks the calendar is filled from. Adding one is a name and how many
-    weeks, then its page.
+    The plan templates: rotations of one or more weeks the calendar is filled from, one ruled line each on a pad sheet,
+    the name in marker. Adding one is the sheet's last line - a name and how many weeks - then its page.
 *@
 
 <PageTitle>Plans - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Plans</MudText>
-<MudText Class="mt-1 mud-text-secondary">A plan is a rotation of weeks - what is eaten each day, slot by slot.</MudText>
-
 <LocalDataGate Start="Start">
-    <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
-        <MudTextField T="string" @bind-Value="_newName" Label="New plan" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength" Class="flex-grow-1"
-                      Error="_addError is not null" ErrorText="@_addError"
-                      InputId="plan-new-name" data-testid="plan-new-name"/>
-        <MudTextField T="string" @bind-Value="_newWeeks" Label="Weeks" Variant="Variant.Outlined" Margin="Margin.Dense"
-                      Immediate="true" InputMode="InputMode.numeric" Style="max-width:6rem"
-                      Error="_weeksError is not null" ErrorText="@_weeksError"
-                      InputId="plan-new-weeks" data-testid="plan-new-weeks"/>
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
-                   data-testid="plan-add">Add</MudButton>
-    </form>
-
-    <MudPaper Outlined="true" Class="mt-4">
+<div class="plans">
+    <PadSheet Title="Plans" Subtitle="Weeks of meals that repeat - the calendar is filled from them.">
         @if (_plans is null || !_plans.Templates.Any())
         {
-            <MudText Class="pa-4 mud-text-secondary" data-testid="plan-empty">
-                No plans yet. Add one, or import the spreadsheet's.
-            </MudText>
+            <p class="pad-note" data-testid="plan-empty">
+                No plans yet. Name one below, or bring in the old spreadsheet's on <a href="import">Import spreadsheet</a>.
+            </p>
         }
         else
         {
             @foreach (PlanTemplate template in _plans.Templates)
             {
                 int entries = _plans.EntriesOf(template.Id).Count(e => e.Week <= template.WeekCount);
-                <a class="list-row meal-row d-block px-4 py-2" href="@($"plans/{template.Id}")" @key="template.Id"
-                   data-testid="plan-row" data-id="@template.Id">
-                    <MudText data-testid="plan-name">@template.Name</MudText>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="plan-detail">@($"{PlanText.Weeks(template.WeekCount)} · {entries} {(entries == 1 ? "entry" : "entries")}")</MudText>
+                <a class="plans-row" href="@($"plans/{template.Id}")" @key="template.Id" data-testid="plan-row" data-id="@template.Id">
+                    <span class="plans-row-text">
+                        <span class="marker" data-testid="plan-name">@template.Name</span>
+                        <span class="plans-detail" data-testid="plan-detail">@($"{PlanText.Weeks(template.WeekCount)} · {entries} {(entries == 1 ? "entry" : "entries")}")</span>
+                    </span>
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Primary"/>
                 </a>
             }
         }
-    </MudPaper>
+
+        @* A new plan is the sheet's next line: a name and how many weeks, then its page. *@
+        <form class="plans-new" @onsubmit="Add" @onsubmit:preventDefault>
+            <MudTextField T="string" @bind-Value="_newName" Label="New plan" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength" Class="plans-new-name"
+                          Error="_addError is not null" ErrorText="@_addError"
+                          InputId="plan-new-name" data-testid="plan-new-name"/>
+            <MudTextField T="string" @bind-Value="_newWeeks" Label="Weeks" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Immediate="true" InputMode="InputMode.numeric" Class="plans-new-weeks"
+                          Error="_weeksError is not null" ErrorText="@_weeksError"
+                          InputId="plan-new-weeks" data-testid="plan-new-weeks"/>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       Class="plans-new-add" data-testid="plan-add">Add</MudButton>
+        </form>
+    </PadSheet>
+</div>
 </LocalDataGate>
 
 @code {

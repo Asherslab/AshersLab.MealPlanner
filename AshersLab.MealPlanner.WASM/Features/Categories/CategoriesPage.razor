@@ -17,11 +17,9 @@
 
 <PageTitle>Categories - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Categories</MudText>
-<MudText Class="mt-1 mud-text-secondary">The ingredients and the shopping list are grouped in this order.</MudText>
-
 <LocalDataGate Start="Start">
-    <NameList Items="_items" Noun="category" TestId="category" NewLabel="New category"
+    <NameList Title="Categories" Subtitle="The ingredients and the shopping list are grouped in this order." Unsent="_unsent"
+              Items="_items" Noun="category" TestId="category" NewLabel="New category"
               NameProblem="CategoryRules.NameProblem"
               InUseHint="Move them to another category first."
               OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
@@ -30,9 +28,11 @@
 @code {
     private List<Category>     _categories = [];
     private List<NameListItem> _items = [];
+    private HashSet<Guid>      _unsent = [];
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
+        _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
         _categories = [.. CategoryEntity.InOrder(await db.Categories.AsNoTracking().Where(c => !c.Deleted).ToListAsync())];
         ILookup<Guid?, string> usedBy = (await db.Ingredients.AsNoTracking()
                 .Where(i => !i.Deleted && i.CategoryId != null)

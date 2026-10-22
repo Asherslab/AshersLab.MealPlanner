@@ -4,17 +4,18 @@
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
 
 @*
-    One calendar entry: which meal (the plan's choices as chips, or any meal by search), who eats it, Skip, where it is
+    One calendar entry: which meal (in marker; the plan's choices as chips, or any meal by search), who eats it (each
+    person's magnet on their chip), Skip, where it is
     (a date and a slot - moving a skipped entry is replanning it), and Remove. Full screen on a phone. Skip answers at once:
     "we didn't have it" is two taps - the entry, Skip. Like the other sheets it only answers; the page writes the ops.
 *@
 
 <MudDialog data-testid="cal-sheet">
     <DialogContent>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="cal-sheet-where">@Where</MudText>
+        <p class="sheet-where" data-testid="cal-sheet-where">@Where</p>
         @if (Source is not null)
         {
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="cal-sheet-source">@Source</MudText>
+            <p class="sheet-source" data-testid="cal-sheet-source">@Source</p>
         }
         @if (Draft.Skipped)
         {
@@ -23,10 +24,18 @@
             </MudAlert>
         }
 
-        <MudText Typo="Typo.overline" Class="d-block mt-2">Meal</MudText>
+        <h3 class="sheet-label">Meal</h3>
+        @if (_meal is { } m)
+        {
+            <p class="@(Draft.Skipped ? "marker sheet-meal struck" : "marker sheet-meal")" data-testid="cal-sheet-meal">@MealName(m)</p>
+        }
+        else
+        {
+            <p class="sheet-meal sheet-meal-none" data-testid="cal-sheet-meal">Nothing chosen</p>
+        }
         @if (Choices.Count > 1)
         {
-            <div class="d-flex flex-wrap gap-2">
+            <div class="sheet-chips">
                 @foreach (PickerOption choice in Choices)
                 {
                     bool chosen = choice.Id == _meal;
@@ -35,7 +44,6 @@
                 }
             </div>
         }
-        <MudText Class="mt-1" data-testid="cal-sheet-meal">@(_meal is { } m ? MealName(m) : "Nothing chosen")</MudText>
 
         <MudTextField T="string" @ref="_searchField" @bind-Value="_search" Class="mt-2"
                       Label="@(_meal is null ? "Find a meal" : "Or another meal")" Variant="Variant.Outlined"
@@ -43,13 +51,12 @@
                       InputId="cal-search" data-testid="cal-search"/>
         @if (!string.IsNullOrWhiteSpace(_search) || (_meal is null && IsNew))
         {
-            <div class="mt-1">
+            <div class="sheet-options">
                 @foreach (PickerOption option in Matches().Take(8))
                 {
-                    <div class="list-row px-2 py-3" @key="option.Id" role="button" tabindex="0"
-                         @onclick="() => Pick(option.Id)" data-testid="cal-meal-option" data-id="@option.Id">
-                        <MudText>@option.Name</MudText>
-                    </div>
+                    <div class="sheet-option" @key="option.Id" role="button" tabindex="0"
+                         @onclick="() => Pick(option.Id)" @onkeydown="e => PickOnEnter(e, option.Id)"
+                         data-testid="cal-meal-option" data-id="@option.Id">@option.Name</div>
                 }
                 @* Planning the week is when a new meal comes up: make it here rather than on the Meals page and back. *@
                 @if (IsNew && NewName() is { } newName)
@@ -60,29 +67,30 @@
             </div>
         }
 
-        <MudText Typo="Typo.overline" Class="d-block mt-4">Who eats it</MudText>
-        <div class="d-flex flex-wrap gap-2">
+        <h3 class="sheet-label">Who eats it</h3>
+        <div class="sheet-chips">
             <MudChip T="string" Color="@(_people is null ? Color.Primary : Color.Default)" Variant="@(_people is null ? Variant.Filled : Variant.Outlined)"
                      OnClick="() => _people = null" data-testid="cal-everyone">Everyone</MudChip>
             @foreach (PersonOption person in People)
             {
                 bool chosen = _people?.Contains(person.Id) == true;
-                <MudChip T="string" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
-                         Style="@(chosen ? $"background:{person.Colour};color:#fff" : $"border-color:{person.Colour}")"
-                         OnClick="() => Toggle(person.Id)" data-testid="cal-person" data-id="@person.Id">@person.Name</MudChip>
+                <MudChip T="string" Color="@(chosen ? Color.Primary : Color.Default)" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                         OnClick="() => Toggle(person.Id)" data-testid="cal-person" data-id="@person.Id">
+                    <span class="magnet sheet-magnet" style="@($"background:{person.Colour}")"></span>@person.Name
+                </MudChip>
             }
         </div>
 
         @if (KindOf(_meal) == MealKind.Cooked)
         {
-            <MudText Typo="Typo.overline" Class="d-block mt-4">Serves made</MudText>
+            <h3 class="sheet-label">Serves made</h3>
             <MudNumericField T="int?" @bind-Value="_servesMade" Min="1" Max="CalendarEntryRules.MaxServes" Variant="Variant.Outlined" Immediate="true"
                              Placeholder="@DefaultServes(_meal).ToString()" HelperText="@($"The meal makes {DefaultServes(_meal)}; leftovers eat what is left.")"
                              InputId="cal-serves-made" data-testid="cal-serves-made"/>
         }
         else if (KindOf(_meal) == MealKind.Leftovers)
         {
-            <MudText Typo="Typo.overline" Class="d-block mt-4">Eats from</MudText>
+            <h3 class="sheet-label">Eats from</h3>
             <label class="native-select">
                 <span>Batch</span>
                 <select value="@(_eatsFrom?.ToString() ?? "")" @onchange="e => _eatsFrom = Guid.TryParse(e.Value as string, out Guid b) ? b : null"
@@ -100,8 +108,8 @@
             </label>
         }
 
-        <MudText Typo="Typo.overline" Class="d-block mt-4">@(Draft.Skipped ? "Replan it on" : IsNew ? "When" : "Move to")</MudText>
-        <div class="d-flex gap-2 align-end">
+        <h3 class="sheet-label">@(Draft.Skipped ? "Replan it on" : IsNew ? "When" : "Move to")</h3>
+        <div class="sheet-where-fields">
             <label class="native-select flex-grow-1">
                 <span>Day</span>
                 <input type="date" class="native-date" @bind="_day" data-testid="cal-move-date"/>
@@ -128,11 +136,11 @@
             <MudButton Color="Color.Error" OnClick="Remove" data-testid="cal-remove">Remove</MudButton>
             @if (Draft.Skipped)
             {
-                <MudButton OnClick="() => Close(skipped: false, home: true)" data-testid="cal-unskip">Not skipped</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(skipped: false, home: true)" data-testid="cal-unskip">Not skipped</MudButton>
             }
             else
             {
-                <MudButton Color="Color.Warning" OnClick="() => Close(skipped: true, home: true)" data-testid="cal-skip">Skip</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Close(skipped: true, home: true)" data-testid="cal-skip">Skip</MudButton>
             }
         }
         <MudSpacer/>
@@ -235,6 +243,12 @@
         _meal   = meal;
         _search = null;
         _error  = null;
+    }
+
+    private void PickOnEnter(KeyboardEventArgs e, Guid meal)
+    {
+        if (e.Key == "Enter")
+            Pick(meal);
     }
 
     private void Toggle(Guid person)

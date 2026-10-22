@@ -7,75 +7,96 @@
 
     Delete is refused while anything uses the item (UsedBy), naming what does - see
     docs/modules/catalogue/catalogue.md for why it is refused rather than cascaded.
+
+    One pad sheet: the page's name on the band (Title, Subtitle), a line to write a new one at the top, then a ruled
+    row per item - its name, and its arrows, rename and delete at the right, each a full thumb's width. A row not yet
+    on the server (Unsent) has the dashed edge.
 *@
 
-<form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
-    <MudTextField T="string" @bind-Value="_newName" Label="@NewLabel" Variant="Variant.Outlined"
-                  Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
-                  Error="_addError is not null" ErrorText="@_addError"
-                  InputId="@($"{TestId}-new-name")" data-testid="@($"{TestId}-new-name")"/>
-    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
-               data-testid="@($"{TestId}-add")">Add</MudButton>
-</form>
+<div class="name-list">
+    <PadSheet Title="@Title" Subtitle="@Subtitle">
+        <form class="name-add" @onsubmit="Add" @onsubmit:preventDefault>
+            <MudTextField T="string" @bind-Value="_newName" Label="@NewLabel" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength" Class="name-field"
+                          Error="_addError is not null" ErrorText="@_addError"
+                          InputId="@($"{TestId}-new-name")" data-testid="@($"{TestId}-new-name")"/>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="name-add-button"
+                       StartIcon="@Icons.Material.Filled.Add" data-testid="@($"{TestId}-add")">Add</MudButton>
+        </form>
 
-<MudPaper Outlined="true" Class="mt-4">
-    @if (Items.Count == 0)
-    {
-        <MudText Class="pa-4 mud-text-secondary"data-testid="@($"{TestId}-empty")">None yet.</MudText>
-    }
-    @* Plain rows, not MudList: a MudListItem takes Space and Enter for its own selection, so a text box inside
-       one loses every space typed and never submits. *@
-    @for (int index = 0; index < Items.Count; index++)
-    {
-        NameListItem item = Items[index];
-        int position = index;
-        <div class="list-row px-4 py-2" @key="item.Id" data-testid="@($"{TestId}-row")" data-id="@item.Id">
-            @if (_renaming == item.Id)
-            {
-                <form class="d-flex align-start gap-2" @onsubmit="SaveRename" @onsubmit:preventDefault>
-                    <MudTextField T="string" @bind-Value="_renameTo" Label="Name" Variant="Variant.Outlined"
-                                  Margin="Margin.Dense" Immediate="true" AutoFocus="true" MaxLength="Names.MaxLength"
-                                  Error="_renameError is not null" ErrorText="@_renameError"
-                                  InputId="@($"{TestId}-rename-input")" data-testid="@($"{TestId}-rename-input")"/>
-                    <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="Variant.Filled"
-                               Class="mt-1" data-testid="@($"{TestId}-rename-save")">Save</MudButton>
-                    <MudButton OnClick="() => _renaming = null" Class="mt-1">Cancel</MudButton>
-                </form>
-            }
-            else
-            {
-                <div class="d-flex align-center">
-                    <MudText Class="flex-grow-1" data-testid="@($"{TestId}-name")">@item.Name</MudText>
-                    @if (OnMove is not null)
-                    {
-                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
-                                       Disabled="position == 0" aria-label="@($"Move {item.Name} up")"
-                                       OnClick="() => OnMove(item.Id, -1)" data-testid="@($"{TestId}-up")"/>
-                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
-                                       Disabled="position == Items.Count - 1" aria-label="@($"Move {item.Name} down")"
-                                       OnClick="() => OnMove(item.Id, +1)" data-testid="@($"{TestId}-down")"/>
-                    }
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                   aria-label="@($"Rename {item.Name}")"
-                                   OnClick="() => StartRename(item)" data-testid="@($"{TestId}-rename")"/>
-                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small"
-                                   aria-label="@($"Delete {item.Name}")"
-                                   OnClick="() => Delete(item)" data-testid="@($"{TestId}-delete")"/>
-                </div>
-                @if (_inUse == item.Id)
+        @if (Items.Count == 0)
+        {
+            <p class="pad-note name-empty" data-testid="@($"{TestId}-empty")">Nothing here yet - write the first one in the box above.</p>
+        }
+        @* Plain rows, not MudList: a MudListItem takes Space and Enter for its own selection, so a text box inside
+           one loses every space typed and never submits. *@
+        @for (int index = 0; index < Items.Count; index++)
+        {
+            NameListItem item = Items[index];
+            int position = index;
+            <div class="@($"name-row{(Unsent?.Contains(item.Id) == true ? " unsent" : "")}")" @key="item.Id"
+                 data-testid="@($"{TestId}-row")" data-id="@item.Id">
+                @if (_renaming == item.Id)
                 {
-                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" ShowCloseIcon="true"
-                              CloseIconClicked="() => _inUse = null" data-testid="@($"{TestId}-in-use")">
-                        @item.Name is used by @string.Join(", and ", new[] { Listed(item.UsedBy, UsedByNoun),Listed(item.UsedByProducts ?? [], "product") }.Where(s => s is not null)).
-                        @InUseHint
-                    </MudAlert>
+                    <form class="name-rename" @onsubmit="SaveRename" @onsubmit:preventDefault>
+                        <MudTextField T="string" @bind-Value="_renameTo" Label="Name" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" Immediate="true" AutoFocus="true" MaxLength="Names.MaxLength"
+                                      Class="name-field"
+                                      Error="_renameError is not null" ErrorText="@_renameError"
+                                      InputId="@($"{TestId}-rename-input")" data-testid="@($"{TestId}-rename-input")"/>
+                        <div class="name-rename-actions">
+                            <MudButton OnClick="() => _renaming = null" Variant="Variant.Text">Cancel</MudButton>
+                            <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="Variant.Filled"
+                                       data-testid="@($"{TestId}-rename-save")">Save</MudButton>
+                        </div>
+                    </form>
                 }
-            }
-        </div>
-    }
-</MudPaper>
+                else
+                {
+                    <div class="name-line">
+                        <span class="name-text" data-testid="@($"{TestId}-name")">@item.Name</span>
+                        <span class="name-actions">
+                            @if (OnMove is not null)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward"
+                                               Disabled="position == 0" aria-label="@($"Move {item.Name} up")"
+                                               OnClick="() => OnMove(item.Id, -1)" data-testid="@($"{TestId}-up")"/>
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
+                                               Disabled="position == Items.Count - 1" aria-label="@($"Move {item.Name} down")"
+                                               OnClick="() => OnMove(item.Id, +1)" data-testid="@($"{TestId}-down")"/>
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           aria-label="@($"Rename {item.Name}")"
+                                           OnClick="() => StartRename(item)" data-testid="@($"{TestId}-rename")"/>
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Class="name-delete"
+                                           aria-label="@($"Delete {item.Name}")"
+                                           OnClick="() => Delete(item)" data-testid="@($"{TestId}-delete")"/>
+                        </span>
+                    </div>
+                    @if (_inUse == item.Id)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="name-in-use" ShowCloseIcon="true"
+                                  CloseIconClicked="() => _inUse = null" data-testid="@($"{TestId}-in-use")">
+                            @item.Name is used by @string.Join(", and ", new[] { Listed(item.UsedBy, UsedByNoun),Listed(item.UsedByProducts ?? [], "product") }.Where(s => s is not null)).
+                            @InUseHint
+                        </MudAlert>
+                    }
+                }
+            </div>
+        }
+    </PadSheet>
+</div>
 
 @code {
+    /// <summary>The sheet's band: the page's name ("Stores"). None for a sheet with no band.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>One line under the title on the band, saying what the order or the list is for.</summary>
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>Items with an edit not yet on the server: their rows wear the dashed edge.</summary>
+    [Parameter] public IReadOnlyCollection<Guid>? Unsent { get; set; }
+
     [Parameter, EditorRequired] public IReadOnlyList<NameListItem> Items { get; set; } = [];
 
     /// <summary>"store" - the lower-case noun, for messages.</summary>

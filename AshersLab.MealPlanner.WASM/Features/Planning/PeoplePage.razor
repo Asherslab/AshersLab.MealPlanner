@@ -14,76 +14,88 @@
     The household: a name and a colour each. Nobody is seeded - names are personal and the code is public - so the
     planner adds everyone here. A plan entry is for everyone unless it names some of them. Someone a plan names cannot
     be deleted.
+
+    One pad sheet: a line to add someone at the top, then a ruled row per person - their magnet, their name - the
+    whole row a tap to open it for the name, the colour (the magnets themselves to pick from) and delete.
 *@
 
 <PageTitle>People - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">People</MudText>
-<MudText Class="mt-1 mud-text-secondary">Everyone who eats from the plan. An entry is for everyone unless it says who.</MudText>
-
 <LocalDataGate Start="Start">
-    <form class="d-flex align-start gap-2 mt-4" @onsubmit="Add" @onsubmit:preventDefault>
-        <MudTextField T="string" @bind-Value="_newName" Label="New person" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
-                      Error="_addError is not null" ErrorText="@_addError"
-                      InputId="person-new-name" data-testid="person-new-name"/>
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
-                   data-testid="person-add">Add</MudButton>
-    </form>
+    <div class="people">
+        <PadSheet Title="People" Subtitle="Everyone who eats from the plan. An entry is for everyone unless it says who.">
+            <form class="person-add" @onsubmit="Add" @onsubmit:preventDefault>
+                <MudTextField T="string" @bind-Value="_newName" Label="New person" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength" Class="person-field"
+                              Error="_addError is not null" ErrorText="@_addError"
+                              InputId="person-new-name" data-testid="person-new-name"/>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="person-add-button"
+                           StartIcon="@Icons.Material.Filled.Add" data-testid="person-add">Add</MudButton>
+            </form>
 
-    <MudPaper Outlined="true" Class="mt-4">
-        @if (_people.Count == 0)
-        {
-            <MudText Class="pa-4 mud-text-secondary" data-testid="person-empty">Nobody yet - add each person in the household.</MudText>
-        }
-        @foreach (Person person in _people)
-        {
-            <div class="list-row px-4 py-2" @key="person.Id" data-testid="person-row" data-id="@person.Id">
-                @if (_editing == person.Id)
-                {
-                    <form @onsubmit="() => Save(person)" @onsubmit:preventDefault>
-                        <MudTextField T="string" @bind-Value="_editName" Label="Name" Variant="Variant.Outlined"
-                                      Margin="Margin.Dense" Immediate="true" AutoFocus="true" MaxLength="Names.MaxLength"
-                                      Error="_editError is not null" ErrorText="@_editError"
-                                      InputId="person-edit-name" data-testid="person-edit-name"/>
-                        <div class="d-flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Colour">
-                            @foreach (string colour in PersonRules.Palette)
+            @if (_people.Count == 0)
+            {
+                <p class="pad-note" data-testid="person-empty">Nobody yet - write each person in the household in the box above.</p>
+            }
+            @foreach (Person person in _people)
+            {
+                <div class="@($"person-row{(_unsent.Contains(person.Id) ? " unsent" : "")}{(_editing == person.Id ? " editing" : "")}")"
+                     @key="person.Id" data-testid="person-row" data-id="@person.Id">
+                    @if (_editing == person.Id)
+                    {
+                        <form class="person-edit" @onsubmit="() => Save(person)" @onsubmit:preventDefault>
+                            <MudTextField T="string" @bind-Value="_editName" Label="Name" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" Immediate="true" AutoFocus="true" MaxLength="Names.MaxLength"
+                                          Error="_editError is not null" ErrorText="@_editError"
+                                          InputId="person-edit-name" data-testid="person-edit-name"/>
+                            <span class="person-colour-label" id="@($"person-colour-{person.Id}")">Their magnet</span>
+                            <div class="person-colours" role="radiogroup" aria-labelledby="@($"person-colour-{person.Id}")">
+                                @foreach (string colour in PersonRules.Palette)
+                                {
+                                    <button type="button" class="@($"colour-swatch{(colour == _editColour ? " chosen" : "")}")"
+                                            style="@($"background:{colour}")" aria-label="@colour" aria-checked="@(colour == _editColour)"
+                                            role="radio" @onclick="() => _editColour = colour" data-testid="person-colour" data-colour="@colour"></button>
+                                }
+                            </div>
+                            @if (_inUse.Count > 0)
                             {
-                                <button type="button" class="@($"colour-swatch{(colour == _editColour ? " chosen" : "")}")"
-                                        style="@($"background:{colour}")" aria-label="@colour" aria-checked="@(colour == _editColour)"
-                                        role="radio" @onclick="() => _editColour = colour" data-testid="person-colour" data-colour="@colour"></button>
+                                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3" data-testid="person-in-use">
+                                    @person.Name is named in @string.Join(", ", _inUse). Make those entries for everyone, or someone else, first.
+                                </MudAlert>
                             }
+                            <div class="person-edit-actions">
+                                <MudButton Color="Color.Error" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.DeleteOutline"
+                                           OnClick="() => Delete(person)" Class="mr-auto" data-testid="person-delete">Delete</MudButton>
+                                <MudButton Variant="Variant.Text" OnClick="() => _editing = null" data-testid="person-cancel">Cancel</MudButton>
+                                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" data-testid="person-save">Save</MudButton>
+                            </div>
+                        </form>
+                    }
+                    else
+                    {
+                        <div class="person-line" role="button" tabindex="0" aria-label="@($"Edit {person.Name}")"
+                             @onclick="() => StartEdit(person)"
+                             @onkeydown="e => RowKey(e, person)">
+                            <span class="magnet person-magnet" style="@($"background:{person.Colour}")"></span>
+                            <span class="person-name" data-testid="person-name">@person.Name</span>
+                            @if (_unsent.Contains(person.Id))
+                            {
+                                <span class="person-unsent">Not sent yet</span>
+                            }
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="person-chevron"/>
                         </div>
-                        @if (_inUse.Count > 0)
-                        {
-                            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" data-testid="person-in-use">
-                                @person.Name is named in @string.Join(", ", _inUse). Make those entries for everyone, or someone else, first.
-                            </MudAlert>
-                        }
-                        <div class="d-flex gap-2 mt-2">
-                            <MudButton Color="Color.Error" OnClick="() => Delete(person)" Class="mr-auto" data-testid="person-delete">Delete</MudButton>
-                            <MudButton OnClick="() => _editing = null" data-testid="person-cancel">Cancel</MudButton>
-                            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" data-testid="person-save">Save</MudButton>
-                        </div>
-                    </form>
-                }
-                else
-                {
-                    <div class="d-flex align-center gap-3" role="button" tabindex="0" @onclick="() => StartEdit(person)">
-                        <span class="person-dot" style="@($"background:{person.Colour}")"></span>
-                        <MudText Class="flex-grow-1" data-testid="person-name">@person.Name</MudText>
-                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="mud-text-secondary"/>
-                    </div>
-                }
-            </div>
-        }
-    </MudPaper>
+                    }
+                </div>
+            }
+        </PadSheet>
+    </div>
 </LocalDataGate>
 
 @code {
     private List<Person> _people = [];
     private PlanBook     _plans  = null!;
     private List<CalendarEntry> _coming = [];
+    private HashSet<Guid> _unsent = [];
 
     private string? _newName;
     private string? _addError;
@@ -99,6 +111,7 @@
         _people = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _plans  = await PlanBook.LoadAsync(db);
         _coming = await CalendarBook.ComingAsync(db, DateOnly.FromDateTime(DateTime.Now));
+        _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
     }
 
     private string? Problem(string name, Guid? id) =>
@@ -127,6 +140,13 @@
         _editColour = person.Colour;
         _editError  = null;
         _inUse      = [];
+    }
+
+    /// <summary>The row is a button to the keyboard too: Enter or Space opens it.</summary>
+    private void RowKey(KeyboardEventArgs e, Person person)
+    {
+        if (e.Key is "Enter" or " ")
+            StartEdit(person);
     }
 
     private async Task Save(Person person)

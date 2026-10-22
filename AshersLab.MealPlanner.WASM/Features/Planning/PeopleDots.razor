@@ -1,22 +1,22 @@
 @using AshersLab.MealPlanner.Shared.Data.Planning
 
 @*
-    Who a plan entry is for, when it is not everyone: a dot in each person's colour, or (Named) a chip with their name.
-    Nothing at all for everyone - the common case stays quiet.
+    Who a plan entry is for, when it is not everyone: a magnet in each person's colour, or (Named) the magnet beside
+    their name. Nothing at all for everyone - the common case stays quiet.
 *@
 
 @if (People.Count > 0)
 {
-    <span class="people-dots" data-testid="plan-entry-people" title="@string.Join(", ", People.Select(p => p.Name))">
+    <span class="magnets" data-testid="plan-entry-people" title="@string.Join(", ", People.Select(p => p.Name))">
         @foreach (Person person in People)
         {
             if (Named)
             {
-                <span class="person-chip" style="@($"background:{person.Colour}")">@person.Name</span>
+                <span class="person-chip"><span class="magnet" style="@($"background:{person.Colour}")"></span>@person.Name</span>
             }
             else
             {
-                <span class="person-dot" style="@($"background:{person.Colour}")" aria-label="@person.Name"></span>
+                <span class="magnet" style="@($"background:{person.Colour}")" role="img" aria-label="@person.Name"></span>
             }
         }
     </span>

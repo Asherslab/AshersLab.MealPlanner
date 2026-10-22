@@ -537,3 +537,8 @@ app-data/
 
 # Rider
 .idea/
+
+# Impeccable (design skill): the review captures and the brief draft are working files. The surface brief
+# (.impeccable/surfaces/), the decision sketches and DESIGN.md are the record and are committed.
+.impeccable/review/
+.impeccable/brief-app.md

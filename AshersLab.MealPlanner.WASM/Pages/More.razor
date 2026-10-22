@@ -1,10 +1,15 @@
 @page "/more"
 
-@* The phone's fifth tab: the pages used week to week rather than daily, then the way into Settings. *@
+@*
+    The phone's fifth tab: the pages used week to week rather than daily, then the way into Settings. Each group is a
+    sheet of rows (DestinationList).
+*@
 
 <PageTitle>More - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">More</MudText>
+<div class="drawer-page">
+    <h1 class="page-title">More</h1>
 
-<DestinationList Heading="Kitchen" Destinations="NavModel.In(NavGroup.Kitchen)" TestIdPrefix="more"/>
-<DestinationList Destinations="NavModel.In(NavGroup.Settings)" TestIdPrefix="more"/>
+    <DestinationList Heading="Kitchen" Destinations="NavModel.In(NavGroup.Kitchen)" TestIdPrefix="more"/>
+    <DestinationList Destinations="NavModel.In(NavGroup.Settings)" TestIdPrefix="more"/>
+</div>

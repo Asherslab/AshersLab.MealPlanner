@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Today - category standard</title>
+<style>
+  :root { --bg: #F2F2F7; --cell: #FFFFFF; --ink: #1C1C1E; --ink-2: #8E8E93; --blue: #0A84FF; --sep: #E5E5EA; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 390px; height: 844px; overflow: hidden; }
+  body { background: var(--bg); color: var(--ink); font: 400 17px/1.3 -apple-system, system-ui, sans-serif; position: relative; }
+  .nav { padding: 14px 16px 0; display: flex; justify-content: flex-end; font-size: 15px; color: var(--ink-2); }
+  h1 { font: 700 34px/1.1 -apple-system, system-ui; padding: 6px 16px 2px; }
+  .sub { padding: 0 16px 16px; color: var(--ink-2); font-size: 15px; }
+  .grp { margin: 0 16px 22px; background: var(--cell); border-radius: 12px; }
+  .hd { margin: 0 32px 6px; font-size: 13px; color: var(--ink-2); }
+  .c { display: flex; justify-content: space-between; padding: 12px 16px; border-top: 0.5px solid var(--sep); }
+  .c:first-child { border-top: 0; }
+  .c span { color: var(--ink-2); }
+  .big { padding: 16px; }
+  .big b { font-size: 22px; display: block; margin: 4px 0 10px; }
+  .big button { background: var(--blue); color: #fff; border: 0; border-radius: 10px; padding: 12px; width: 100%; font: 600 17px -apple-system, system-ui; }
+  nav { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; background: rgba(249,249,249,.94); border-top: 0.5px solid #C6C6C8; display: grid; grid-template-columns: repeat(5, 1fr); padding: 8px 4px 28px; }
+  nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: var(--ink-2); text-decoration: none; }
+  nav a i { font-style: normal; font-size: 22px; }
+  nav a.on { color: var(--blue); }
+</style>
+</head>
+<body>
+  <div class="nav">Synced</div>
+  <h1>Today</h1>
+  <p class="sub">Thursday 22 October</p>
+  <div class="grp big"><span style="color:var(--ink-2);font-size:13px">DINNER</span><b>Chicken and lemon traybake</b><button>View recipe</button></div>
+  <p class="hd">REST OF TODAY</p>
+  <div class="grp">
+    <div class="c">Breakfast<span>Overnight oats</span></div>
+    <div class="c">Snack<span>Fruit and yoghurt</span></div>
+    <div class="c">Lunch<span>Leftover bolognese</span></div>
+    <div class="c">Snack<span>Cheese and crackers</span></div>
+  </div>
+  <p class="hd">THIS WEEK</p>
+  <div class="grp"><div class="c">To buy<span>12 items</span></div><div class="c">Spend<span>$146</span></div></div>
+  <nav><a class="on" href="#"><i>☀</i>Today</a><a href="#"><i>▦</i>Plan</a><a href="#"><i>✓</i>Shop</a><a href="#"><i>◍</i>Meals</a><a href="#"><i>≡</i>More</a></nav>
+</body>
+</html>

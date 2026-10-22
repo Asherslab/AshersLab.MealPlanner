@@ -16,10 +16,9 @@
 
 <PageTitle>Stores - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Stores</MudText>
-
 <LocalDataGate Start="Start">
-    <NameList Items="_stores" Noun="store" TestId="store" NewLabel="New store"
+    <NameList Title="Stores" Subtitle="Where you shop: prices and the shopping list are split by store." Unsent="_unsent"
+              Items="_stores" Noun="store" TestId="store" NewLabel="New store"
               NameProblem="StoreRules.NameProblem"
               InUseHint="Give the ingredients another usual store, and delete the products, first."
               OnAdd="Add" OnRename="Rename" OnDelete="Delete"/>
@@ -27,9 +26,11 @@
 
 @code {
     private List<NameListItem> _stores = [];
+    private HashSet<Guid>      _unsent = [];
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
+        _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
         List<Store> stores = await db.Stores.AsNoTracking().Where(s => !s.Deleted).ToListAsync();
         ILookup<Guid?, string> usedBy = (await db.Ingredients.AsNoTracking()
                 .Where(i => !i.Deleted && i.UsualStoreId != null)

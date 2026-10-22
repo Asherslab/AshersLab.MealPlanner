@@ -1,0 +1,5 @@
+/* A set-up list is the size of a pad: NameList draws the sheet, this keeps it a phone-ish column on a wide screen. */
+.meal-groups {
+    max-width: 640px;
+    margin: 0 auto;
+}

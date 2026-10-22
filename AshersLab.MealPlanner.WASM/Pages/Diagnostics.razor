@@ -9,53 +9,48 @@
 @*
     For when something is wrong: whether this browser's copy of the data opened (and the reset when it did not), the
     server's version and newest migration, and this device's row. A LocalDataPage only for the gate - it reads nothing.
+    Two quiet sheets - a plain band, ruled rows of label and value - so it reads as the back of the pad, not daily work.
 *@
 
 <PageTitle>Diagnostics - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Diagnostics</MudText>
+<div class="diagnostics">
+    <h1 class="page-title">Diagnostics</h1>
 
-@* Shows nothing once the database is open; when it failed, the error and the reset offer the device card points at. *@
-<LocalDataGate Start="Start"/>
+    @* Shows nothing once the database is open; when it failed, the error and the reset offer the device sheet points at. *@
+    <LocalDataGate Start="Start"/>
 
-<MudCard Outlined="true" Class="home-server mt-4">
-    <MudCardHeader>
-        <CardHeaderContent>
-            <MudText Typo="Typo.h6">Server</MudText>
-        </CardHeaderContent>
-        <CardHeaderActions>
-            <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Check the server again"
+    <PadSheet Title="Server" Class="quiet">
+        <Head>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Primary" aria-label="Check the server again"
                            Disabled="_loading" OnClick="Load"/>
-        </CardHeaderActions>
-    </MudCardHeader>
-    <MudCardContent>
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
-        }
-        else if (_error is not null)
-        {
-            <MudAlert Severity="Severity.Error">Could not reach the server: @_error</MudAlert>
-        }
-        else if (_info is not null)
-        {
-            <MudSimpleTable Dense="true" Elevation="0">
-                <tbody>
-                <tr>
-                    <th scope="row">Version</th>
-                    <td data-testid="server-version">@_info.Version</td>
-                </tr>
-                <tr>
-                    <th scope="row">Server time</th>
-                    <td data-testid="server-time">@_info.ServerTimeUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
-                </tr>
-                <tr>
-                    <th scope="row">Database</th>
-                    <td data-testid="server-migration">@(_info.LatestMigration ?? "not migrated")</td>
-                </tr>
-                <tr>
-                    <th scope="row">Signed in as</th>
-                    <td data-testid="server-user">
+        </Head>
+        <ChildContent>
+            @if (_loading)
+            {
+                <div class="diag-note">
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
+                </div>
+            }
+            else if (_error is not null)
+            {
+                <div class="diag-note">
+                    <MudAlert Severity="Severity.Error" Dense="true">Could not reach the server: @_error</MudAlert>
+                </div>
+            }
+            else if (_info is not null)
+            {
+                <PadRow Label="Version">
+                    <span class="diag-value" data-testid="server-version">@_info.Version</span>
+                </PadRow>
+                <PadRow Label="Server time">
+                    <span class="diag-value num" data-testid="server-time">@_info.ServerTimeUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                </PadRow>
+                <PadRow Label="Database">
+                    <span class="diag-value" data-testid="server-migration">@(_info.LatestMigration ?? "not migrated")</span>
+                </PadRow>
+                <PadRow Label="Signed in as">
+                    <span class="diag-value" data-testid="server-user">
                         @if (_info.UserName is null)
                         {
                             <span>nobody - not opened through Home Assistant</span>
@@ -64,16 +59,15 @@
                         {
                             <span>@(_info.UserDisplayName ?? _info.UserName) (@_info.UserName)</span>
                         }
-                    </td>
-                </tr>
-                </tbody>
-            </MudSimpleTable>
-        }
-    </MudCardContent>
-</MudCard>
+                    </span>
+                </PadRow>
+            }
+        </ChildContent>
+    </PadSheet>
 
-<div class="mt-4">
-    <ThisDeviceCard/>
+    <div class="mt-4">
+        <ThisDeviceCard/>
+    </div>
 </div>
 
 @code {

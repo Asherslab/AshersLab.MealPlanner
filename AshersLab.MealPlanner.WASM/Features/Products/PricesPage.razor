@@ -26,92 +26,107 @@
 
 <PageTitle>Prices - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Prices</MudText>
+@*
+    One pad sheet: the search, New and the store chips across its top, then the ingredients under their category's
+    small green print, each with its products ruled under it and the latest price at the right.
+*@
 
 <LocalDataGate Start="Start">
-    <div class="d-flex align-start gap-2 mt-4">
-        <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                      InputId="price-search" data-testid="price-search"/>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-1 text-nowrap" OnClick="() => Add(null)"
-                   aria-label="New product" data-testid="price-new-product">New</MudButton>
-    </div>
+    <div class="prices">
+        <PadSheet Title="Prices" Subtitle="What things cost, and where. Tap a product to write in a price.">
+            <div class="price-tools">
+                <div class="price-search-line">
+                    <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength" Class="price-search"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  InputId="price-search" data-testid="price-search"/>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="price-new text-nowrap" OnClick="() => Add(null)"
+                               StartIcon="@Icons.Material.Filled.Add" aria-label="New product" data-testid="price-new-product">New</MudButton>
+                </div>
 
-    <div class="d-flex flex-wrap gap-1 mt-2" role="group" aria-label="Store">
-        <MudChip T="string" Color="@(_store is null ? Color.Primary : Color.Default)" OnClick="() => _store = null"
-                 data-testid="price-store-chip" data-id="">All stores</MudChip>
-        @foreach ((Guid id, string name) in _stores)
-        {
-            <MudChip T="string" Color="@(_store == id ? Color.Primary : Color.Default)" OnClick="() => _store = id"
-                     data-testid="price-store-chip" data-id="@id">@name</MudChip>
-        }
-    </div>
-
-    @if (_ingredients.Count == 0 && _products.Count == 0)
-    {
-        <MudText Class="pa-4 mud-text-secondary" data-testid="prices-empty">
-            No ingredients yet - add them on the Ingredients page first.
-        </MudText>
-    }
-
-    @foreach ((string heading, List<Ingredient?> items) in Groups())
-    {
-        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="price-group">@heading</MudText>
-        <MudPaper Outlined="true">
-            @foreach (Ingredient? ingredient in items)
-            {
-                List<Product> products = Shown(ingredient);
-                <div class="price-ingredient" @key="@(ingredient?.Id ?? Guid.Empty)" data-testid="price-ingredient" data-id="@ingredient?.Id">
-                    @if (ingredient is not null)
+                <div class="price-chips" role="group" aria-label="Store">
+                    <MudChip T="string" Color="@(_store is null ? Color.Primary : Color.Default)"
+                             Variant="@(_store is null ? Variant.Filled : Variant.Outlined)" OnClick="() => _store = null"
+                             data-testid="price-store-chip" data-id="">All stores</MudChip>
+                    @foreach ((Guid id, string name) in _stores)
                     {
-                        <div class="d-flex align-center pl-4 pr-1">
-                            <div class="flex-grow-1 py-2">
-                                <MudText Typo="Typo.subtitle1" data-testid="price-ingredient-name">@ingredient.Name</MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="price-ingredient-unit-price">
-                                    @UnitPriceText(ingredient)
-                                </MudText>
-                            </div>
-                            <MudIconButton Icon="@Icons.Material.Filled.Add" aria-label="@($"Add a product for {ingredient.Name}")"
-                                           OnClick="() => Add(ingredient)" data-testid="price-ingredient-add"/>
-                        </div>
-                    }
-                    @if (products.Count == 0)
-                    {
-                        <MudText Typo="Typo.caption" Class="d-block px-4 pb-2 mud-text-secondary" data-testid="price-no-products">
-                            @(_store is { } store ? $"No {StoreName(store)} products" : "No products yet")
-                        </MudText>
-                    }
-                    @foreach (Product product in products)
-                    {
-                        PriceReading? latest = PriceReadings.Latest(_readings[product.Id]);
-                        <div class="price-product d-flex align-center gap-2 px-4 py-2" @key="product.Id" role="button" tabindex="0"
-                             @onclick="() => OpenSheet(product, ingredient)" data-testid="price-product-row" data-id="@product.Id">
-                            <div class="flex-grow-1">
-                                <MudText data-testid="price-product-name">@product.Name</MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="price-product-detail">
-                                    @Detail(product, ingredient)
-                                </MudText>
-                            </div>
-                            <div class="text-right">
-                                @if (latest is not null)
-                                {
-                                    <MudText data-testid="price-product-price">@Money.Format(latest.PriceCents)</MudText>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary text-nowrap" data-testid="price-product-seen">
-                                        @latest.ObservedOn.ToString("d MMM")
-                                    </MudText>
-                                }
-                                else
-                                {
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-nowrap" data-testid="price-product-price">no price</MudText>
-                                }
-                            </div>
-                        </div>
+                        <MudChip T="string" Color="@(_store == id ? Color.Primary : Color.Default)"
+                                 Variant="@(_store == id ? Variant.Filled : Variant.Outlined)" OnClick="() => _store = id"
+                                 data-testid="price-store-chip" data-id="@id">@name</MudChip>
                     }
                 </div>
+            </div>
+
+            @if (_ingredients.Count == 0 && _products.Count == 0)
+            {
+                <p class="pad-note" data-testid="prices-empty">
+                    No ingredients yet - add them on <a href="ingredients">Ingredients</a> first, then their prices here.
+                </p>
             }
-        </MudPaper>
-    }
+
+            @{ bool any = false; }
+            @foreach ((string heading, List<Ingredient?> items) in Groups())
+            {
+                any = true;
+                <h3 class="price-group" data-testid="price-group">@heading</h3>
+                @foreach (Ingredient? ingredient in items)
+                {
+                    List<Product> products = Shown(ingredient);
+                    <div class="price-ingredient" @key="@(ingredient?.Id ?? Guid.Empty)" data-testid="price-ingredient" data-id="@ingredient?.Id">
+                        @if (ingredient is not null)
+                        {
+                            <div class="price-ingredient-head">
+                                <div class="price-ingredient-text">
+                                    <span class="price-ingredient-name" data-testid="price-ingredient-name">@ingredient.Name</span>
+                                    <span class="price-caption" data-testid="price-ingredient-unit-price">@UnitPriceText(ingredient)</span>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Color="Color.Primary"
+                                               aria-label="@($"Add a product for {ingredient.Name}")"
+                                               OnClick="() => Add(ingredient)" data-testid="price-ingredient-add"/>
+                            </div>
+                        }
+                        @if (products.Count == 0)
+                        {
+                            <p class="price-none" data-testid="price-no-products">
+                                @(_store is { } store ? $"No {StoreName(store)} products" : "No products yet")
+                            </p>
+                        }
+                        @foreach (Product product in products)
+                        {
+                            PriceReading? latest = PriceReadings.Latest(_readings[product.Id]);
+                            <div class="@($"price-product{(_unsent.Contains(product.Id) ? " unsent" : "")}")" @key="product.Id" role="button" tabindex="0"
+                                 @onclick="() => OpenSheet(product, ingredient)" @onkeydown="e => ProductKey(e, product, ingredient)"
+                                 data-testid="price-product-row" data-id="@product.Id">
+                                <div class="price-product-text">
+                                    <span class="price-product-name" data-testid="price-product-name">@product.Name</span>
+                                    <span class="price-caption" data-testid="price-product-detail">@Detail(product, ingredient)</span>
+                                </div>
+                                <div class="price-latest">
+                                    @if (latest is not null)
+                                    {
+                                        <span class="price-amount" data-testid="price-product-price">@Money.Format(latest.PriceCents)</span>
+                                        <span class="price-caption" data-testid="price-product-seen">@latest.ObservedOn.ToString("d MMM")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="price-missing" data-testid="price-product-price">no price</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (!any && (_ingredients.Count > 0 || _products.Count > 0))
+            {
+                <p class="pad-note" data-testid="prices-no-match">
+                    Nothing here matches@(Filter.Length > 0 ? $" \"{Filter}\"" : "")@(_store is { } picked ? $" at {StoreName(picked)}" : "").
+                    Tap New to add it as a product.
+                </p>
+            }
+        </PadSheet>
+    </div>
 </LocalDataGate>
 
 @code {
@@ -120,6 +135,9 @@
     private Dictionary<Guid, string>  _stores      = [];
     private List<Product>             _products    = [];
     private ILookup<Guid, PriceReading> _readings  = Array.Empty<PriceReading>().ToLookup(_ => Guid.Empty);
+
+    /// <summary>Products with an edit not yet on the server: their rows wear the dashed edge.</summary>
+    private HashSet<Guid> _unsent = [];
 
     /// <summary>The day it is where the planner is: what "seen on" defaults to.</summary>
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
@@ -140,6 +158,7 @@
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)];
         _readings    = (await db.PriceObservations.AsNoTracking().Where(o => !o.Deleted).ToListAsync())
             .ToLookup(o => o.ProductId, o => o.Reading());
+        _unsent      = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
 
         if (_store is { } store && !_stores.ContainsKey(store))
             _store = null;
@@ -230,6 +249,13 @@
         if (result.FirstPriceCents is { } cents)
             await WriteAsync(SyncedEntities.PriceObservation, Guid.CreateVersion7(), OpKind.Create,
                 new PriceEntry(id, cents, Today, PriceSource.Manual, null).Fields());
+    }
+
+    /// <summary>A product row is a button to the keyboard too: Enter or Space opens its price sheet.</summary>
+    private async Task ProductKey(KeyboardEventArgs e, Product product, Ingredient? ingredient)
+    {
+        if (e.Key is "Enter" or " ")
+            await OpenSheet(product, ingredient);
     }
 
     /// <summary>Tapping a product: its price sheet. Saving adds an observation; it never changes one.</summary>

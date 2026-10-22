@@ -169,8 +169,9 @@ public static class LocalOps
     /// what this browser shows.
     /// </summary>
     /// <remarks>
-    /// This device's own ops come back too: their clocks equal the ones already held, so they change nothing,
-    /// and their arrival confirms them - this is where an accepted op leaves the outbox.
+    /// This device's own ops come back too: their clocks equal the ones already held, so they change no row,
+    /// and their arrival confirms them - this is where an accepted op leaves the outbox. That still returns true:
+    /// pages mark what is unsent, and must re-read when it is sent.
     /// </remarks>
     public static async Task<bool> ApplyPulledAsync(
         LocalDbContext          db,
@@ -211,8 +212,10 @@ public static class LocalOps
             db.Attach(state);
         }
 
+        // An edit of this device's own coming back changes no row, but it leaves the outbox - and pages show what is
+        // still unsent (the dashed edge), so that counts as a change for them to re-read.
         List<Guid> confirmed = [.. ops.Select(o => o.OpId)];
-        await db.Outbox.Where(o => confirmed.Contains(o.OpId)).ExecuteDeleteAsync(cancellationToken);
+        changed |= await db.Outbox.Where(o => confirmed.Contains(o.OpId)).ExecuteDeleteAsync(cancellationToken) > 0;
 
         state.ServerEpoch  = serverEpoch;
         state.Clock        = clock?.ToString();

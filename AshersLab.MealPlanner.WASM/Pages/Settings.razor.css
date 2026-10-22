@@ -1,0 +1,31 @@
+.drawer-page {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+/* On a phone the app bar names the page, so the title is there only for a screen reader; from Md up (no back-arrow
+   title in the bar) the page names itself in plain bold print. */
+.page-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    margin: 0;
+}
+
+@media (min-width: 960px) {
+    .page-title {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip-path: none;
+        white-space: normal;
+        margin: 4px 4px 12px;
+        font: 700 1.5rem/1.15 var(--font-body);
+        letter-spacing: -0.01em;
+        color: var(--ink);
+    }
+}

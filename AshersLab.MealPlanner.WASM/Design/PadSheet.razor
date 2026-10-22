@@ -1,0 +1,37 @@
+@*
+    One sheet of the fridge-door pad: a bottle-green printed head band, then ruled rows (PadRow) on white enamel, torn
+    along its top. The app's main container for a day, a list, a set of entries - in place of a card.
+*@
+
+<section class="@($"pad {Class}".TrimEnd())" data-testid="@TestId">
+    @if (Title is not null || Head is not null)
+    {
+        <header class="pad-head">
+            @if (Title is not null)
+            {
+                <h2>@Title</h2>
+            }
+            @if (Subtitle is not null)
+            {
+                <p>@Subtitle</p>
+            }
+            @Head
+        </header>
+    }
+    @ChildContent
+</section>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>Anything else the head band carries - a control beside the title, a week stepper.</summary>
+    [Parameter] public RenderFragment? Head { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public string? TestId { get; set; }
+}

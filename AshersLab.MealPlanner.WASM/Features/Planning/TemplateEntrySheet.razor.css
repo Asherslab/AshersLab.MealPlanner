@@ -1,0 +1,84 @@
+/* A plan entry's sheet. The same sheet vocabulary as CalendarEntrySheet.razor.css - keep the two alike. */
+.sheet-where {
+    margin: 0;
+    font: 700 0.9375rem/1.3 var(--font-body);
+    color: var(--bottle);
+}
+
+/* A section of the sheet: small printed bottle-green heading, more room above than below. */
+.sheet-label {
+    margin: 20px 0 8px;
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+
+/* The meals it may be, ruled, in marker; the usual one first. */
+.sheet-choice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 52px;
+    padding: 4px 0 4px 2px;
+    border-top: 1px solid var(--rule);
+}
+
+.sheet-label + .sheet-choice {
+    border-top: 0;
+}
+
+.sheet-choice-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.sheet-usual {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--bottle);
+}
+
+.sheet-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sheet-chips ::deep .mud-chip {
+    margin: 0;
+    min-height: 36px;
+}
+
+.sheet-magnet {
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+}
+
+.sheet-options {
+    margin-top: 4px;
+}
+
+.sheet-option {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 8px;
+    border-top: 1px solid var(--rule);
+    cursor: pointer;
+}
+
+.sheet-option:first-child {
+    border-top: 0;
+}
+
+.sheet-option:hover {
+    background: rgba(47, 93, 80, 0.06);
+}
+
+.sheet-note {
+    margin: 6px 0 0;
+    padding: 4px 8px;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+}

@@ -29,40 +29,51 @@
 
 <PageTitle>Receipts - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Receipts</MudText>
+@*
+    A tool, in three sheets: "Add a receipt" with the file pick as its one main action; while a receipt is open, its
+    summary and then every line to check, ruled on one sheet, with Import at the foot; otherwise the receipts imported
+    so far.
+*@
 
 <LocalDataGate Start="Start">
+<div class="receipts">
     @if (_review is null)
     {
-        <MudText Class="mt-2 mud-text-secondary">
-            Pick a Woolworths invoice (the PDF from the order's page) or a Costco receipt (the PDF the Costco app saves). It is
-            read on this device only, and not kept.
-        </MudText>
-        <label class="import-file mt-4 d-block">
-            <InputFile OnChange="Picked" accept=".pdf,application/pdf" data-testid="receipt-file" disabled="@_reading"/>
-        </label>
-        @if (_reading)
-        {
-            @if (_progress is { } progress)
-            {
-                <MudText Typo="Typo.body2" Class="mt-2" data-testid="receipt-ocr-progress">Reading the receipt's picture… @((int)(progress * 100))%</MudText>
-                <MudProgressLinear Value="@(progress * 100)" Class="mt-1"/>
-            }
-            else
-            {
-                <MudProgressLinear Indeterminate="true" Class="mt-2"/>
-            }
-        }
+        <PadSheet Title="Add a receipt" Subtitle="Its prices update, and what came home goes into the pantry.">
+            <div class="pick">
+                <p class="pick-help">
+                    A Woolworths invoice (the PDF from the order's page) or a Costco receipt (the PDF the Costco app saves).
+                    It is read on this device only, and not kept.
+                </p>
+                <label class="@($"file-pick{(_reading ? " busy" : "")}")">
+                    <MudIcon Icon="@Icons.Material.Filled.UploadFile"/>
+                    <span>@(_reading ? "Reading the receipt…" : "Choose a receipt PDF")</span>
+                    <InputFile OnChange="Picked" accept=".pdf,application/pdf" class="file-input" data-testid="receipt-file" disabled="@_reading"/>
+                </label>
+                @if (_reading)
+                {
+                    @if (_progress is { } progress)
+                    {
+                        <p class="pick-progress" data-testid="receipt-ocr-progress">Reading the receipt's picture… @((int)(progress * 100))%</p>
+                        <MudProgressLinear Value="@(progress * 100)" Color="Color.Primary" Class="mt-1"/>
+                    }
+                    else
+                    {
+                        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-3"/>
+                    }
+                }
+            </div>
+        </PadSheet>
     }
 
     @if (_error is not null)
     {
-        <MudAlert Severity="Severity.Error" Class="mt-4" data-testid="receipt-error">@_error</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mt-3" data-testid="receipt-error">@_error</MudAlert>
     }
 
     @if (_done is not null)
     {
-        <MudAlert Severity="Severity.Success" Class="mt-4" data-testid="receipt-done">@_done</MudAlert>
+        <MudAlert Severity="Severity.Success" Class="mt-3" data-testid="receipt-done">@_done</MudAlert>
     }
 
     @if (_review is { } import && _lines is not null)
@@ -70,11 +81,12 @@
         ParsedReceipt parsed = import.Parsed;
         string? totals = parsed.TotalsProblem();
         bool ocr = _spans is not null;
-        <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="receipt-summary" data-order="@parsed.OrderNumber" data-date="@parsed.PurchasedOn.ToString("yyyy-MM-dd")"
-                  data-store="@import.StoreId">
-            <MudText Typo="Typo.h6">@StoreName(import.StoreId) · @ShoppingText.Day(parsed.PurchasedOn) @parsed.PurchasedOn.Year</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">@(ocr ? "Receipt" : "Order") @parsed.OrderNumber · @parsed.Lines.Count lines</MudText>
-            <MudText Typo="Typo.body2" Class="mt-2" data-testid="receipt-totals">
+        <div class="receipt-summary" data-testid="receipt-summary" data-order="@parsed.OrderNumber" data-date="@parsed.PurchasedOn.ToString("yyyy-MM-dd")"
+             data-store="@import.StoreId">
+        <PadSheet Title="@($"{StoreName(import.StoreId)} · {ShoppingText.Day(parsed.PurchasedOn)} {parsed.PurchasedOn.Year}")"
+                  Subtitle="@($"{(ocr ? "Receipt" : "Order")} {parsed.OrderNumber} · {parsed.Lines.Count} lines")">
+        <div class="summary-body">
+            <p class="summary-totals num" data-testid="receipt-totals">
                 @if (parsed.Fees.Count > 0 || parsed.SubtotalCents != parsed.TotalCents)
                 {
                     <span>Sub total @Money.Format(parsed.SubtotalCents)</span>
@@ -93,12 +105,13 @@
                 {
                     <span> · refunded @Money.Format(refund)</span>
                 }
-            </MudText>
+            </p>
             @if (totals is null)
             {
-                <MudText Typo="Typo.caption" Color="Color.Success" data-testid="receipt-totals-ok">
+                <p class="summary-ok" data-testid="receipt-totals-ok">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircleOutline" Size="Size.Small" Color="Color.Success"/>
                     @(parsed.ItemsSold is { } n ? $"The lines add up to the total, and to the {n} items sold." : "The lines add up to the sub total.")
-                </MudText>
+                </p>
             }
             else
             {
@@ -114,7 +127,7 @@
             }
             @if (ocr && _editingTotal)
             {
-                <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="receipt-total-form">
+                <div class="inset-form" data-testid="receipt-total-form">
                     <div class="d-flex flex-wrap gap-2">
                         <MudTextField T="string" @bind-Value="_editTotal" Label="Total" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-total" Style="max-width: 9rem"/>
                         <MudTextField T="string" @bind-Value="_editSold" Label="Items sold" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-sold" Style="max-width: 9rem"/>
@@ -129,12 +142,12 @@
                         <MudText Typo="Typo.caption" Color="Color.Error" data-testid="receipt-edit-problem">@_editProblem</MudText>
                     }
                     <div class="d-flex gap-2 mt-2">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveTotal" data-testid="receipt-total-save">Correct</MudButton>
-                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => _editingTotal = false">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTotal" data-testid="receipt-total-save">Correct</MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="() => _editingTotal = false">Cancel</MudButton>
                     </div>
-                </MudPaper>
+                </div>
             }
-            <div class="d-flex flex-wrap gap-2 mt-3">
+            <div class="d-flex flex-wrap gap-1 mt-2 summary-tools">
                 <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" OnClick="ShowFile" data-testid="receipt-show-file">
                     @(_showingFile ? $"Hide the {(ocr ? "receipt" : "invoice")}" : $"Show the {(ocr ? "receipt" : "invoice")}")
                 </MudButton>
@@ -143,13 +156,16 @@
                     <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditTotal" data-testid="receipt-total-edit">Correct the total</MudButton>
                 }
             </div>
-            <div @ref="_fileView" class="@(_showingFile ? "mt-2" : "d-none")" data-testid="receipt-file-view"></div>
-        </MudPaper>
+            <div @ref="_fileView" class="@(_showingFile ? "mt-2 file-view" : "d-none")" data-testid="receipt-file-view"></div>
+        </div>
+        </PadSheet>
+        </div>
 
-        <MudText Class="mt-4 mud-text-secondary">
-            Check each line: what it is decides what it prices and what goes into the pantry. A line matched once is matched by
-            itself on the next receipt.@(ocr ? " Each line shows the part of the receipt it was read from: if a figure differs, correct it." : "")
-        </MudText>
+        <PadSheet Title="Check each line" Class="mt-4">
+        <p class="lines-help">
+            What a line is decides what it prices and what goes into the pantry. A line matched once is matched by itself on
+            the next receipt.@(ocr ? " Each line shows the part of the receipt it was read from: if a figure differs, correct it." : "")
+        </p>
 
         <div @ref="_linesView">
         @foreach (LineState state in _lines)
@@ -157,8 +173,8 @@
             ParsedLine line = state.Review.Line;
             string? sums = line.SumProblem();
             bool unsure = _unsure?.Contains(line.Position) == true;
-            <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="receipt-line" data-position="@line.Position" data-match="@state.Review.Match.By"
-                      data-choice="@state.Choice" data-kind="@KindOf(state)" data-code="@line.StoreCode" data-check="@(sums is not null || unsure)">
+            <div class="@($"receipt-line{(sums is not null || unsure ? " check" : "")}")" data-testid="receipt-line" data-position="@line.Position" data-match="@state.Review.Match.By"
+                 data-choice="@state.Choice" data-kind="@KindOf(state)" data-code="@line.StoreCode" data-check="@(sums is not null || unsure)">
                 <MudGrid Spacing="2">
                     @if (_spans?.GetValueOrDefault(line.Position) is { } spans)
                     {
@@ -173,11 +189,11 @@
                     }
                     <MudItem xs="12" md="@(_spans is null ? 12 : 7)">
                 <div class="d-flex gap-2">
-                    <div class="flex-grow-1">
-                        <MudText data-testid="receipt-line-desc">@line.Description</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="receipt-line-amount">
+                    <div class="flex-grow-1 line-text">
+                        <span class="line-desc" data-testid="receipt-line-desc">@line.Description</span>
+                        <span class="line-amount num" data-testid="receipt-line-amount">
                             @(line.StoreCode is { } code ? $"#{code} · " : "")@Bought(line)
-                        </MudText>
+                        </span>
                     </div>
                     @if (state.Review.Match.By != MatchedBy.None && state.Choice == $"p:{state.Review.Match.ProductId}")
                     {
@@ -192,7 +208,7 @@
                 }
                 @if (ocr && _editing == line.Position)
                 {
-                    <MudPaper Outlined="true" Class="pa-2 mt-2" data-testid="receipt-line-form">
+                    <div class="inset-form" data-testid="receipt-line-form">
                         <MudTextField T="string" @bind-Value="_editDescription" Label="Description" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-desc"/>
                         <div class="d-flex flex-wrap gap-2 mt-1">
                             <MudTextField T="string" @bind-Value="_editCode" Label="Item number" Variant="Variant.Outlined" Immediate="true" InputId="receipt-edit-code" Style="max-width: 9rem"/>
@@ -208,22 +224,22 @@
                         {
                             <MudText Typo="Typo.caption" Color="Color.Error" data-testid="receipt-edit-problem">@_editProblem</MudText>
                         }
-                        <div class="d-flex gap-2 mt-1">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => SaveLine(line)" data-testid="receipt-line-save">Correct</MudButton>
-                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => _editing = null">Cancel</MudButton>
+                        <div class="d-flex gap-2 mt-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SaveLine(line)" data-testid="receipt-line-save">Correct</MudButton>
+                            <MudButton Variant="Variant.Text" OnClick="() => _editing = null">Cancel</MudButton>
                         </div>
-                    </MudPaper>
+                    </div>
                 }
                 else if (ocr)
                 {
-                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Edit" Class="mt-1" OnClick="() => EditLine(line)"
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" Class="mt-1 line-correct" OnClick="() => EditLine(line)"
                                data-testid="receipt-line-edit">Correct what was read</MudButton>
                 }
                 @* The best guess, one tap: a product, or - the first time something is bought - a new product of an ingredient
                    ("Ayam Red Curry Paste 185g" is curry paste), its pack read from the description. *@
                 @if (state.Choice == "" && state.Review.Match.Suggestions.FirstOrDefault(s => s.ProductId is not null || s.IngredientId is not null) is { } guess)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1"
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2 line-suggest"
                                OnClick="@(() => Choose(state, guess.ProductId is { } p ? "p:" + p : "n:" + guess.IngredientId))" data-testid="receipt-line-suggest">
                         Is it @guess.Name?
                     </MudButton>
@@ -275,38 +291,44 @@
                         </MudCheckBox>
                     </div>
                 }
-                <MudText Typo="Typo.caption" Class="d-block mt-1" data-testid="receipt-line-will">@Will(state)</MudText>
+                <p class="line-will" data-testid="receipt-line-will">@Will(state)</p>
                     </MudItem>
                 </MudGrid>
-            </MudPaper>
+            </div>
         }
         </div>
 
-        <div class="d-flex gap-2 mt-4 mb-8">
+        <div class="receipt-actions">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanImport)" OnClick="Import" data-testid="receipt-import">
                 Import @_lines.Count lines
             </MudButton>
             <MudButton Variant="Variant.Text" OnClick="Cancel" data-testid="receipt-cancel">Cancel</MudButton>
         </div>
+        </PadSheet>
     }
 
     @if (_review is null)
     {
-        <MudText Typo="Typo.h6" Component="h2" Class="mt-6">Imported</MudText>
-        @if (_receipts.Count == 0)
-        {
-            <MudText Class="mud-text-secondary">None yet.</MudText>
-        }
-        @foreach (ReceiptRow row in _receipts)
-        {
-            <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="receipt-row" data-id="@row.Receipt.Id">
-                <MudText>@StoreName(row.Receipt.StoreId) · @ShoppingText.Day(row.Receipt.PurchasedOn) @row.Receipt.PurchasedOn.Year · @Money.Format(row.Receipt.TotalCents)</MudText>
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                    @row.Lines lines · @row.Unmatched not matched · imported @ShoppingText.Day(row.Receipt.ImportedOn)
-                </MudText>
-            </MudPaper>
-        }
+        <PadSheet Title="Imported receipts" Class="mt-4">
+            @if (_receipts.Count == 0)
+            {
+                <p class="pad-note">None yet - a receipt you add above shows here once it is imported.</p>
+            }
+            @foreach (ReceiptRow row in _receipts)
+            {
+                <PadRow Label="@StoreName(row.Receipt.StoreId)" TestId="receipt-row" DataId="@row.Receipt.Id.ToString()">
+                    <div class="imported-line">
+                        <span class="imported-day">@ShoppingText.Day(row.Receipt.PurchasedOn) @row.Receipt.PurchasedOn.Year</span>
+                        <span class="imported-total">@Money.Format(row.Receipt.TotalCents)</span>
+                    </div>
+                    <div class="pad-entry-meta">
+                        @row.Lines lines · @row.Unmatched not matched · imported @ShoppingText.Day(row.Receipt.ImportedOn)
+                    </div>
+                </PadRow>
+            }
+        </PadSheet>
     }
+</div>
 </LocalDataGate>
 
 @code {

@@ -16,11 +16,9 @@
 
 <PageTitle>Slots - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Slots of the day</MudText>
-<MudText Class="mt-1 mud-text-secondary">A plan shows each day's meals in this order.</MudText>
-
 <LocalDataGate Start="Start">
-    <NameList Items="_items" Noun="slot" TestId="slot" NewLabel="New slot" UsedByNoun="plan" AllowSameName="true"
+    <NameList Title="Slots of the day" Subtitle="A plan shows each day's meals in this order." Unsent="_unsent"
+              Items="_items" Noun="slot" TestId="slot" NewLabel="New slot" UsedByNoun="plan" AllowSameName="true"
               NameProblem="SlotRules.NameProblem"
               InUseHint="Move its entries to another slot first."
               OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
@@ -29,10 +27,12 @@
 @code {
     private List<Slot>         _slots = [];
     private List<NameListItem> _items = [];
+    private HashSet<Guid>      _unsent = [];
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
         _slots = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
+        _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
         PlanBook plans = await PlanBook.LoadAsync(db);
         DateOnly today = DateOnly.FromDateTime(DateTime.Now);
         List<CalendarEntry> coming = await CalendarBook.ComingAsync(db, today);

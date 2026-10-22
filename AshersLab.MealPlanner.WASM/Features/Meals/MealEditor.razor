@@ -5,13 +5,17 @@
 
 @*
     One meal's own fields: name, group, kind, serves, the price of a fixed-cost meal, notes - and delete. Its
-    ingredients are edited on the meal's page, one row at a time. A dialog, full screen on a phone; like the other
+    ingredients are edited on the meal's page, one row at a time. A dialog, full screen on a phone, on enamel with
+    its title in the pad's green and Save the one filled action; like the other
     editors it only edits a draft and answers it, and the page turns the answer into an op.
 
     Serves has no default for a new batch: a wrong "1" would make every per-serve cost wrong without anyone noticing.
 *@
 
-<MudDialog data-testid="meal-editor">
+<MudDialog Class="pad-dialog" data-testid="meal-editor">
+    <TitleContent>
+        <h2 class="dialog-title">@(IsNew ? "New meal" : "Edit meal")</h2>
+    </TitleContent>
     <DialogContent>
         <form id="meal-editor-form" @onsubmit="Save" @onsubmit:preventDefault>
             <MudTextField T="string" @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Immediate="true"
@@ -30,7 +34,7 @@
                 </select>
             </label>
 
-            <MudText Typo="Typo.subtitle2" Class="mt-4">What kind of meal</MudText>
+            <h3 class="field-label">What kind of meal</h3>
             <MudRadioGroup T="MealKind" @bind-Value="_kind" data-testid="meal-kind">
                 @foreach (MealKind kind in Enum.GetValues<MealKind>())
                 {
@@ -74,9 +78,10 @@
     <DialogActions>
         @if (!IsNew)
         {
-            <MudButton Color="Color.Error" OnClick="Delete" Class="mr-auto" data-testid="meal-delete">Delete</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteOutline" OnClick="Delete"
+                       Class="mr-auto" data-testid="meal-delete">Delete</MudButton>
         }
-        <MudButton OnClick="() => Dialog.Cancel()" data-testid="meal-cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => Dialog.Cancel()" data-testid="meal-cancel">Cancel</MudButton>
         <MudButton ButtonType="ButtonType.Submit" form="meal-editor-form" Color="Color.Primary"
                    Variant="Variant.Filled" data-testid="meal-save">Save</MudButton>
     </DialogActions>

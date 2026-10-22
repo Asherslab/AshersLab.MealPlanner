@@ -1,0 +1,38 @@
+/* One ingredient's stock: what there is now, big; the quick counts as a row of buttons under small bottle-green print;
+   then what the plan takes and the history as ruled lines. */
+
+.sheet-now {
+    margin: 0 0 4px;
+    font-size: 1.375rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+}
+
+.sheet-heading {
+    margin: 18px 0 8px;
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+.sheet-heading-gap { margin-top: 26px; }
+
+.sheet-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.sheet-buttons-after { margin-top: 10px; }
+.sheet-buttons ::deep .mud-button-root { min-height: 44px; }
+
+.sheet-rows { border-bottom: 1px solid var(--rule); }
+.sheet-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 4px 0;
+    border-top: 1px solid var(--rule);
+    font-size: 0.9375rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+.sheet-row-text { flex: 1 1 auto; min-width: 0; }
+
+.sheet-empty { margin: 0; font-size: 0.9375rem; color: var(--ink-soft); }

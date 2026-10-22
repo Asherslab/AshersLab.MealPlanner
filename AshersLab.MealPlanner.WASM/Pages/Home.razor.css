@@ -1,0 +1,5 @@
+/* A pad is the size of a pad: on a wide screen the day keeps a phone-ish column rather than spanning the page. */
+.today {
+    max-width: 640px;
+    margin: 0 auto;
+}

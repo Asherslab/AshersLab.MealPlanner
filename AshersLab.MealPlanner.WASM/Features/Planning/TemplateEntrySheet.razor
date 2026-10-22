@@ -4,24 +4,28 @@
 
 @*
     One thing eaten in a plan: the meals it may be (the first is the usual one; "Leftovers / Noodles / Pizza"
-    is three) and who eats it. Adding one is: tap the slot's +, type a few letters, tap the meal, Save. The search box
+    is three; listed in marker, the usual one marked) and who eats it (each person's magnet on their chip). Adding one is: tap the slot's +, type a few letters, tap the meal, Save. The search box
     stays up after a tap so another choice is one more tap. Full screen on a phone. Like the other editors it only
     answers; the page writes the ops.
 *@
 
 <MudDialog data-testid="entry-sheet">
     <DialogContent>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="entry-where">@Where</MudText>
+        <p class="sheet-where" data-testid="entry-where">@Where</p>
 
         @if (_meals.Count > 0)
         {
-            <MudText Typo="Typo.overline" Class="d-block mt-2">@(_meals.Count == 1 ? "Meal" : "One of")</MudText>
+            <h3 class="sheet-label">@(_meals.Count == 1 ? "Meal" : "One of")</h3>
             @for (int i = 0; i < _meals.Count; i++)
             {
                 Guid meal = _meals[i];
                 int at = i;
-                <div class="list-row d-flex align-center gap-2 px-2 py-1" @key="meal" data-testid="entry-choice" data-id="@meal">
-                    <MudText Class="flex-grow-1" data-testid="entry-choice-name">@MealName(meal)</MudText>
+                <div class="sheet-choice" @key="meal" data-testid="entry-choice" data-id="@meal">
+                    <span class="marker sheet-choice-name" data-testid="entry-choice-name">@MealName(meal)</span>
+                    @if (at == 0 && _meals.Count > 1)
+                    {
+                        <span class="sheet-usual">usual</span>
+                    }
                     @if (at > 0)
                     {
                         <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="Make it the usual one"
@@ -39,38 +43,38 @@
                       InputId="entry-search" data-testid="entry-search"/>
         @if (_meals.Count == 0 || !string.IsNullOrWhiteSpace(_search))
         {
-            <div class="mt-1">
+            <div class="sheet-options">
                 @foreach (PickerOption option in Matches().Take(8))
                 {
-                    <div class="list-row px-2 py-3" @key="option.Id" role="button" tabindex="0"
-                         @onclick="() => Choose(option)" data-testid="entry-meal-option" data-id="@option.Id">
-                        <MudText>@option.Name</MudText>
-                    </div>
+                    <div class="sheet-option" @key="option.Id" role="button" tabindex="0"
+                         @onclick="() => Choose(option)" @onkeydown="e => ChooseOnEnter(e, option)"
+                         data-testid="entry-meal-option" data-id="@option.Id">@option.Name</div>
                 }
                 @if (!Matches().Any())
                 {
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2" data-testid="entry-no-match">
+                    <p class="sheet-note" data-testid="entry-no-match">
                         @(Meals.Count == 0 ? "No meals yet - add them on the Meals page first." : "No meal like that - add it on the Meals page first.")
-                    </MudText>
+                    </p>
                 }
             </div>
         }
 
-        <MudText Typo="Typo.overline" Class="d-block mt-4">Who eats it</MudText>
-        <div class="d-flex flex-wrap gap-2">
+        <h3 class="sheet-label">Who eats it</h3>
+        <div class="sheet-chips">
             <MudChip T="string" Color="@(_people is null ? Color.Primary : Color.Default)" Variant="@(_people is null ? Variant.Filled : Variant.Outlined)"
                      OnClick="() => _people = null" data-testid="entry-everyone">Everyone</MudChip>
             @foreach (PersonOption person in People)
             {
                 bool chosen = _people?.Contains(person.Id) == true;
-                <MudChip T="string" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
-                         Style="@(chosen ? $"background:{person.Colour};color:#fff" : $"border-color:{person.Colour}")"
-                         OnClick="() => Toggle(person.Id)" data-testid="entry-person" data-id="@person.Id">@person.Name</MudChip>
+                <MudChip T="string" Color="@(chosen ? Color.Primary : Color.Default)" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                         OnClick="() => Toggle(person.Id)" data-testid="entry-person" data-id="@person.Id">
+                    <span class="magnet sheet-magnet" style="@($"background:{person.Colour}")"></span>@person.Name
+                </MudChip>
             }
         </div>
         @if (People.Count == 0)
         {
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">Add the household on the People page to plan for some of them.</MudText>
+            <p class="sheet-note">Add the household on the People page to plan for some of them.</p>
         }
 
         @if (_error is not null)
@@ -146,6 +150,8 @@
         _error  = null;
         await (_searchField?.FocusAsync() ?? ValueTask.CompletedTask);
     }
+
+    private Task ChooseOnEnter(KeyboardEventArgs e, PickerOption option) => e.Key == "Enter" ? Choose(option) : Task.CompletedTask;
 
     private void MakeFirst(int at)
     {

@@ -26,78 +26,83 @@
 
 <PageTitle>Pantry - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Pantry</MudText>
-
 <LocalDataGate Start="Start">
-    <MudTextField T="string" @bind-Value="_search" Label="Find an ingredient" Variant="Variant.Outlined" Class="mt-4"
-                  Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
-                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                  InputId="pantry-search" data-testid="pantry-search"/>
+<div class="pantry">
+    <PadSheet Title="Pantry" Subtitle="About how much is at home. Tap one to put it right." TestId="pantry-list">
+        <div class="pantry-search">
+            <MudTextField T="string" @bind-Value="_search" Label="Find an ingredient" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          InputId="pantry-search" data-testid="pantry-search"/>
+        </div>
 
-    @if (_pantry is not null && !Groups().Any() && Staples().Count == 0 && Filter.Length == 0)
-    {
-        <MudText Class="pa-4 mud-text-secondary" data-testid="pantry-empty">
-            Nothing counted yet - find an ingredient above and say how much you have.
-        </MudText>
-    }
+        @if (_pantry is not null && !Groups().Any() && Staples().Count == 0 && Filter.Length == 0)
+        {
+            <p class="pad-note pantry-empty" data-testid="pantry-empty">
+                Nothing counted yet - find an ingredient above and say how much you have.
+            </p>
+        }
+        else if (_pantry is not null && Filter.Length > 0 && !Groups().Any() && Untracked().Count == 0 && Staples().Count == 0)
+        {
+            <p class="pad-note pantry-empty">
+                Nothing called that. Check the spelling, or add it on <a href="ingredients">Ingredients</a> first.
+            </p>
+        }
 
-    @foreach ((string heading, List<Ingredient> items) in Groups())
-    {
-        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="pantry-group">@heading</MudText>
-        <MudPaper Outlined="true">
+        @foreach ((string heading, List<Ingredient> items) in Groups())
+        {
+            <h3 class="pantry-group" data-testid="pantry-group">@heading</h3>
             @foreach (Ingredient ingredient in items)
             {
                 StockLevel now = _pantry!.At(ingredient.Id, Today);
-                <div class="list-row d-flex align-center gap-2 px-4 py-2" @key="ingredient.Id" role="button" tabindex="0"
+                <div class="pantry-row" @key="ingredient.Id" role="button" tabindex="0"
                      @onclick="() => Open(ingredient)" data-testid="pantry-row" data-id="@ingredient.Id">
-                    <div class="flex-grow-1">
-                        <MudText data-testid="pantry-name">@ingredient.Name</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="pantry-detail">@Detail(ingredient)</MudText>
-                    </div>
-                    <MudText Class="@($"text-nowrap {(now.State is StockState.InStock ? "" : "mud-warning-text")}")"
-                             data-testid="pantry-level" data-state="@now.State">@PantryText.Level(now, ingredient.BaseUnit)</MudText>
+                    <span class="pantry-what">
+                        <span class="pantry-name" data-testid="pantry-name">@ingredient.Name</span>
+                        <span class="pantry-detail" data-testid="pantry-detail">@Detail(ingredient)</span>
+                    </span>
+                    <span class="@($"pantry-level{(now.State is StockState.InStock ? "" : " low")}")"
+                          data-testid="pantry-level" data-state="@now.State">@PantryText.Level(now, ingredient.BaseUnit)</span>
                 </div>
             }
-        </MudPaper>
-    }
+        }
 
-    @if (Untracked() is { Count: > 0 } untracked)
-    {
-        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block">Not counted yet</MudText>
-        <MudPaper Outlined="true">
+        @if (Untracked() is { Count: > 0 } untracked)
+        {
+            <h3 class="pantry-group">Not counted yet</h3>
             @foreach (Ingredient ingredient in untracked)
             {
-                <div class="list-row d-flex align-center px-4 py-2" @key="ingredient.Id" role="button" tabindex="0"
+                <div class="pantry-row" @key="ingredient.Id" role="button" tabindex="0"
                      @onclick="() => Open(ingredient)" data-testid="pantry-untracked" data-id="@ingredient.Id">
-                    <MudText Class="flex-grow-1">@ingredient.Name</MudText>
-                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/>
+                    <span class="pantry-what"><span class="pantry-name">@ingredient.Name</span></span>
+                    <span class="pantry-add"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/></span>
                 </div>
             }
-        </MudPaper>
-    }
+        }
 
-    @if (Staples() is { Count: > 0 } staples)
-    {
-        <MudText Typo="Typo.overline" Component="h2" Class="mt-4 d-block" data-testid="pantry-staples">Staples</MudText>
-        <MudPaper Outlined="true">
+        @if (Staples() is { Count: > 0 } staples)
+        {
+            <h3 class="pantry-group" data-testid="pantry-staples">Staples</h3>
             @foreach (Ingredient staple in staples)
             {
-                <div class="list-row d-flex flex-wrap align-center gap-2 px-4 py-2" @key="staple.Id" data-testid="pantry-staple" data-id="@staple.Id">
-                    <MudText Class="flex-grow-1" data-testid="pantry-staple-name">@staple.Name</MudText>
-                    <div class="d-flex gap-1" role="group" aria-label="@($"{staple.Name}: have, running low or out")">
+                <div class="pantry-row pantry-staple" @key="staple.Id" data-testid="pantry-staple" data-id="@staple.Id">
+                    <span class="pantry-what"><span class="pantry-name" data-testid="pantry-staple-name">@staple.Name</span></span>
+                    <div class="pantry-states" role="group" aria-label="@($"{staple.Name}: have, running low or out")">
                         @foreach (StapleStock state in Enum.GetValues<StapleStock>())
                         {
                             bool chosen = staple.StapleStock == state;
-                            <MudChip T="string" Size="Size.Small" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
-                                     Color="@(chosen ? state == StapleStock.Have ? Color.Success : Color.Warning : Color.Default)"
-                                     OnClick="() => SetStaple(staple, state)"
-                                     data-testid="pantry-staple-state" data-state="@state" data-chosen="@(chosen ? "true" : "false")">@state.Label()</MudChip>
+                            <MudButton Size="Size.Small" Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                                       Color="@(chosen ? state == StapleStock.Have ? Color.Primary : Color.Warning : Color.Default)"
+                                       Class="pantry-state" aria-pressed="@(chosen ? "true" : "false")"
+                                       OnClick="() => SetStaple(staple, state)"
+                                       data-testid="pantry-staple-state" data-state="@state" data-chosen="@(chosen ? "true" : "false")">@state.Label()</MudButton>
                         }
                     </div>
                 </div>
             }
-        </MudPaper>
-    }
+        }
+    </PadSheet>
+</div>
 </LocalDataGate>
 
 @code {

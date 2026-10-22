@@ -191,6 +191,10 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   op back, or a push answers "already have it" at a seq the cursor has reached (`LocalOps.AcknowledgeAsync`). A
   push's "accepted" alone does not remove it - if the server is then restored from a backup older than that push,
   the op is still here and simply goes again. A rejected op leaves at once; it would be rejected forever.
+- **What is unsent shows.** Pages mark a row whose id is still in the outbox with a dashed edge ("not sent yet").
+  So a pull that confirms this device's own ops reports a change (`SyncRoundResult.Changed`, then
+  `SyncLoop.DataChanged`) although no row changed: the pages re-read and the edge goes.
+  `SyncEndToEndTests.A_round_that_sends_this_browsers_own_edit_says_pages_should_re_read`.
 - **The cursor** (`SyncState`: epoch, pulled-through seq and that op's chain, this device's clock) is one row
   shared by every window.
 - **A copy that cannot be opened** (a failed migration) is reset from the page, by the planner, after a warning

@@ -1,6 +1,7 @@
 using System.Globalization;
 using AshersLab.MealPlanner.Shared.Data.Shopping;
 using AshersLab.MealPlanner.Shared.Domain.Ingredients;
+using AshersLab.MealPlanner.Shared.Domain.Meals;
 using AshersLab.MealPlanner.Shared.Domain.Prices;
 using AshersLab.MealPlanner.Shared.Domain.Shopping;
 
@@ -35,6 +36,19 @@ public static class ShoppingText
                                  + (plan.Have > 0 ? $" · need {Quantity.Format(plan.Needed, unit)}, have about {Quantity.Format(plan.Have, unit)}" : ""),
         };
     }
+
+    /// <summary>What the progress figure counts: "to get · 2 done", or "to get · all done" once nothing is left.</summary>
+    public static string ProgressLabel(int left, int done) => left == 0 && done > 0 ? "to get · all done" : $"to get · {done} done";
+
+    /// <summary>
+    /// A cost as the week tiles print it - the known amount big, the rest small around it - in pieces that read as
+    /// <see cref="Cost.Format"/> end to end: ("from ", "$3.12", " + 1 unpriced"). With nothing priced the figure is "$?",
+    /// never "$0.00".
+    /// </summary>
+    public static (string Before, string Figure, string After) Figure(Cost cost) =>
+        cost.Complete ? ("", Money.Format(cost.Cents), "")
+        : cost.Cents == 0 ? ("", "$?", $" · {cost.Missing} unpriced")
+        : ("from ", Money.Format(cost.Cents), $" + {cost.Missing} unpriced");
 
     /// <summary>"$24.99", "unpriced", or nothing for a line in the pantry.</summary>
     public static string Cost(ShoppingLine line) => line.Plan.Need switch

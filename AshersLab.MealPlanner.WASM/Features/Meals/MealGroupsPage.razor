@@ -17,22 +17,24 @@
 
 <PageTitle>Meal groups - Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">Meal groups</MudText>
-<MudText Class="mt-1 mud-text-secondary">The meals are grouped in this order.</MudText>
-
-<LocalDataGate Start="Start">
-    <NameList Items="_items" Noun="meal group" TestId="meal-group" NewLabel="New meal group" UsedByNoun="meal"
-              NameProblem="MealGroupRules.NameProblem"
-              InUseHint="Move them to another group first."
-              OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
-</LocalDataGate>
+<div class="meal-groups">
+    <LocalDataGate Start="Start">
+        <NameList Title="Meal groups" Subtitle="The Meals list shows its groups in this order." Unsent="_unsent"
+                  Items="_items" Noun="meal group" TestId="meal-group" NewLabel="New meal group" UsedByNoun="meal"
+                  NameProblem="MealGroupRules.NameProblem"
+                  InUseHint="Move them to another group first."
+                  OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
+    </LocalDataGate>
+</div>
 
 @code {
     private List<MealGroup>    _groups = [];
     private List<NameListItem> _items  = [];
+    private HashSet<Guid>      _unsent = [];
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
+        _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
         _groups = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
         ILookup<Guid?, string> usedBy = (await db.Meals.AsNoTracking()
                 .Where(m => !m.Deleted && m.GroupId != null)

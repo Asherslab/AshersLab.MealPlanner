@@ -1,0 +1,92 @@
+/* The recipe box: one pad sheet, a phone-ish column even on a wide screen (as Today). */
+.meals {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+/* The box that searches and starts a new meal: the first line written at the top of the sheet. */
+.meals-find {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 16px 14px 10px;
+}
+
+.meals-find ::deep .mud-input-control {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.meals-find ::deep .meals-add {
+    flex: none;
+    min-height: 56px;
+    margin-top: 0;
+}
+
+/* A group's name: small bold print in the pad's green, a ruled line above it, more space above than below. */
+.meals-group {
+    margin: 0;
+    padding: 18px 14px 6px;
+    border-top: 1px solid var(--rule);
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+
+/* The block of a group's rows. Its "mud-paper" class is only the scripts' hook; it is not a paper box. */
+.meals-rows.mud-paper {
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    color: inherit;
+}
+
+.meals-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 60px;
+    padding: 8px 8px 8px 14px;
+    border-top: 1px solid var(--rule);
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.meals-row:hover {
+    background: rgba(47, 93, 80, 0.05);
+}
+
+.meals-row:hover .marker {
+    text-decoration: underline;
+    text-decoration-color: var(--bottle);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+}
+
+.meals-row-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.meals-row-text > .marker {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.meals-row-detail {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+.meals ::deep .meals-row-go {
+    flex: none;
+    color: var(--chrome);
+}
+
+/* The sheet's bottom corners are rounded; the last row stays inside them. */
+.meals-rows:last-child > .meals-row:last-child {
+    border-radius: 0 0 var(--pad-radius) var(--pad-radius);
+}

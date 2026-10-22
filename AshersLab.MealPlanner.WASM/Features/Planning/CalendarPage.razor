@@ -6,6 +6,7 @@
 @using AshersLab.MealPlanner.Shared.Data.Shopping
 @using AshersLab.MealPlanner.Shared.Data.Sync
 @using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.Shared.Domain.Prices
 @using AshersLab.MealPlanner.Shared.Domain.Sync
 @using AshersLab.MealPlanner.WASM.Data
 @using AshersLab.MealPlanner.WASM.Features.Ingredients
@@ -18,171 +19,211 @@
 @inject NavigationManager Navigation
 
 @*
-    The calendar, a week at a time: what is planned on each real date, filled from a plan and changed by hand. On a
-    desktop the week is a grid - slots down, dates across; on a phone a day at a time. Each entry shows its meal and what
-    a serve costs (incomplete costs say so). Tapping one opens its sheet: another of the plan's choices, any other meal,
-    who eats it, Skip, move. Skipped entries wait under "To replan" until they are put on another day or removed.
+    The calendar, the whole week's sheet of the fridge-door pad: what is planned on each real date, filled from a plan
+    and changed by hand. The head band carries the week, its stepper and "Fill from a plan". On a desktop the week is a
+    grid - slots printed down the side, days across, today's column marked and its date circled in tomato; on a phone a
+    day at a time under a strip of the week's days. Meals are in marker, with what a serve costs and the batch's serves
+    in small print under them; magnets only when an entry is for some of the household, not everyone. A skipped entry
+    stays, struck through, and waits under "To replan" until it is put on another day or removed; one not yet on the
+    server has a dashed edge. Under the sheet, the week's two costs as tiles.
 *@
 
 <PageTitle>Calendar - Meal Planner</PageTitle>
 
 <LocalDataGate Start="Start">
-    <div class="d-flex align-center gap-1 flex-wrap">
-        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" aria-label="The week before" OnClick="() => GoToWeek(_monday.AddDays(-7))"
-                       data-testid="cal-prev"/>
-        <MudText Typo="Typo.h5" Component="h1" data-testid="cal-week">@CalendarText.Week(_monday)</MudText>
-        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" aria-label="The week after" OnClick="() => GoToWeek(_monday.AddDays(7))"
-                       data-testid="cal-next"/>
-        @if (_monday != Rotation.MondayOf(Today))
-        {
-            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => GoToWeek(Rotation.MondayOf(Today))" data-testid="cal-this-week">This week</MudButton>
-        }
-        <MudSpacer/>
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.EventRepeat" OnClick="ApplyPlan" data-testid="cal-apply">Fill from a plan</MudButton>
-    </div>
-    @if (WeeksOnScreen() is { Length: > 0 } weeks)
-    {
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" data-testid="cal-plan-weeks">@weeks</MudText>
-    }
+<div class="cal">
     @if (_applied is not null)
     {
-        <MudAlert Severity="Severity.Success" Dense="true" Class="mt-2" ShowCloseIcon="true" CloseIconClicked="() => _applied = null"
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _applied = null"
                   data-testid="cal-applied">@_applied</MudAlert>
     }
 
-    @* A desktop: the whole week as a grid. *@
-    <MudHidden Breakpoint="Breakpoint.SmAndDown">
-        <div class="plan-grid-scroll mt-3">
-            <table class="plan-grid" data-testid="cal-grid">
-                <thead>
-                    <tr>
-                        <th></th>
-                        @foreach (DateOnly date in Days)
-                        {
-                            <th class="@(date == Today ? "cal-today" : null)">@CalendarText.Day(date)</th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
+    <PadSheet Class="cal-pad">
+        <Head>
+            <h2 data-testid="cal-week">@CalendarText.Week(_monday)</h2>
+            @if (WeeksOnScreen() is { Length: > 0 } weeks)
+            {
+                <p data-testid="cal-plan-weeks">@weeks</p>
+            }
+            <div class="cal-step">
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The week before"
+                               OnClick="() => GoToWeek(_monday.AddDays(-7))" data-testid="cal-prev"/>
+                <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The week after"
+                               OnClick="() => GoToWeek(_monday.AddDays(7))" data-testid="cal-next"/>
+            </div>
+            <div class="cal-head-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.EventRepeat" OnClick="ApplyPlan"
+                           data-testid="cal-apply">Fill from a plan</MudButton>
+                @if (_monday != Rotation.MondayOf(Today))
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
+                               OnClick="() => GoToWeek(Rotation.MondayOf(Today))" data-testid="cal-this-week">This week</MudButton>
+                }
+            </div>
+        </Head>
+        <ChildContent>
+            @if (_slots.Count == 0)
+            {
+                <p class="pad-note">
+                    The day has no slots yet. Add breakfast, lunch, dinner and the rest on <a href="slots">Slots of the day</a>.
+                </p>
+            }
+
+            @* A desktop: the whole week, slots printed down the side, days across. *@
+            <MudHidden Breakpoint="Breakpoint.SmAndDown">
+                <div class="cal-grid-scroll">
+                    <table class="cal-grid" data-testid="cal-grid">
+                        <thead>
+                            <tr>
+                                <td class="cal-corner"></td>
+                                @foreach (DateOnly date in Days)
+                                {
+                                    <th class="@DayClass("cal-dayhead", date)" aria-current="@(date == Today ? "date" : null)">
+                                        <span class="cal-dow">@(date == Today ? "Today" : Dow(date))</span>
+                                        <span class="cal-dnum">@date.Day</span>
+                                    </th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (Slot slot in _slots)
+                            {
+                                <tr @key="slot.Id">
+                                    <th class="cal-slot-head" scope="row">@slot.Name</th>
+                                    @foreach (DateOnly date in Days)
+                                    {
+                                        <td class="@DayClass("cal-cell", date)" data-testid="cal-cell" data-date="@OpValues.FormatDate(date)" data-slot="@slot.Id">
+                                            @foreach (PlannedEntry entry in _calendar.On(date, slot.Id))
+                                            {
+                                                <div class="@EntryClass(entry)" @key="entry.Id" role="button" tabindex="0"
+                                                     @onclick="() => EditEntry(entry)" @onkeydown="e => Key(e, () => EditEntry(entry))"
+                                                     data-testid="cal-entry" data-id="@entry.Id" data-skipped="@(entry.Skipped ? "true" : "false")">
+                                                    <span class="@MealClass(entry)" data-testid="cal-entry-meal">@MealName(entry.MealId)</span>
+                                                    <span class="cal-entry-meta">
+                                                        <PeopleDots People="PeopleOf(entry)"/>
+                                                        <span data-testid="cal-entry-cost">@CostText(entry)</span>
+                                                    </span>
+                                                    @if (ServesLine(entry) is { } serves)
+                                                    {
+                                                        <span class="@ServesClass(entry)" data-testid="cal-entry-serves">@serves</span>
+                                                    }
+                                                </div>
+                                            }
+                                            <button type="button" class="cal-add" aria-label="@($"Add to {CalendarText.Day(date)} {slot.Name}")"
+                                                    @onclick="() => AddEntry(date, slot)" data-testid="cal-cell-add">
+                                                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/>
+                                            </button>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </MudHidden>
+
+            @* A phone: the week's days in a strip, and one day's slots ruled down the sheet. *@
+            <MudHidden Breakpoint="Breakpoint.MdAndUp">
+                <div class="cal-strip" role="tablist" aria-label="Days of the week">
+                    @foreach (DateOnly d in Days)
+                    {
+                        DateOnly date = d;
+                        <MudButton Variant="@(date == _day ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                                   OnClick="() => _day = date" role="tab" aria-selected="@(date == _day)" Class="@DayClass("cal-day", date)"
+                                   data-testid="cal-day" data-date="@OpValues.FormatDate(date)">
+                            <span class="cal-day-label"><span class="cal-dow">@Dow(date)</span><span class="cal-dnum">@date.Day</span></span>
+                        </MudButton>
+                    }
+                </div>
+                <p class="@(_day == Today ? "cal-day-title is-today" : "cal-day-title")" data-testid="cal-day-title">@CalendarText.LongDay(_day)@(_day == Today ? " · today" : "")</p>
+                <div data-testid="cal-day-view">
                     @foreach (Slot slot in _slots)
                     {
-                        <tr @key="slot.Id">
-                            <th class="plan-grid-slot">@slot.Name</th>
-                            @foreach (DateOnly date in Days)
-                            {
-                                <td class="@(date < Today ? "cal-past" : null)" data-testid="cal-cell" data-date="@OpValues.FormatDate(date)" data-slot="@slot.Id">
-                                    @foreach (PlannedEntry entry in _calendar.On(date, slot.Id))
-                                    {
-                                        <div class="@EntryClass(entry)" @key="entry.Id" role="button" tabindex="0" @onclick="() => EditEntry(entry)"
-                                             data-testid="cal-entry" data-id="@entry.Id" data-skipped="@(entry.Skipped ? "true" : "false")">
-                                            <span data-testid="cal-entry-meal">@MealName(entry.MealId)</span>
-                                            <PeopleDots People="PeopleOf(entry)"/>
-                                            <span class="d-block mud-text-secondary cal-cost" data-testid="cal-entry-cost">@CostText(entry)</span>
-                                            @if (ServesLine(entry) is { } serves)
-                                            {
-                                                <span class="@ServesClass(entry)" data-testid="cal-entry-serves">@serves</span>
-                                            }
-                                        </div>
-                                    }
-                                    <button type="button" class="plan-add" aria-label="@($"Add to {CalendarText.Day(date)} {slot.Name}")"
-                                            @onclick="() => AddEntry(date, slot)" data-testid="cal-cell-add">+</button>
-                                </td>
-                            }
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </MudHidden>
-
-    @* A phone: one day at a time. *@
-    <MudHidden Breakpoint="Breakpoint.MdAndUp">
-        <div class="d-flex flex-wrap gap-1 mt-3" role="tablist">
-            @foreach (DateOnly d in Days)
-            {
-                DateOnly date = d;
-                <MudButton Size="Size.Small" Variant="@(date == _day ? Variant.Filled : Variant.Text)" Color="Color.Primary"
-                           OnClick="() => _day = date" role="tab" aria-selected="@(date == _day)" Class="plan-day cal-day-button"
-                           data-testid="cal-day" data-date="@OpValues.FormatDate(date)">
-                    <span class="cal-day-label"><span>@date.ToString("ddd", System.Globalization.CultureInfo.InvariantCulture)</span><span>@date.Day</span></span>
-                </MudButton>
-            }
-        </div>
-        <MudText Typo="Typo.subtitle1" Class="mt-2" data-testid="cal-day-title">@CalendarText.LongDay(_day)@(_day == Today ? " · today" : "")</MudText>
-        <MudPaper Outlined="true" Class="mt-1" data-testid="cal-day-view">
-            @foreach (Slot slot in _slots)
-            {
-                <div class="plan-day-slot px-4 py-2" @key="slot.Id" data-testid="cal-cell" data-date="@OpValues.FormatDate(_day)" data-slot="@slot.Id">
-                    <div class="d-flex align-center">
-                        <MudText Typo="Typo.overline" Class="flex-grow-1">@slot.Name</MudText>
-                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add to {slot.Name}")"
-                                       OnClick="() => AddEntry(_day, slot)" data-testid="cal-cell-add"/>
-                    </div>
-                    @foreach (PlannedEntry entry in _calendar.On(_day, slot.Id))
-                    {
-                        <div class="@($"{EntryClass(entry)} d-flex align-center gap-2")" @key="entry.Id" role="button" tabindex="0"
-                             @onclick="() => EditEntry(entry)" data-testid="cal-entry" data-id="@entry.Id" data-skipped="@(entry.Skipped ? "true" : "false")">
-                            <div class="flex-grow-1">
-                                <MudText data-testid="cal-entry-meal">@MealName(entry.MealId)</MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="cal-entry-cost">@CostText(entry)</MudText>
-                                @if (ServesLine(entry) is { } serves)
+                        List<PlannedEntry> entries = [.. _calendar.On(_day, slot.Id)];
+                        <div class="pad-row cal-slot" @key="slot.Id" data-testid="cal-cell" data-date="@OpValues.FormatDate(_day)" data-slot="@slot.Id">
+                            <span class="pad-label">@slot.Name</span>
+                            <div class="pad-entry">
+                                @if (entries.Count == 0)
                                 {
-                                    <span class="@ServesClass(entry)" data-testid="cal-entry-serves">@serves</span>
+                                    <button type="button" class="pad-blank cal-blank" @onclick="() => AddEntry(_day, slot)">Nothing planned</button>
+                                }
+                                @foreach (PlannedEntry entry in entries)
+                                {
+                                    <div class="@EntryClass(entry)" @key="entry.Id" role="button" tabindex="0"
+                                         @onclick="() => EditEntry(entry)" @onkeydown="e => Key(e, () => EditEntry(entry))"
+                                         data-testid="cal-entry" data-id="@entry.Id" data-skipped="@(entry.Skipped ? "true" : "false")">
+                                        <span class="@MealClass(entry)" data-testid="cal-entry-meal">@MealName(entry.MealId)</span>
+                                        <span class="cal-entry-meta">
+                                            <PeopleDots People="PeopleOf(entry)" Named="true"/>
+                                            <span data-testid="cal-entry-cost">@CostText(entry)</span>
+                                        </span>
+                                        @if (ServesLine(entry) is { } serves)
+                                        {
+                                            <span class="@ServesClass(entry)" data-testid="cal-entry-serves">@serves</span>
+                                        }
+                                    </div>
                                 }
                             </div>
-                            <PeopleDots People="PeopleOf(entry)" Named="true"/>
+                            <div class="cal-slot-add">
+                                <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" aria-label="@($"Add to {slot.Name}")"
+                                               OnClick="() => AddEntry(_day, slot)" data-testid="cal-cell-add"/>
+                            </div>
                         </div>
                     }
                 </div>
-            }
-        </MudPaper>
-    </MudHidden>
+            </MudHidden>
+        </ChildContent>
+    </PadSheet>
 
-    @* The week's two costs: what the shop costs (whole packs after the pantry), and what the food eaten was worth. *@
-    <MudPaper Outlined="true" Class="d-flex flex-wrap align-center gap-4 px-4 py-2 mt-4" data-testid="cal-week-cost">
-        <div>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Spend this week</MudText>
-            <MudText Typo="Typo.subtitle1" data-testid="cal-week-spend">@_week.Spend.Format()</MudText>
+    @*
+        The week's two costs, as the week tiles: what the shop costs (whole packs after the pantry) - which opens the
+        week's shopping list - and what the food eaten was worth. An incomplete cost keeps its unpriced count right under
+        the number.
+    *@
+    <div class="week-tiles cal-tiles" data-testid="cal-week-cost">
+        <a class="week-tile cal-tile-link" href="@($"shopping?from={OpValues.FormatDate(_monday)}&to={OpValues.FormatDate(_monday.AddDays(6))}")"
+           data-testid="cal-shopping">
+            <b data-testid="cal-week-spend">@Big(_week.Spend)</b>
+            <span>@Small(_week.Spend, "the shop this week")</span>
+            <span class="cal-tile-go">Shopping list <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small"/></span>
+        </a>
+        <div class="week-tile">
+            <b data-testid="cal-week-eaten">@Big(_week.Eaten)</b>
+            <span>@Small(_week.Eaten, "food eaten this week")</span>
         </div>
-        <div>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Food eaten</MudText>
-            <MudText Typo="Typo.subtitle1" data-testid="cal-week-eaten">@_week.Eaten.Format()</MudText>
-        </div>
-        <MudSpacer/>
-        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ShoppingCart" Href="@($"shopping?from={OpValues.FormatDate(_monday)}&to={OpValues.FormatDate(_monday.AddDays(6))}")"
-                   data-testid="cal-shopping">Shopping list</MudButton>
-    </MudPaper>
+    </div>
 
     @if (ServesNotes() is { Count: > 0 } notes)
     {
-        <MudText Typo="Typo.h6" Component="h2" Class="mt-6">Serves</MudText>
-        <MudPaper Outlined="true" Class="mt-1" data-testid="cal-serves">
+        <PadSheet Title="Serves" Class="cal-below" TestId="cal-serves">
             @foreach ((string note, bool problem) in notes)
             {
-                <div class="list-row d-flex align-center gap-2 px-4 py-2" data-testid="cal-serves-note" data-problem="@(problem ? "true" : "false")">
+                <div class="@(problem ? "cal-note cal-note-problem" : "cal-note")" data-testid="cal-serves-note" data-problem="@(problem ? "true" : "false")">
                     <MudIcon Icon="@(problem ? Icons.Material.Filled.ErrorOutline : Icons.Material.Filled.Info)" Size="Size.Small"
-                             Color="@(problem ? Color.Error : Color.Default)"/>
-                    <MudText Typo="Typo.body2">@note</MudText>
+                             Color="@(problem ? Color.Error : Color.Primary)"/>
+                    <span>@note</span>
                 </div>
             }
-        </MudPaper>
+        </PadSheet>
     }
 
     @if (_calendar.ToReplan.Count > 0)
     {
-        <MudText Typo="Typo.h6" Component="h2" Class="mt-6">To replan</MudText>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Skipped. Tap one to put it on another day, or remove it.</MudText>
-        <MudPaper Outlined="true" Class="mt-1" data-testid="cal-replan">
+        <PadSheet Title="To replan" Subtitle="Skipped. Tap one to put it on another day, or remove it." Class="cal-below" TestId="cal-replan">
             @foreach (PlannedEntry entry in _calendar.ToReplan)
             {
-                <div class="list-row d-flex align-center gap-2 px-4 py-2" @key="entry.Id" role="button" tabindex="0"
-                     @onclick="() => EditEntry(entry)" data-testid="cal-replan-entry" data-id="@entry.Id">
-                    <MudText Class="flex-grow-1">@MealName(entry.MealId)</MudText>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@CalendarText.Day(entry.Day) · @SlotName(entry.SlotId)</MudText>
+                <div class="@(_unsent.Contains(entry.Id) ? "pad-row cal-replan-row unsent" : "pad-row cal-replan-row")" @key="entry.Id" role="button" tabindex="0"
+                     @onclick="() => EditEntry(entry)" @onkeydown="e => Key(e, () => EditEntry(entry))"
+                     data-testid="cal-replan-entry" data-id="@entry.Id">
+                    <span class="pad-label">@CalendarText.Day(entry.Day)<br/>@SlotName(entry.SlotId)</span>
+                    <div class="pad-entry">
+                        <span class="marker struck">@MealName(entry.MealId)</span>
+                    </div>
                 </div>
             }
-        </MudPaper>
+        </PadSheet>
     }
+</div>
 </LocalDataGate>
 
 @code {
@@ -197,6 +238,7 @@
     private List<Person>             _people   = [];
     private Dictionary<Guid, Meal>   _meals    = [];
     private List<MealGroup>          _groups   = [];
+    private HashSet<Guid>            _unsent   = [];
 
     private DateOnly _monday = Rotation.MondayOf(Today);
     private DateOnly _day    = Today;
@@ -228,6 +270,7 @@
         _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _meals    = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id);
         _groups   = [.. MealGroupEntity.InOrder(await db.MealGroups.AsNoTracking().Where(g => !g.Deleted).ToListAsync())];
+        _unsent   = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
     }
 
     private void GoToWeek(DateOnly monday) => Navigation.NavigateTo($"calendar?week={OpValues.FormatDate(monday)}");
@@ -237,7 +280,30 @@
         string.Join(" · ", _calendar.Plans.Templates.Where(t => t.RotationOn(_monday).StartsOn is not null && Days.Any(d => _calendar.On(d).Any(e => e.Template?.Id == t.Id)))
             .Select(t => t.RotationOn(_monday) is ({ } starts, int weeks) ? $"{t.Name}: week {Rotation.WeekOf(starts, weeks, _monday)}" : t.Name));
 
-    private static string EntryClass(PlannedEntry entry) => entry.Skipped ? "plan-entry cal-skipped" : "plan-entry";
+    /// <summary>"Tue".</summary>
+    private static string Dow(DateOnly date) => date.ToString("ddd", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A day's column, header or strip button: marked when it is today, quieter once it has gone.</summary>
+    private static string DayClass(string name, DateOnly date) =>
+        date == Today ? $"{name} is-today" : date < Today ? $"{name} is-past" : name;
+
+    /// <summary>Not yet on the server: the dashed edge.</summary>
+    private string EntryClass(PlannedEntry entry) => _unsent.Contains(entry.Id) ? "cal-entry unsent" : "cal-entry";
+
+    /// <summary>The meal in marker; a skipped one struck through, in place.</summary>
+    private static string MealClass(PlannedEntry entry) => entry.Skipped ? "marker cal-meal struck" : "marker cal-meal";
+
+    /// <summary>The tile's number: what is known, or "$?" with nothing priced at all - never "$0.00".</summary>
+    private static string Big(Cost cost) => cost.Cents == 0 && cost.Missing > 0 ? "$?" : Money.Format(cost.Cents);
+
+    /// <summary>What the tile counts, and how many things it could not price.</summary>
+    private static string Small(Cost cost, string what) => cost.Missing switch
+    {
+        0 => what,
+        _ => $"{what} · {cost.Missing} unpriced",
+    };
+
+    private static Task Key(KeyboardEventArgs e, Func<Task> act) => e.Key == "Enter" ? act() : Task.CompletedTask;
 
     private string MealName(Guid? meal) => meal is { } id ? _meals.GetValueOrDefault(id)?.Name ?? "meal removed" : "nothing chosen";
 
@@ -261,9 +327,10 @@
         : _serves.LeftoversOf(entry.Id) is { } eats ? ServesText.Leftovers(eats, BatchMeal(eats.BatchId)?.Name, BatchDay(eats.BatchId))
         : null;
 
+    /// <summary>The serves line; <c>cal-serves-problem</c> (read by the check scripts) when it has less than it needs.</summary>
     private string ServesClass(PlannedEntry entry) =>
         _serves.LeftoversOf(entry.Id) is { Problem: not LeftoversProblem.None } || _serves.BatchOf(entry.Id) is { Short: > 0 }
-            ? "d-block cal-serves cal-serves-problem" : "d-block mud-text-secondary cal-serves";
+            ? "cal-serves cal-serves-problem" : "cal-serves";
 
     /// <summary>
     /// The week's serves, in calendar order: every leftovers entry with less than it needs ("Saturday's leftovers has

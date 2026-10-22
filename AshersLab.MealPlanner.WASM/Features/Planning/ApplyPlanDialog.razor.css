@@ -1,0 +1,13 @@
+/* Fill from a plan: a sentence of small print under the choices, or in place of them with no plans yet. */
+.apply-note {
+    margin: 12px 0 0;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: var(--ink-soft);
+}
+
+.apply-note:first-child {
+    margin-top: 0;
+    font-size: 1rem;
+    color: var(--ink);
+}

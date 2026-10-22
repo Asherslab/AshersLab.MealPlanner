@@ -1,58 +1,101 @@
 @page "/"
 @using AshersLab.MealPlanner.LocalData
 @using AshersLab.MealPlanner.Shared.Data.Planning
+@using AshersLab.MealPlanner.Shared.Data.Shopping
+@using AshersLab.MealPlanner.Shared.Domain.Meals
 @using AshersLab.MealPlanner.Shared.Domain.Planning
+@using AshersLab.MealPlanner.Shared.Domain.Shopping
 @using AshersLab.MealPlanner.WASM.Data
 @using AshersLab.MealPlanner.WASM.Features.Planning
 @using Microsoft.EntityFrameworkCore
 @inherits LocalDataPage
 
 @*
-    Where the app opens: today's meals, and one tap to each of the four things the planner comes to do - plan the
-    week, shop, add a meal, import a receipt. The server and this device are on Settings > Diagnostics.
+    Where the app opens: today's sheet of the fridge-door pad. Every slot of the day is printed down the side whether
+    or not anything is written in it; what is planned is in marker. The household's magnets are on the head band; a row carries magnets only when it is
+    for some of them, not everyone. A skipped
+    entry stays, struck through; one not yet on the server has a dashed edge. Under the sheet, the week at a glance -
+    what is left to buy and what it costs. The server and this device are on Settings > Diagnostics.
 *@
 
 <PageTitle>Meal Planner</PageTitle>
 
-<MudText Typo="Typo.h5" Component="h1">@CalendarText.LongDay(Today)</MudText>
-
 <LocalDataGate Start="Start">
+<div class="today">
+    <PadSheet Title="@CalendarText.LongDay(Today)" Subtitle="@CalendarText.Week(Rotation.MondayOf(Today))" TestId="home-today">
+        <Head>
+            @if (_people.Count > 0)
+            {
+                <div class="pad-head-magnets" title="@string.Join(", ", _people.Select(p => p.Name))">
+                    <PeopleDots People="_people"/>
+                </div>
+            }
+        </Head>
+        <ChildContent>
+        @if (_slots.Count == 0)
+        {
+            <p class="pad-note" data-testid="home-today-empty">
+                The day has no slots yet. Add breakfast, lunch, dinner and the rest on
+                <a href="slots">Slots of the day</a>.
+            </p>
+        }
+        @foreach (TodaySlot slot in _slots)
+        {
+            if (slot.Entries.Count == 0)
+            {
+                <PadRow Label="@slot.Name">
+                    <a class="pad-blank" href="calendar">Nothing planned</a>
+                </PadRow>
+            }
+            @foreach (TodayEntry entry in slot.Entries)
+            {
+                <PadRow Label="@slot.Name" Struck="entry.Skipped" Unsent="entry.Unsent" TestId="home-today-entry" DataId="@entry.Id.ToString()">
+                    <span class="marker">@entry.Meal</span>
+                    <div class="pad-entry-meta">
+                        <PeopleDots People="entry.People"/>
+                        @if (entry.Skipped)
+                        {
+                            <span>Skipped</span>
+                        }
+                        else if (entry.Unsent)
+                        {
+                            <span>Not sent yet</span>
+                        }
+                    </div>
+                </PadRow>
+            }
+        }
+        </ChildContent>
+    </PadSheet>
+
     @* With nobody added, "everyone" is one person: a batch of 4 looks like it leaves 3 serves. *@
     @if (_noPeople)
     {
-        <MudAlert Severity="Severity.Info" Class="mt-2" data-testid="home-no-people">
-            Add the household on <MudLink Href="people">People</MudLink> first - until then a meal for everyone counts as one serve.
-        </MudAlert>
+        <p class="pad-aside" data-testid="home-no-people">
+            Add the household on <a href="people">People</a> first - until then a meal for everyone counts as one serve.
+        </p>
     }
-    <MudPaper Outlined="true" Class="pa-3 mt-2" data-testid="home-today">
-        @if (_today.Count == 0)
-        {
-            <MudText Class="mud-text-secondary" data-testid="home-today-empty">Nothing planned today.</MudText>
-        }
-        @foreach ((string slot, string meal, bool skipped) in _today)
-        {
-            <div class="d-flex gap-2 py-1" data-testid="home-today-entry">
-                <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="min-width: 5.5rem">@slot</MudText>
-                <MudText Typo="Typo.body2" Style="@(skipped ? "text-decoration: line-through" : null)">@meal</MudText>
-            </div>
-        }
-    </MudPaper>
+
+    <div class="mt-4">
+        <WeekTiles ToGet="_toGet" Done="_done" Spend="_spend"/>
+    </div>
+
+    <MudButton Href="receipts" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Receipt"
+               Class="mt-3" data-testid="home-receipts">Import a receipt</MudButton>
+</div>
 </LocalDataGate>
 
-<div class="home-actions mt-4">
-    <MudButton Href="calendar" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
-               StartIcon="@Icons.Material.Filled.CalendarMonth" data-testid="home-calendar">This week's plan</MudButton>
-    <MudButton Href="shopping" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
-               StartIcon="@Icons.Material.Filled.ShoppingCart" data-testid="home-shopping">Shopping list</MudButton>
-    <MudButton Href="meals" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Size="Size.Large"
-               StartIcon="@Icons.Material.Filled.RestaurantMenu" data-testid="home-meals">Meals</MudButton>
-    <MudButton Href="receipts" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Size="Size.Large"
-               StartIcon="@Icons.Material.Filled.Receipt" data-testid="home-receipts">Import a receipt</MudButton>
-</div>
-
 @code {
-    private List<(string Slot, string Meal, bool Skipped)> _today = [];
+    private sealed record TodayEntry(Guid Id, string Meal, IReadOnlyList<Person> People, bool Skipped, bool Unsent);
+
+    private sealed record TodaySlot(string Name, List<TodayEntry> Entries);
+
+    private List<TodaySlot> _slots = [];
+    private List<Person> _people = [];
     private bool _noPeople;
+    private int  _toGet;
+    private int  _done;
+    private Cost _spend;
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
 
@@ -61,12 +104,38 @@
         CalendarBook calendar = await CalendarBook.LoadAsync(db, Today, Today);
         List<Slot> slots = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         Dictionary<Guid, string> meals = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, m => m.Name);
-        _noPeople = !await db.People.AnyAsync(p => !p.Deleted);
+        List<Person> people = [.. (await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync()).OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)];
+        HashSet<Guid> unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
+        _people   = people;
+        _noPeople = people.Count == 0;
 
-        _today = [.. calendar.On(Today)
-            .OrderBy(e => slots.FindIndex(s => s.Id == e.SlotId) is var i and >= 0 ? i : int.MaxValue)
-            .Select(e => (slots.FirstOrDefault(s => s.Id == e.SlotId)?.Name ?? "",
-                          e.MealId is { } id ? meals.GetValueOrDefault(id) ?? "meal removed" : "nothing chosen",
-                          e.Skipped))];
+        // The household's magnets sit once on the head band; a row shows magnets only when it is for some of them.
+        IReadOnlyList<Person> Eating(PlannedEntry e) =>
+            e.People is { } chosen ? [.. people.Where(p => chosen.Contains(p.Id))] : [];
+
+        List<PlannedEntry> today = [.. calendar.On(Today)];
+        _slots = [.. slots.Select(s => new TodaySlot(s.Name, [.. today.Where(e => e.SlotId == s.Id).Select(e => new TodayEntry(
+            e.Id,
+            e.MealId is { } id ? meals.GetValueOrDefault(id) ?? "Meal removed" : "Nothing chosen",
+            Eating(e),
+            e.Skipped,
+            unsent.Contains(e.Id)))]))];
+
+        // The same list Shop opens on: the one covering today, the latest started; otherwise this week, Monday to Sunday.
+        DateOnly monday = Rotation.MondayOf(Today);
+        (DateOnly from, DateOnly to) = await db.ShoppingLists.AsNoTracking()
+                .Where(l => !l.Deleted && l.StartsOn <= Today && l.EndsOn >= Today)
+                .OrderByDescending(l => l.StartsOn)
+                .Select(l => new { l.StartsOn, l.EndsOn })
+                .FirstOrDefaultAsync() is { } current
+            ? (current.StartsOn, current.EndsOn)
+            : (monday, monday.AddDays(6));
+        ShoppingBook shop = await ShoppingBook.LoadAsync(db, from, to);
+        List<ShoppingLine> lines = [.. shop.Groups.SelectMany(g => g.Categories).SelectMany(c => c.Lines)];
+        _done  = lines.Count(l => l.Tick != ShoppingTick.None) + shop.Extras.Count(e => e.Tick == ShoppingTick.Bought);
+        _toGet = lines.Count + shop.Extras.Count - _done;
+
+        ShoppingBook week = from == monday && to == monday.AddDays(6) ? shop : await ShoppingBook.LoadAsync(db, monday, monday.AddDays(6));
+        _spend = week.Spend;
     }
 }

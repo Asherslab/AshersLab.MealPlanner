@@ -1,0 +1,104 @@
+/* A list is a pad's width: on a wide screen it keeps a phone-ish column rather than spanning the page. */
+.name-list {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+/* The line to write a new one on: the box and its button side by side, the box taking the room. */
+.name-add {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 14px 12px;
+    border-bottom: 1px solid var(--rule);
+}
+
+.name-add ::deep .name-field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* As tall as the dense outlined box beside it, so the two read as one line. */
+.name-add ::deep .name-add-button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    margin-top: 6px;
+}
+
+.name-empty {
+    padding: 16px 18px;
+}
+
+.name-row {
+    border-top: 1px solid var(--rule);
+    padding: 4px 4px 4px 18px;
+}
+
+.name-row:first-of-type {
+    border-top: 0;
+}
+
+.name-row:last-child {
+    border-radius: 0 0 var(--pad-radius) var(--pad-radius);
+}
+
+.name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 56px;
+}
+
+.name-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 1.0625rem;
+    line-height: 1.3;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+/* Arrows, rename, delete: each a full 44px+ target, in the printed green's quieter cousin until pointed at. */
+.name-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.name-actions ::deep .mud-icon-button {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    color: var(--ink-soft);
+}
+
+.name-actions ::deep .mud-icon-button:hover:not(:disabled) {
+    color: var(--bottle);
+}
+
+.name-actions ::deep .mud-icon-button:disabled {
+    color: var(--chrome);
+}
+
+/* Delete only turns tomato when pointed at: the bin is the one destructive control on the row. */
+.name-actions ::deep .name-delete:hover {
+    color: var(--tomato-ink) !important;
+}
+
+.name-row ::deep .name-in-use {
+    margin: 0 14px 12px 0;
+}
+
+/* Renaming opens the row up: the box across the row, Cancel and Save under it at the right. */
+.name-rename {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px 10px 0;
+}
+
+.name-rename-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

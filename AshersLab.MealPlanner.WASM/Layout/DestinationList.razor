@@ -1,31 +1,24 @@
 @*
-    One group of pages on More or Settings: a heading, then a row per page - its icon, its name and one line saying what
-    it is for. Each row is a plain link the full width of the screen, so the whole row is the tap target.
+    One group of pages on More or Settings - a drawer of the fridge door: one pad sheet, the group's name on its head
+    band, a ruled row per page - its icon in the pad's green, its name and one line saying what it is for, a chevron.
+    Each row is a plain link the full width of the sheet, so the whole row is the tap target.
 *@
 
-<section class="destination-group">
-    @if (Heading is not null)
-    {
-        <MudText Typo="Typo.subtitle2" Component="h2" Class="mud-text-secondary destination-heading">@Heading</MudText>
-    }
-    <MudPaper Outlined="true">
-        @foreach ((NavDestination d, int i) in Destinations.Select((d, i) => (d, i)))
+<div class="destination-group">
+    <PadSheet Title="@Heading">
+        @foreach (NavDestination d in Destinations)
         {
-            @if (i > 0)
-            {
-                <MudDivider/>
-            }
             <a href="@d.Route" class="destination-row" data-testid="@TestIdPrefix-@d.Key">
-                <MudIcon Icon="@d.Icon" Class="destination-icon"/>
+                <MudIcon Icon="@d.Icon" Color="Color.Primary" Class="destination-icon"/>
                 <span class="destination-text">
-                    <MudText Typo="Typo.body1">@d.Title</MudText>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@d.Description</MudText>
+                    <span class="destination-title">@d.Title</span>
+                    <span class="destination-description">@d.Description</span>
                 </span>
-                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="mud-text-secondary"/>
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="destination-chevron"/>
             </a>
         }
-    </MudPaper>
-</section>
+    </PadSheet>
+</div>
 
 @code {
     [Parameter] public string? Heading { get; set; }

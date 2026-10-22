@@ -9,62 +9,51 @@
     The browser database's proof of life: the Device row it keeps for this browser profile. The id staying put
     and the count going up across reloads and browser restarts is what "the database persists" looks like.
     Every window of the app shares the row, so opening a second window updates the count shown in the first.
+    A quiet pad sheet of label-and-value rows (Diagnostics dresses it).
 *@
 
-<MudCard Outlined="true">
-    <MudCardHeader>
-        <CardHeaderContent>
-            <MudText Typo="Typo.h6">This device</MudText>
-        </CardHeaderContent>
-    </MudCardHeader>
-    <MudCardContent>
-        @if (_start is null)
-        {
+<PadSheet Title="This device" Class="quiet" TestId="device-sheet">
+    @if (_start is null)
+    {
+        <div class="device-note">
             <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
-        }
-        else if (_start.State == DbInitState.TAB_LOCKED)
-        {
+        </div>
+    }
+    else if (_start.State == DbInitState.TAB_LOCKED)
+    {
+        <div class="device-note">
             <MudAlert Severity="Severity.Warning" data-testid="local-db-state">
                 Another window is holding this browser's copy of the data and not sharing it. Close the other
                 windows of the meal planner, then reload this one.
             </MudAlert>
-        }
-        else if (_device is null)
-        {
-            @* The page's LocalDataGate says why, and offers the reset. *@
-            <MudText Class="mud-text-secondary" data-testid="device-not-open">
-                This browser's copy of the data is not open (@_start.State) - see above.
-            </MudText>
-        }
-        else
-        {
-            <MudSimpleTable Dense="true" Elevation="0">
-                <tbody>
-                <tr>
-                    <th scope="row">Device</th>
-                    <td data-testid="device-id">@_device.Id</td>
-                </tr>
-                <tr>
-                    <th scope="row">First opened</th>
-                    <td data-testid="device-first-opened">@_device.FirstOpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
-                </tr>
-                <tr>
-                    <th scope="row">Opened</th>
-                    <td data-testid="device-open-count">@_device.OpenCount @(_device.OpenCount == 1 ? "time" : "times")</td>
-                </tr>
-                <tr>
-                    <th scope="row">Storage</th>
-                    <td data-testid="device-storage">@StorageText(_start.StoragePersisted)</td>
-                </tr>
-                <tr>
-                    <th scope="row">Held by</th>
-                    <td data-testid="device-role">@RoleText(_role)</td>
-                </tr>
-                </tbody>
-            </MudSimpleTable>
-        }
-    </MudCardContent>
-</MudCard>
+        </div>
+    }
+    else if (_device is null)
+    {
+        @* The page's LocalDataGate says why, and offers the reset. *@
+        <p class="pad-note" data-testid="device-not-open">
+            This browser's copy of the data is not open (@_start.State) - see above.
+        </p>
+    }
+    else
+    {
+        <PadRow Label="Device">
+            <span class="diag-value num" data-testid="device-id">@_device.Id</span>
+        </PadRow>
+        <PadRow Label="First opened">
+            <span class="diag-value num" data-testid="device-first-opened">@_device.FirstOpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+        </PadRow>
+        <PadRow Label="Opened">
+            <span class="diag-value num" data-testid="device-open-count">@_device.OpenCount @(_device.OpenCount == 1 ? "time" : "times")</span>
+        </PadRow>
+        <PadRow Label="Storage">
+            <span class="diag-value" data-testid="device-storage">@StorageText(_start.StoragePersisted)</span>
+        </PadRow>
+        <PadRow Label="Held by">
+            <span class="diag-value" data-testid="device-role">@RoleText(_role)</span>
+        </PadRow>
+    }
+</PadSheet>
 
 @code {
     private LocalDatabaseStart? _start;

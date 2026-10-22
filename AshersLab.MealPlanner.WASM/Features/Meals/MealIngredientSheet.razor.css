@@ -1,0 +1,62 @@
+/* The dialog's title in the pad's printed green (the dialog surface is the theme's enamel). */
+.dialog-title {
+    margin: 0;
+    font: 700 1.25rem/1.2 var(--font-body);
+    letter-spacing: -0.01em;
+    color: var(--bottle);
+}
+
+/* The matching ingredients: ruled lines under the search box, each a thumb-sized tap. */
+.choices {
+    margin-top: 8px;
+}
+
+.choice {
+    display: flex;
+    align-items: center;
+    min-height: 52px;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.choice:first-child {
+    border-top: 1px solid var(--rule);
+}
+
+.choice:hover {
+    background: rgba(47, 93, 80, 0.05);
+}
+
+.choice-name {
+    overflow-wrap: anywhere;
+}
+
+.choices-none {
+    margin: 0;
+    padding: 12px 6px;
+    color: var(--ink-soft);
+}
+
+.choices ::deep .choices-new {
+    margin-top: 6px;
+    min-height: 44px;
+}
+
+/* The chosen ingredient, with Change beside it for a new line. */
+.chosen {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+}
+
+.chosen-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 700;
+    font-size: 1.0625rem;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}

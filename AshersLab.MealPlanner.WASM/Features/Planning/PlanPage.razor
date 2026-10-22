@@ -14,128 +14,154 @@
 @inject NavigationManager Navigation
 
 @*
-    One plan template, a week at a time. On a desktop the week is a grid - slots down, days across - with every entry
-    in its cell; on a phone, a day at a time, its slots down the screen. Tapping an entry opens its sheet; a slot's +
-    adds one. Each entry is its own op (with its choices, written together), so two phones planning different days
-    both keep theirs.
+    One plan template, a week at a time: the pad's master copy, in the calendar's grid language. The head band carries
+    the plan's name and Edit; a plan of more than one week has a strip of its weeks under it. On a desktop the week is a
+    grid - slots printed down the side, days across - with every entry in marker in its cell; on a phone, a day at a
+    time under a strip of the days. Tapping an entry opens its sheet; a slot's + adds one. Each entry is its own op (with
+    its choices, written together), so two phones planning different days both keep theirs; one not yet on the server
+    has a dashed edge.
 *@
 
 <PageTitle>@(_template?.Name ?? "Plan") - Meal Planner</PageTitle>
 
-<MudButton Href="plans" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2"
-           data-testid="plan-back">Plans</MudButton>
+@* The phone's app bar has its own back arrow; a desktop keeps this one. *@
+<div class="plan-back">
+    <MudButton Href="plans" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.ArrowBack"
+               data-testid="plan-back">Plans</MudButton>
+</div>
 
 <LocalDataGate Start="Start">
+<div class="plan">
     @if (_template is null)
     {
-        <MudAlert Severity="Severity.Info" data-testid="plan-gone">
-            This plan is not here - it may have been deleted on another device.
-        </MudAlert>
+        <PadSheet>
+            <p class="pad-note" data-testid="plan-gone">
+                This plan is not here - it may have been deleted on another device. See the others on <a href="plans">Plans</a>.
+            </p>
+        </PadSheet>
     }
     else
     {
-        <div class="d-flex align-start gap-2">
-            <div class="flex-grow-1">
-                <MudText Typo="Typo.h5" Component="h1" data-testid="plan-title">@_template.Name</MudText>
-                <MudText Class="mud-text-secondary" data-testid="plan-summary">
-                    @PlanText.Weeks(_template.WeekCount), then it repeats
-                </MudText>
-            </div>
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditPlan"
-                       data-testid="plan-edit">Edit</MudButton>
-        </div>
-
-        @if (_template.WeekCount > 1)
-        {
-            <div class="d-flex flex-wrap gap-1 mt-3" role="tablist">
-                @for (int w = 1; w <= _template.WeekCount; w++)
+        <PadSheet Class="plan-pad">
+            <Head>
+                <h2 data-testid="plan-title">@_template.Name</h2>
+                <p data-testid="plan-summary">@PlanText.Weeks(_template.WeekCount), then it repeats</p>
+                <div>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditPlan"
+                               data-testid="plan-edit">Edit</MudButton>
+                </div>
+            </Head>
+            <ChildContent>
+                @if (_template.WeekCount > 1)
                 {
-                    int week = w;
-                    <MudButton Size="Size.Small" Variant="@(week == _week ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
-                               OnClick="() => _week = week" role="tab" aria-selected="@(week == _week)"
-                               data-testid="plan-week" data-week="@week">Week @week</MudButton>
-                }
-            </div>
-        }
-
-        @if (_slots.Count == 0)
-        {
-            <MudAlert Severity="Severity.Info" Class="mt-4">There are no slots of the day - add them on the Slots page.</MudAlert>
-        }
-
-        @* A desktop: the whole week as a grid. *@
-        <MudHidden Breakpoint="Breakpoint.SmAndDown">
-            <div class="plan-grid-scroll mt-3">
-                <table class="plan-grid" data-testid="plan-grid">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            @foreach (DayOfWeek day in PlanDays.Week)
-                            {
-                                <th>@PlanDays.Short(day)</th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (Slot slot in _slots)
+                    <div class="plan-weeks" role="tablist" aria-label="Weeks of the plan">
+                        @for (int w = 1; w <= _template.WeekCount; w++)
                         {
-                            <tr @key="slot.Id">
-                                <th class="plan-grid-slot">@slot.Name</th>
-                                @foreach (DayOfWeek day in PlanDays.Week)
-                                {
-                                    <td data-testid="plan-cell" data-day="@day" data-slot="@slot.Id">
-                                        @foreach (TemplateEntry entry in EntriesAt(day, slot.Id))
-                                        {
-                                            <div class="plan-entry" @key="entry.Id" role="button" tabindex="0"
-                                                 @onclick="() => EditEntry(entry, day, slot)" data-testid="plan-entry" data-id="@entry.Id">
-                                                <span data-testid="plan-entry-meals">@EntryText(entry)</span>
-                                                <PeopleDots People="PeopleOf(entry)"/>
-                                            </div>
-                                        }
-                                        <button type="button" class="plan-add" aria-label="@($"Add to {PlanDays.Format(day)} {slot.Name}")"
-                                                @onclick="() => AddEntry(day, slot)" data-testid="plan-cell-add">+</button>
-                                    </td>
-                                }
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </MudHidden>
-
-        @* A phone: one day at a time. *@
-        <MudHidden Breakpoint="Breakpoint.MdAndUp">
-            <div class="d-flex flex-wrap gap-1 mt-3" role="tablist">
-                @foreach (DayOfWeek d in PlanDays.Week)
-                {
-                    DayOfWeek day = d;
-                    <MudButton Size="Size.Small" Variant="@(day == _day ? Variant.Filled : Variant.Text)" Color="Color.Primary"
-                               OnClick="() => _day = day" role="tab" aria-selected="@(day == _day)" Class="plan-day"
-                               data-testid="plan-day" data-day="@day">@PlanDays.Short(day)</MudButton>
-                }
-            </div>
-            <MudPaper Outlined="true" Class="mt-2" data-testid="plan-day-view">
-                @foreach (Slot slot in _slots)
-                {
-                    <div class="plan-day-slot px-4 py-2" @key="slot.Id" data-testid="plan-cell" data-day="@_day" data-slot="@slot.Id">
-                        <div class="d-flex align-center">
-                            <MudText Typo="Typo.overline" Class="flex-grow-1">@slot.Name</MudText>
-                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add to {slot.Name}")"
-                                           OnClick="() => AddEntry(_day, slot)" data-testid="plan-cell-add"/>
-                        </div>
-                        @foreach (TemplateEntry entry in EntriesAt(_day, slot.Id))
-                        {
-                            <div class="plan-entry d-flex align-center gap-2" @key="entry.Id" role="button" tabindex="0"
-                                 @onclick="() => EditEntry(entry, _day, slot)" data-testid="plan-entry" data-id="@entry.Id">
-                                <MudText Class="flex-grow-1" data-testid="plan-entry-meals">@EntryText(entry)</MudText>
-                                <PeopleDots People="PeopleOf(entry)" Named="true"/>
-                            </div>
+                            int week = w;
+                            <MudButton Variant="@(week == _week ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                                       OnClick="() => _week = week" role="tab" aria-selected="@(week == _week)"
+                                       data-testid="plan-week" data-week="@week">Week @week</MudButton>
                         }
                     </div>
                 }
-            </MudPaper>
-        </MudHidden>
+
+                @if (_slots.Count == 0)
+                {
+                    <p class="pad-note">
+                        The day has no slots yet. Add breakfast, lunch, dinner and the rest on <a href="slots">Slots of the day</a>.
+                    </p>
+                }
+
+                @* A desktop: the whole week, slots printed down the side, days across. *@
+                <MudHidden Breakpoint="Breakpoint.SmAndDown">
+                    <div class="tpl-scroll">
+                        <table class="tpl-grid" data-testid="plan-grid">
+                            <thead>
+                                <tr>
+                                    <td class="plan-corner"></td>
+                                    @foreach (DayOfWeek day in PlanDays.Week)
+                                    {
+                                        <th class="plan-dayhead">@PlanDays.Short(day)</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (Slot slot in _slots)
+                                {
+                                    <tr @key="slot.Id">
+                                        <th class="plan-slot-head" scope="row">@slot.Name</th>
+                                        @foreach (DayOfWeek day in PlanDays.Week)
+                                        {
+                                            <td class="plan-cell" data-testid="plan-cell" data-day="@day" data-slot="@slot.Id">
+                                                @foreach (TemplateEntry entry in EntriesAt(day, slot.Id))
+                                                {
+                                                    <div class="@EntryClass(entry)" @key="entry.Id" role="button" tabindex="0"
+                                                         @onclick="() => EditEntry(entry, day, slot)" @onkeydown="e => Key(e, () => EditEntry(entry, day, slot))"
+                                                         data-testid="plan-entry" data-id="@entry.Id">
+                                                        <span class="marker plan-meals" data-testid="plan-entry-meals">@EntryText(entry)</span>
+                                                        <PeopleDots People="PeopleOf(entry)"/>
+                                                    </div>
+                                                }
+                                                <button type="button" class="tpl-add"aria-label="@($"Add to {PlanDays.Format(day)} {slot.Name}")"
+                                                        @onclick="() => AddEntry(day, slot)" data-testid="plan-cell-add">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/>
+                                                </button>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </MudHidden>
+
+                @* A phone: the days in a strip, and one day's slots ruled down the sheet. *@
+                <MudHidden Breakpoint="Breakpoint.MdAndUp">
+                    <div class="plan-strip" role="tablist" aria-label="Days of the week">
+                        @foreach (DayOfWeek d in PlanDays.Week)
+                        {
+                            DayOfWeek day = d;
+                            <MudButton Variant="@(day == _day ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                                       OnClick="() => _day = day" role="tab" aria-selected="@(day == _day)" Class="tpl-day"
+                                       data-testid="plan-day" data-day="@day">@PlanDays.Short(day)</MudButton>
+                        }
+                    </div>
+                    <p class="plan-day-title">@(_template.WeekCount > 1 ? $"Week {_week} · {PlanDays.Format(_day)}" : PlanDays.Format(_day))</p>
+                    <div data-testid="plan-day-view">
+                        @foreach (Slot slot in _slots)
+                        {
+                            List<TemplateEntry> entries = [.. EntriesAt(_day, slot.Id)];
+                            <div class="pad-row plan-slot" @key="slot.Id" data-testid="plan-cell" data-day="@_day" data-slot="@slot.Id">
+                                <span class="pad-label">@slot.Name</span>
+                                <div class="pad-entry">
+                                    @if (entries.Count == 0)
+                                    {
+                                        <button type="button" class="pad-blank plan-blank" @onclick="() => AddEntry(_day, slot)">Nothing planned</button>
+                                    }
+                                    @foreach (TemplateEntry entry in entries)
+                                    {
+                                        <div class="@EntryClass(entry)" @key="entry.Id" role="button" tabindex="0"
+                                             @onclick="() => EditEntry(entry, _day, slot)" @onkeydown="e => Key(e, () => EditEntry(entry, _day, slot))"
+                                             data-testid="plan-entry" data-id="@entry.Id">
+                                            <span class="marker plan-meals" data-testid="plan-entry-meals">@EntryText(entry)</span>
+                                            <div class="pad-entry-meta">
+                                                <PeopleDots People="PeopleOf(entry)" Named="true"/>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="plan-slot-add">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" aria-label="@($"Add to {slot.Name}")"
+                                                   OnClick="() => AddEntry(_day, slot)" data-testid="plan-cell-add"/>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </MudHidden>
+            </ChildContent>
+        </PadSheet>
     }
+</div>
 </LocalDataGate>
 
 @code {
@@ -146,6 +172,7 @@
     private List<Slot>                _slots  = [];
     private List<Person>              _people = [];
     private Dictionary<Guid, string>  _meals  = [];
+    private HashSet<Guid>             _unsent = [];
 
     private int       _week = 1;
     private DayOfWeek _day  = DayOfWeek.Monday;
@@ -163,6 +190,7 @@
         _slots    = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _meals    = await db.Meals.AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, m => m.Name);
+        _unsent   = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
         if (_template is not null && _week > _template.WeekCount)
             _week = 1;
     }
@@ -174,6 +202,12 @@
         _plans.ChoicesOf(entry.Id) is { Count: > 0 } choices
             ? PlanText.Choices(choices.Select(c => _meals.GetValueOrDefault(c.MealId, "meal removed")))
             : "nothing chosen";
+
+    /// <summary>Not yet on the server - the entry or any of its choices: the dashed edge.</summary>
+    private string EntryClass(TemplateEntry entry) =>
+        _unsent.Contains(entry.Id) || _plans.ChoicesOf(entry.Id).Any(c => _unsent.Contains(c.Id)) ? "tpl-entry unsent" : "tpl-entry";
+
+    private static Task Key(KeyboardEventArgs e, Func<Task> act) => e.Key == "Enter" ? act() : Task.CompletedTask;
 
     /// <summary>The people it names, live ones only; empty for everyone.</summary>
     private IReadOnlyList<Person> PeopleOf(TemplateEntry entry) =>

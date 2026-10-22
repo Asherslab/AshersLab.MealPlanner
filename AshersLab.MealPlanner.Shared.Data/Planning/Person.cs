@@ -12,7 +12,7 @@ public class Person : ISyncedRow
 
     public string Name { get; set; } = "";
 
-    /// <summary>"#rrggbb" (<c>PersonRules.Palette</c>).</summary>
+    /// <summary>"#rrggbb" (<c>PersonRules.Palette</c>): their magnet's colour.</summary>
     public string Colour { get; set; } = "";
 
     public bool Deleted { get; set; }

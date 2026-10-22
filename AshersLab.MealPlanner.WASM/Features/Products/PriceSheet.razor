@@ -13,7 +13,7 @@
 
 <MudDialog data-testid="price-sheet">
     <DialogContent>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-3" data-testid="price-sheet-detail">@Detail</MudText>
+        <p class="sheet-detail" data-testid="price-sheet-detail">@Detail</p>
 
         <form id="price-sheet-form" @onsubmit="Save" @onsubmit:preventDefault>
             <MudTextField T="string" @ref="_priceField" @bind-Value="_price" Label="Price for one pack" Variant="Variant.Outlined"
@@ -40,27 +40,29 @@
             <button type="submit" hidden></button>
         </form>
 
-        <MudText Typo="Typo.overline" Class="d-block mt-4">History</MudText>
+        <h3 class="history-heading">Prices seen</h3>
         @if (History.Count == 0)
         {
-            <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="price-history-empty">No price yet.</MudText>
+            <p class="history-empty" data-testid="price-history-empty">No price yet - the one you save is the first.</p>
         }
-        @foreach (PriceReading reading in History)
-        {
-            <div class="d-flex align-center list-row" @key="reading.Id" data-testid="price-history-row" data-id="@reading.Id">
-                <MudText Class="flex-grow-1" Typo="Typo.body2">
-                    <span data-testid="price-history-price">@Money.Format(reading.PriceCents)</span>
-                    @if (reading.PerKgCents is { } perKg)
-                    {
-                        <span class="mud-text-secondary"> · @Money.Format(perKg)/kg</span>
-                    }
-                    <span class="mud-text-secondary"> · @reading.ObservedOn.ToString("d MMM yyyy") · @reading.Source.Label()</span>
-                </MudText>
-                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small"
-                               aria-label="@($"Delete the price of {Money.Format(reading.PriceCents)}")"
-                               OnClick="() => Delete(reading)" data-testid="price-history-delete"/>
-            </div>
-        }
+        <div class="history">
+            @foreach (PriceReading reading in History)
+            {
+                <div class="history-row" @key="reading.Id" data-testid="price-history-row" data-id="@reading.Id">
+                    <span class="history-price" data-testid="price-history-price">@Money.Format(reading.PriceCents)</span>
+                    <span class="history-detail">
+                        @if (reading.PerKgCents is { } perKg)
+                        {
+                            <span>@Money.Format(perKg)/kg · </span>
+                        }
+                        <span>@reading.ObservedOn.ToString("d MMM yyyy") · @reading.Source.Label()</span>
+                    </span>
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Class="history-delete"
+                                   aria-label="@($"Delete the price of {Money.Format(reading.PriceCents)}")"
+                                   OnClick="() => Delete(reading)" data-testid="price-history-delete"/>
+                </div>
+            }
+        </div>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="EditProduct" Class="mr-auto" data-testid="price-sheet-edit-product">Edit product</MudButton>
