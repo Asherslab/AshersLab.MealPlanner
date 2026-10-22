@@ -67,6 +67,13 @@ GSBC.Accounting holds 7273/5242, 5260, 7068/5279, 17269/15024, 21201, 22307, 160
 As with the GSBC stacks, 7283 is Aspire's DCP **proxy**; the host process itself binds a random port.
 Opening that random port works for the page but nothing else should be pointed at it.
 
+The AppHost sets both endpoints' `TargetHost` to `0.0.0.0`, so the proxy listens on every interface (DCP binds
+each address separately - loopback, the LAN address, a VPN's) and a phone on the same network can open
+`https://<the Mac's LAN address>:7283`. Use **https**: plain http on a LAN address is not a secure context, so
+OPFS and Web Locks are missing and the browser database cannot open. The dev certificate is for `localhost`,
+so the phone warns once and has to be told to continue. Development has no sign-in: anyone on the network
+can use the app while it runs.
+
 ## What differs from the skill
 
 - **No YARP, no separate WASM resource.** The gRPC host serves `_framework/`, `_content/` and

@@ -12,8 +12,13 @@ string dataDirectory = Path.Combine(
 
 // Its fixed ports (https 7283, http 5280) come from the project's launchSettings.json and must differ from
 // both GSBC stacks, which run at the same time. They are recorded in .claude/app-local.md.
+//
+// Bound to every interface, not only loopback, so a phone on the same network can open the app at the Mac's address.
+// Development has no sign-in, so anyone on that network can too.
 builder.AddProject<Projects.AshersLab_MealPlanner_Grpc>("mealplanner")
     .WithEnvironment("DataDirectory", dataDirectory)
-    .WithExternalHttpEndpoints();
+    .WithExternalHttpEndpoints()
+    .WithEndpoint("https", e => e.TargetHost = "0.0.0.0", createIfNotExists: false)
+    .WithEndpoint("http", e => e.TargetHost = "0.0.0.0", createIfNotExists: false);
 
 builder.Build().Run();
