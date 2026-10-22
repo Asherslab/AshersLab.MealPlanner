@@ -1,8 +1,9 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 
-@* The fridge-door pad in the kitchen bench's colours: Design/AppTheme.cs. *@
-<MudThemeProvider Theme="AppTheme.Theme"/>
+@* The fridge-door pad in the kitchen bench's colours: Design/AppTheme.cs. Light only, said outright: a phone in dark mode
+   otherwise got MudBlazor's own dark palette - dark selects, faint labels, fields invisible until tapped. *@
+<MudThemeProvider Theme="AppTheme.Theme" IsDarkMode="false" ObserveSystemDarkModeChange="false"/>
 <MudPopoverProvider/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
