@@ -90,16 +90,63 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
 
     public async Task<bool> SupportedAsync() => await (await Passkeys()).InvokeAsync<bool>("supported");
 
+    // Request options fetched ahead of a tap: Safari only shows the passkey prompt in answer to one, and a round trip to
+    // the server between the tap and the prompt can lose it. Each is good for one prompt, and not for long.
+    private (string Options, DateTimeOffset At)? _prepared;
+    private static readonly TimeSpan PreparedFor = TimeSpan.FromMinutes(3);
+
+    /// <summary>Whether this device has signed in here before, so has a passkey to offer (a hint, kept on the device).</summary>
+    public async Task<bool> KnownAsync() => await (await Passkeys()).InvokeAsync<bool>("known");
+
+    /// <summary>Whether the browser offers the passkey in a sign-in field's autofill.</summary>
+    public async Task<bool> AutofillAvailableAsync() => await (await Passkeys()).InvokeAsync<bool>("autofillAvailable");
+
+    /// <summary>Fetches the request options now, so a sign-in on the next tap goes straight to the prompt.</summary>
+    public async Task PrepareSignInAsync()
+    {
+        (string? options, _) = await PostText("account/sign-in/options", new EmptyBody(), AccountJson.Default.EmptyBody);
+        _prepared = options is null ? null : (options, DateTimeOffset.UtcNow);
+    }
+
     /// <summary>Signs in with a passkey: the phone asks for Face ID or its PIN.</summary>
     public async Task<AccountResult> SignInAsync()
+    {
+        string? options = _prepared is { } p && DateTimeOffset.UtcNow - p.At < PreparedFor ? p.Options : null;
+        _prepared = null;
+        string? problem = null;
+        if (options is null)
+            (options, problem) = await PostText("account/sign-in/options", new EmptyBody(), AccountJson.Default.EmptyBody);
+        if (options is null)
+            return new AccountResult(false, problem);
+        return await Assert(await (await Passkeys()).InvokeAsync<string?>("get", options));
+    }
+
+    /// <summary>
+    /// Waits for the passkey to be picked from the sign-in field's autofill, then signs in. Cancelled when the page calls
+    /// it off (<see cref="StopAutofillAsync"/>) or starts another sign-in.
+    /// </summary>
+    public async Task<AccountResult> SignInFromAutofillAsync()
     {
         (string? options, string? problem) = await PostText("account/sign-in/options", new EmptyBody(), AccountJson.Default.EmptyBody);
         if (options is null)
             return new AccountResult(false, problem);
-        if (await (await Passkeys()).InvokeAsync<string?>("get", options) is not { } credential)
-            return AccountResult.Cancel;
-        return await Post("account/sign-in", new CredentialBody(credential), AccountJson.Default.CredentialBody);
+        return await Assert(await (await Passkeys()).InvokeAsync<string?>("getFromAutofill", options));
     }
+
+    public async Task StopAutofillAsync() => await (await Passkeys()).InvokeVoidAsync("abort");
+
+    private async Task<AccountResult> Assert(string? credential)
+    {
+        if (credential is null)
+            return AccountResult.Cancel;
+        AccountResult result = await Post("account/sign-in", new CredentialBody(credential), AccountJson.Default.CredentialBody);
+        // A passkey the server does not know (its member removed): stop going straight to the prompt on this device.
+        if (result.Ok || result.Problem?.Contains("not one this app knows", StringComparison.Ordinal) == true)
+            await (await Passkeys()).InvokeVoidAsync("remember", result.Ok);
+        return result;
+    }
+
+    private async Task Remember() => await (await Passkeys()).InvokeVoidAsync("remember", true);
 
     public async Task<(InvitationView? Invitation, string? Problem)> InvitationAsync(string token)
     {
@@ -124,7 +171,10 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
             return new AccountResult(false, problem);
         if (await (await Passkeys()).InvokeAsync<string?>("create", options) is not { } credential)
             return AccountResult.Cancel;
-        return await Post("account/invitation/accept", new AcceptBody(token, name, credential), AccountJson.Default.AcceptBody);
+        AccountResult result = await Post("account/invitation/accept", new AcceptBody(token, name, credential), AccountJson.Default.AcceptBody);
+        if (result.Ok)
+            await Remember();
+        return result;
     }
 
     /// <summary>Another passkey for whoever is signed in - this device's.</summary>
@@ -135,7 +185,10 @@ public sealed class AccountClient(HttpClient http, IJSRuntime js)
             return new AccountResult(false, problem);
         if (await (await Passkeys()).InvokeAsync<string?>("create", options) is not { } credential)
             return AccountResult.Cancel;
-        return await Post("account/passkeys", new CredentialBody(credential), AccountJson.Default.CredentialBody);
+        AccountResult result = await Post("account/passkeys", new CredentialBody(credential), AccountJson.Default.CredentialBody);
+        if (result.Ok)
+            await Remember();
+        return result;
     }
 
     public async Task<IReadOnlyList<MemberView>?> MembersAsync()

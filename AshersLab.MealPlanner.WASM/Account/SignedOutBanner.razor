@@ -2,34 +2,76 @@
 @using AshersLab.MealPlanner.WASM.Sync
 @implements IDisposable
 @inject SyncLoop Sync
+@inject AccountClient Account
 @inject NavigationManager Navigation
 
 @*
     Across the top of every page while signed out: what it means (nothing lost; it waits on this device) and the way
-    back in. Not on the sign-in pages themselves.
+    back in. On a device that has signed in here before, Sign in goes straight to the passkey prompt - Face ID, one tap -
+    with the request fetched as the banner appears, because Safari prompts only in answer to a tap and a round trip in
+    between can lose it. Anywhere else, or if that is cancelled, it opens the sign-in page. Not on the sign-in pages.
 *@
 
 @if (Sync.Status.Connection == SyncConnection.SignedOut && !OnSignInPage)
 {
     <div class="signed-out" role="status" data-testid="signed-out">
-        <span>You're signed out. Changes stay on this device and are sent once you sign in.</span>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Href="@SignInLink" data-testid="signed-out-sign-in">Sign in</MudButton>
+        <span>@(_problem ?? "You're signed out. Changes stay on this device and are sent once you sign in.")</span>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="SignIn"
+                   StartIcon="@(_known ? Icons.Material.Filled.Key : null)" data-testid="signed-out-sign-in">Sign in</MudButton>
     </div>
 }
 
 @code {
+    private bool _known, _prepared, _busy;
+    private string? _problem;
+
     private bool OnSignInPage => Navigation.ToBaseRelativePath(Navigation.Uri) is var path
                                  && (path.StartsWith("sign-in", StringComparison.Ordinal) || path.StartsWith("welcome", StringComparison.Ordinal));
 
-    private string SignInLink => $"sign-in?back={Uri.EscapeDataString(Navigation.ToBaseRelativePath(Navigation.Uri))}";
+    private string SignInPage => $"sign-in?back={Uri.EscapeDataString(Navigation.ToBaseRelativePath(Navigation.Uri))}";
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Sync.StatusChanged += Changed;
         Navigation.LocationChanged += Moved;
+        await Prepare();
     }
 
-    private Task Changed() => InvokeAsync(StateHasChanged);
+    /// <summary>Signed out on a known device: the request is fetched now, so the tap goes straight to the prompt.</summary>
+    private async Task Prepare()
+    {
+        if (_prepared || Sync.Status.Connection != SyncConnection.SignedOut)
+            return;
+        _prepared = true;
+        _known = await Account.KnownAsync();
+        if (_known)
+            await Account.PrepareSignInAsync();
+    }
+
+    private async Task SignIn()
+    {
+        if (!_known)
+        {
+            Navigation.NavigateTo(SignInPage);
+            return;
+        }
+        (_busy, _problem) = (true, null);
+        AccountResult result = await Account.SignInAsync();
+        _busy = false;
+        _prepared = false;
+        if (result.Ok)
+            Sync.Kick();
+        else if (result.Cancelled)
+            Navigation.NavigateTo(SignInPage);   // no prompt (or closed): the page has the other ways in
+        else
+            _problem = result.Problem;
+    }
+
+    private async Task Changed()
+    {
+        await Prepare();
+        await InvokeAsync(StateHasChanged);
+    }
 
     private void Moved(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
 

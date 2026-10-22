@@ -8,7 +8,8 @@
 // 3. The app stopped (the proxy answers 502), then nothing answering at all: A still opens, "Offline". Back: online.
 // 4. A invites "Alex" from Settings → Who can sign in. B opens the link, makes a passkey, is signed in and syncing; the
 //    same link again is refused. A's list shows both.
-// 5. A signs out: "Signed out" and the banner. A signs in again with the passkey: online.
+// 5. A signs out: "Signed out" and the banner. The banner's Sign in goes straight to the passkey prompt (A's phone has
+//    signed in here before): online, without the sign-in page. Signed out again, opening Sign in prompts by itself.
 // 6. Refused around the app: a POST from another site 403, a sync call with no session 401.
 // 7. A removes Alex: within a minute and a bit B's sync says "Signed out".
 //
@@ -131,11 +132,20 @@ await a.click('access-sign-out');
 await a.go(APP);
 check(await a.until(`document.querySelector('[data-testid=sync-status]')?.dataset.state === 'signedout'`, 40_000)
   && await a.until(`!!document.querySelector('[data-testid=signed-out]')`), `A signs out: ${await a.state()}, the banner`);
+// This phone has signed in here before: the banner's Sign in goes straight to the passkey prompt - no sign-in page.
 await a.click('signed-out-sign-in');
-await a.until(`!!document.querySelector('[data-testid=sign-in-passkey]')`);
-await a.click('sign-in-passkey');
-check(await a.until(`document.querySelector('[data-testid=sync-status]')?.dataset.state === 'online' && !document.querySelector('[data-testid=signed-out]')`, 40_000),
-  `A signs in with the passkey: ${await a.state()}`);
+check(await a.until(`document.querySelector('[data-testid=sync-status]')?.dataset.state === 'online' && !document.querySelector('[data-testid=signed-out]')`, 40_000)
+  && !(await a.evaluate('location.pathname')).startsWith('/sign-in'),
+  `A taps the banner's Sign in: the passkey prompt at once, ${await a.state()}, still on ${await a.evaluate('location.pathname')}`);
+
+// And the sign-in page itself opens the prompt by itself on a device it knows (where the browser allows it: Chrome).
+await a.go(APP + 'settings/access');
+await a.until(`!!document.querySelector('[data-testid=access-sign-out]')`, 30_000);
+await a.click('access-sign-out');
+await sleep(800);
+await a.go(APP + 'sign-in?back=meals');
+check(await a.until(`location.pathname === '/meals' && document.querySelector('[data-testid=sync-status]')?.dataset.state === 'online'`, 40_000),
+  `opening Sign in on a known phone prompts by itself, and goes back to ${await a.evaluate('location.pathname')}: ${await a.state()}`);
 
 // --- 6. Around the app ------------------------------------------------------------------------------------------------------
 const crossSite = execFileSync('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '-X', 'POST', '-H', 'Origin: https://evil.example.com',

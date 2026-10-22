@@ -94,8 +94,18 @@ nobody), the sign-in and invitation endpoints, and the health probes. **Every gR
 
 - **Signed out** - the chip, and a banner across every page: *"You're signed out. Changes stay on this device and are sent
   once you sign in."* with **Sign in**. A fresh phone opens to it.
-- **Sign in** (`/sign-in`): one button, *Sign in with a passkey*, then Face ID. Where the app has no sign-in of its own
-  (`/account` is a 404 - ingress or a proxy), it says to reload instead.
+- **As few taps as each browser allows.** A device that has signed in here before remembers it (`passkeys.js` `known`,
+  `localStorage`; a hint only - wrong, the prompt finds nothing - and dropped when the server no longer knows its passkey).
+  On such a device the banner's **Sign in** goes straight to the passkey prompt: Face ID, one tap, no page in between. The
+  request is fetched as the banner appears, because **Safari only shows the prompt in answer to a tap**, and a round trip
+  to the server between the tap and the prompt can lose it. Cancelled, or a device that never signed in, opens the page.
+- **Sign in** (`/sign-in`): on a known device the prompt **opens by itself** (Chrome and Android allow it; Safari refuses
+  without a tap, which reads as cancelled). Then the **autofill**: a field marked `autocomplete="username webauthn"`, where
+  the browser offers this site's passkeys among its suggestions - on an iPhone on the keyboard's bar - while a
+  `mediation: 'conditional'` request waits in the background (called off when the page goes or the button starts its own;
+  a browser runs one passkey request at a time, so the button is disabled while the prompt is open). And the button,
+  *Sign in with a passkey*. Where the app has no sign-in of its own (`/account` is a 404 - ingress or a proxy), it says to
+  reload instead.
 - **Welcome** (`/welcome#...`): the inviter's name for them, or a box for their own; *Make my passkey*; *You're in*.
 - **Settings → Who can sign in** (`/settings/access`): each member and their passkeys (*synced to their other devices* or
   *this device only*), remove a passkey (never a member's last - remove the member and invite them again) or a member
