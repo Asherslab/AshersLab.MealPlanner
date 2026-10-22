@@ -67,6 +67,14 @@ descriptions. Read before touching a reader, the import, the matching, or anythi
 - **The file is never stored or uploaded.** `wwwroot/js/receipt-pdf.js` keeps the open PDF and its picture only while the
   review is up (to draw them) and drops both on import, cancel, or leaving the page. OCR runs in the browser. Only what was
   read becomes ops.
+- **Two reads can overlap, and the later pick wins.** A file picked twice, or a change event fired twice, starts a second
+  read while the first is in pdf.js. Each read holds its own document and destroys only its own; the page numbers each
+  pick and passes the number to `read`, and a read of an earlier pick gives way (`receipt-read-superseded`) and is
+  ignored rather than reported. Before, the second read destroyed the first's document mid-read ("Worker task was
+  terminated"), the first's failure then destroyed the second's, and the planner saw "That file is not a PDF this
+  device can read." for a good file (Safari on a Mac, 2026-10-23). The order picks reach pdf.js is not the order they
+  were made - a larger file takes longer to copy - which is why the number comes from the page. A read that fails for
+  real logs pdf.js's own message (`ReceiptsPage`, a warning) behind that sentence.
 
 ## Reading a Woolworths invoice
 

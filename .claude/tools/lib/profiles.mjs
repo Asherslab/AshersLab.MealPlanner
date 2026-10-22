@@ -32,16 +32,26 @@ export async function launch(scratch, name, port, path) {
   }
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   let id = 0; const pending = new Map();
-  ws.onmessage = e => { const m = JSON.parse(e.data); pending.get(m.id)?.(m); pending.delete(m.id); };
+  // Every console line and uncaught exception, as text: what a check prints when the page only says "something failed".
+  const consoleLines = [];
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.method === 'Runtime.consoleAPICalled')
+      consoleLines.push(`${m.params.type}: ${m.params.args.map(a => a.value ?? a.description ?? '').join(' ')}`);
+    else if (m.method === 'Runtime.exceptionThrown')
+      consoleLines.push(`exception: ${m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text}`);
+    pending.get(m.id)?.(m); pending.delete(m.id);
+  };
   await new Promise(r => ws.onopen = r);
   const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
   const evaluate = async expression =>
     (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.result?.value;
   await send('Network.enable');
+  await send('Runtime.enable');
   // A brand-new headless profile drops requests for about its first second (see chrome-multiwindow-check.mjs).
   await sleep(3000);
   const b = {
-    name, scratch, send, evaluate,
+    name, scratch, send, evaluate, consoleLines,
     offline: on => send('Network.emulateNetworkConditions', { offline: on, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }),
     go: async p => { await send('Page.navigate', { url: APP_URL + p }); await until(b, `document.readyState === 'complete' && !!document.querySelector('[data-testid=sync-status]')`, 30_000); },
   };

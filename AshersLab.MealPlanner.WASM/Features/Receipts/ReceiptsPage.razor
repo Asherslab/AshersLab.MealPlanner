@@ -18,6 +18,7 @@
 @using Microsoft.EntityFrameworkCore
 @inherits LocalDataPage
 @inject IJSRuntime JS
+@inject ILogger<ReceiptsPage> Logger
 @implements IAsyncDisposable
 
 @*
@@ -428,8 +429,12 @@
         return InvokeAsync(StateHasChanged);
     }
 
+    /// <summary>The latest pick: an earlier one still reading gives way to it and leaves the page to it.</summary>
+    private int _pick;
+
     private async Task Picked(InputFileChangeEventArgs e)
     {
+        int pick = ++_pick;
         (_error, _done, _reading, _progress) = (null, null, true, null);
         try
         {
@@ -441,7 +446,10 @@
                 bytes = copy.ToArray();
             }
             IJSObjectReference module = await Module();
-            List<PdfPage> pages = PdfJson.Read(await module.InvokeAsync<string>("read", bytes));
+            string text = await module.InvokeAsync<string>("read", bytes, pick);
+            if (pick != _pick)
+                return;   // picked again while this one was reading: the later one's document is the open one now
+            List<PdfPage> pages = PdfJson.Read(text);
 
             // The reader names the store, by its seeded id: never a name, never a choice - a receipt's id is derived from it.
             if (WoolworthsInvoice.Recognises(pages) || WoolworthsEReceipt.Recognises(pages))
@@ -466,15 +474,22 @@
             (_spans, _unsure) = (read.Spans, read.Unsure);
             await OpenAsync(Store(StoreRules.Costco, "Costco"), read.Receipt);
         }
+        catch (Exception ex) when (ex is ReceiptFormatException or IOException or JSException && pick != _pick)
+        {
+            // A later pick replaced this one (receipt-pdf.js destroyed its document): its outcome is the one shown.
+        }
         catch (Exception ex) when (ex is ReceiptFormatException or IOException or JSException)
         {
+            if (ex is JSException)
+                Logger.LogWarning("Could not read the receipt PDF: {Message}", ex.Message);
             _error = ex is IOException ? "That file is too big to be a receipt." : ex is JSException ? "That file is not a PDF this device can read." : ex.Message;
             (_spans, _unsure) = (null, null);
             await Forget();
         }
         finally
         {
-            (_reading, _progress) = (false, null);
+            if (pick == _pick)
+                (_reading, _progress) = (false, null);
         }
     }
 

@@ -16,22 +16,46 @@ async function library() {
   return pdfjs;
 }
 
-/** The text runs of every page as JSON: [{ items: [{ text, x, y, width }] }], y from the page's top, in points. */
-export async function read(bytes) {
+let reading = 0;   // the latest pick read() has seen: an earlier one still going gives way to it
+
+/** Thrown by a read() a later one replaced: the page ignores it rather than reporting it. */
+const superseded = 'receipt-read-superseded';
+
+/**
+ * The text runs of every page as JSON: [{ items: [{ text, x, y, width }] }], y from the page's top, in points.
+ * Two reads can overlap - a file picked twice, or a change event Safari fires twice. Each holds its own document and
+ * destroys only that one, never the other's mid-read: that was "Worker task was terminated", and both failing.
+ * Which is latest is the page's pick number, not the order reads arrive here: an earlier pick can arrive later, its
+ * file having taken longer to copy.
+ */
+export async function read(bytes, pick) {
   const lib = await library();
+  const mine = pick;
+  if (mine < reading) throw new Error(superseded);
+  reading = mine;
   await forget();
   // No eval, no fonts loaded into the page: only the text is wanted.
-  open = await lib.getDocument({ data: bytes, isEvalSupported: false, disableFontFace: true }).promise;
+  const doc = await lib.getDocument({ data: bytes, isEvalSupported: false, disableFontFace: true }).promise;
+  const stale = async () => { if (mine === reading) return; await doc.destroy(); throw new Error(superseded); };
+  await stale();
+  open = doc;
   const pages = [];
-  for (let n = 1; n <= open.numPages; n++) {
-    const page = await open.getPage(n);
-    const height = page.getViewport({ scale: 1 }).height;
-    const content = await page.getTextContent();
-    pages.push({
-      items: content.items.filter(i => typeof i.str === 'string' && i.str.trim() !== '')
-        .map(i => ({ text: i.str, x: i.transform[4], y: height - i.transform[5], width: i.width })),
-    });
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const height = page.getViewport({ scale: 1 }).height;
+      const content = await page.getTextContent();
+      pages.push({
+        items: content.items.filter(i => typeof i.str === 'string' && i.str.trim() !== '')
+          .map(i => ({ text: i.str, x: i.transform[4], y: height - i.transform[5], width: i.width })),
+      });
+    }
+  } catch (e) {
+    // A later read destroyed this document on its way in: not a problem with this file.
+    if (mine !== reading) throw new Error(superseded);
+    throw e;
   }
+  await stale();
   return JSON.stringify(pages);
 }
 
