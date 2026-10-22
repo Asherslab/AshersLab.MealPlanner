@@ -6,6 +6,21 @@
 
 let pdfjs;
 let open = null;
+
+/**
+ * A page's text items - what page.getTextContent() gives, read without it. getTextContent loops over a ReadableStream
+ * with for-await, which Safari's ReadableStream does not support ("undefined is not a function"), and this pdf.js does
+ * not polyfill it. A reader works everywhere.
+ */
+async function textItems(page) {
+  const reader = page.streamTextContent().getReader();
+  const items = [];
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return items;
+    items.push(...value.items);
+  }
+}
 let picture = null;   // a canvas: the receipt's bitmap, white behind it
 
 async function library() {
@@ -44,9 +59,9 @@ export async function read(bytes, pick) {
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const height = page.getViewport({ scale: 1 }).height;
-      const content = await page.getTextContent();
+      const content = await textItems(page);
       pages.push({
-        items: content.items.filter(i => typeof i.str === 'string' && i.str.trim() !== '')
+        items: content.filter(i => typeof i.str === 'string' && i.str.trim() !== '')
           .map(i => ({ text: i.str, x: i.transform[4], y: height - i.transform[5], width: i.width })),
       });
     }

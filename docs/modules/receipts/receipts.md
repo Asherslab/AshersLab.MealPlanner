@@ -71,10 +71,16 @@ descriptions. Read before touching a reader, the import, the matching, or anythi
   read while the first is in pdf.js. Each read holds its own document and destroys only its own; the page numbers each
   pick and passes the number to `read`, and a read of an earlier pick gives way (`receipt-read-superseded`) and is
   ignored rather than reported. Before, the second read destroyed the first's document mid-read ("Worker task was
-  terminated"), the first's failure then destroyed the second's, and the planner saw "That file is not a PDF this
-  device can read." for a good file (Safari on a Mac, 2026-10-23). The order picks reach pdf.js is not the order they
-  were made - a larger file takes longer to copy - which is why the number comes from the page. A read that fails for
-  real logs pdf.js's own message (`ReceiptsPage`, a warning) behind that sentence.
+  terminated"), the first's failure then destroyed the second's, and both said "That file is not a PDF this device can
+  read." for a good file (reproduced in Chrome by firing the change event twice). The order picks reach pdf.js is not
+  the order they were made - a larger file takes longer to copy - which is why the number comes from the page. A read
+  that fails for real logs pdf.js's own message (`ReceiptsPage`, a warning) behind that sentence.
+- **Never `page.getTextContent()` - Safari cannot run it.** It loops over a `ReadableStream` with `for await`, and
+  Safari's `ReadableStream` has no async iterator (Safari 26.3 on a Mac: "undefined is not a function"); the vendored
+  pdf.js does not polyfill it. `receipt-pdf.js` `textItems` reads `page.streamTextContent()` with a reader instead -
+  the same items. Every Woolworths PDF failed in Safari until 2026-10-23 with "That file is not a PDF this device can
+  read."; seen fixed in Safari itself through `safaridriver` against the add-on sim, the published 0.0.46 image failing
+  the same way first. Any new pdf.js call: check it for `for await` over a stream before relying on it in Safari.
 
 ## Reading a Woolworths invoice
 
