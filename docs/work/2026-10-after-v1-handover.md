@@ -101,8 +101,37 @@ confirming this device's own edits reported no change, so pages never re-read wh
 Open for the owner: look at it on the phone; whether any page still feels stock (the dialogs, the date pickers and the
 receipt review were restyled but are the least-seen pages).
 
+## Done on 2026-10-22, after the design leg
+
+At the owner's ask: the Woolworths app's in-store **eReceipt** read ([receipts](../modules/receipts/receipts.md)); Plan's
+**month at a glance** ([the calendar](../modules/planning/calendar.md)); a person's **portion** - the toddler on half a
+serve ([batches and serves](../modules/planning/batches-and-serves.md)); and the **installable app** - a service worker,
+so it opens with no signal ([offline sync](../modules/sync/offline-sync.md#the-service-worker)).
+
+**The add-on is no longer a Home Assistant panel.** An app in Home Assistant's frame can be neither installed nor opened
+offline, so the owner chose its own HTTPS address through their Nginx Proxy Manager (an add-on on the same Pi) with
+Authelia signing people in; external access is wanted. The add-on runs in sign-in-proxy mode, trusting only
+`trusted_proxies` from its Configuration tab; `mealplanner/DOCS.md` is the owner's set-up
+([deployment](../modules/infrastructure/deployment.md#behind-nginx-proxy-manager-and-authelia)).
+
+## Next step 4 - the add-on on the Pi (the owner)
+
+Replaces most of step 2's Pi items: install the add-on, set it up per `mealplanner/DOCS.md` (Authelia, the proxy host
+and its Advanced tab, `trusted_proxies` narrowed to the proxy's own address), install the app on both phones, and note
+what differed from DOCS.md - the Advanced tab is written from Authelia's and Nginx Proxy Manager's documentation and
+proven only against `.claude/tools/addon-sim`. Still from step 2: the multi-arch pull, first load and RAM, a real backup
+and restore, then wiping the test data and the first real import.
+
+## Next step 5 - Actual Budget, read only (this leg, after the Pi)
+
+The owner wants it this leg, once the app is on the Pi. **Ingest only: the app reads Actual and never writes to it** -
+no transaction, category or budget change, ever; make that structural (a client with read calls only), not a
+convention. Design in [version 2 integrations](2026-10-version-2-integrations.md#actual-budget): this month's Groceries
+budgeted, spent and balance, fetched by the server on a schedule and on demand and written as server ops so phones show
+the last figure offline; later the category's transactions, to spot a shop with no receipt imported. The Actual server
+and its credentials are outside the repo: ask before touching it, credentials as add-on options (never committed).
+
 ## Later, from the walk-through
 
-No offline cold start (a PWA service worker, standalone deployment only); "New meal" in the plan editor's entry sheet;
-"1 of 2 bought" on a ticked line a receipt part-covered. Version 2's integrations are in
-[2026-10-version-2-integrations.md](2026-10-version-2-integrations.md).
+"New meal" in the plan editor's entry sheet; "1 of 2 bought" on a ticked line a receipt part-covered. Woolworths live
+prices are in [2026-10-version-2-integrations.md](2026-10-version-2-integrations.md).

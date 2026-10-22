@@ -16,6 +16,17 @@
         reception, so the app makes no third-party request: its fonts are self-hosted under fonts/ and
         declared in css/app.css.
     -->
+    <!--
+        Installable: relative to <base href> like everything else, so it works at "/" and under an ingress path. An
+        install only means anything at the app's own HTTPS address - inside Home Assistant's frame the browser installs
+        Home Assistant, not this (docs/modules/sync/offline-sync.md#where-offline-works).
+    -->
+    <link rel="manifest" href="manifest.webmanifest"/>
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml"/>
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
+    <meta name="theme-color" content="#2F5D50"/>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-title" content="Meals"/>
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet"/>
     <link href="css/app.css" rel="stylesheet"/>
     <link href="AshersLab.MealPlanner.WASM.styles.css" rel="stylesheet"/>
@@ -35,6 +46,8 @@
 <!-- Plain name, no fingerprint marker - see OverrideHtmlAssetPlaceholders in the csproj. -->
 <script src="_framework/blazor.webassembly.js"></script>
 <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+<script src="js/app-update.js"></script>
+<script>mealPlannerApp.register();</script>
 </body>
 
 </html>

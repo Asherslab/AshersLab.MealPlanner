@@ -28,15 +28,17 @@ Present tense, kept current, no dates.
 
 - [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
-- [How the app is deployed](modules/infrastructure/deployment.md) — the one image, the Home Assistant add-on,
-  ingress (base path, the gRPC-Web prefix trap, who may connect, the HA user), CI to GHCR, and the owner's
+- [How the app is deployed](modules/infrastructure/deployment.md) — the one image, the Home Assistant add-on behind
+  Nginx Proxy Manager and Authelia (its options, a page redirected to the login but a sync call given a 401), ingress
+  (still supported, no longer used: base path, the gRPC-Web prefix trap, the HA user), CI to GHCR, and the owner's
   install steps; standalone on Kubernetes or Docker: refusing to start with no auth, a sign-in proxy's header believed
   only from the proxy, the chart, Litestream to S3, and what the owner must do to deploy it.
 - [The browser database](modules/sync/browser-database.md) — EF Core SQLite in OPFS, the `wasm-tools`
   workload trap, starting it after the first render, sharing it across windows, one context at a time per
   window, local migrations, and what it costs.
 - [Offline sync](modules/sync/offline-sync.md) — every edit is an op: the clock and merge rules, push, pull
-  and the change stream, the protocol version check, and where offline does and does not work. **Read before
+  and the change stream, the protocol version check, signed out, where offline does and does not work, and the
+  service worker that opens the installed app with no signal. **Read before
   any write path.
 - [The catalogue](modules/catalogue/catalogue.md) — stores, categories and ingredients: seeded as server ops, valid
   names, hand-set order by position, an ingredient's unit, no foreign keys, and why deleting something in use is

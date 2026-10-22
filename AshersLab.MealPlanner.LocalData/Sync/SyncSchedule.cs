@@ -18,6 +18,12 @@ public enum SyncConnection
 
     /// <summary>The server came back empty; nothing syncs until the planner chooses - see <see cref="ServerReplaced"/>.</summary>
     WaitingForChoice,
+
+    /// <summary>
+    /// The sign-in in front of the app (a sign-in proxy) says nobody is signed in: the session expired. Not "offline" -
+    /// waiting does not fix it, the planner signing in again does.
+    /// </summary>
+    SignedOut,
 }
 
 /// <summary>
@@ -38,11 +44,13 @@ public static class SyncSchedule
     /// <summary>
     /// What a round that threw leaves the chip saying. Only failing to reach the server is
     /// <see cref="SyncConnection.Offline"/>; the server refusing this build's protocol is
-    /// <see cref="SyncConnection.Refused"/>; anything else - a pulled op that will not apply, a server error, a bug -
+    /// <see cref="SyncConnection.Refused"/>; a 401 - the sign-in proxy, or the app finding no user header - is
+    /// <see cref="SyncConnection.SignedOut"/>; anything else - a pulled op that will not apply, a server error, a bug -
     /// is <see cref="SyncConnection.Failed"/>, because waiting does not fix it.
     /// </summary>
     public static SyncConnection AfterFailure(Exception exception) =>
         exception is RpcException rpc && IsRefusal(rpc) ? SyncConnection.Refused
+        : exception is RpcException { StatusCode: StatusCode.Unauthenticated } ? SyncConnection.SignedOut
         : SyncFailure.IsOffline(exception)              ? SyncConnection.Offline
         : SyncConnection.Failed;
 
@@ -74,5 +82,6 @@ public static class SyncSchedule
     /// or the open question of <see cref="SyncConnection.WaitingForChoice"/> behind "Offline".
     /// </summary>
     public static SyncConnection? AfterStreamDropped(SyncConnection connection) =>
-        connection is SyncConnection.Refused or SyncConnection.Failed or SyncConnection.WaitingForChoice ? null : SyncConnection.Offline;
+        connection is SyncConnection.Refused or SyncConnection.Failed or SyncConnection.WaitingForChoice or SyncConnection.SignedOut
+            ? null : SyncConnection.Offline;
 }

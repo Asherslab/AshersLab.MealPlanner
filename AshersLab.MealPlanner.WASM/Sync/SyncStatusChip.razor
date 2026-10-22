@@ -13,7 +13,7 @@
     @* Outlined, and the app bar's own text colour when nothing is wrong: a Text chip's default is dark on the bar. *@
     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorFor(Sync.Status)"
              Style="@(ColorFor(Sync.Status) == Color.Inherit ? "color: inherit; border-color: currentColor" : null)"
-             Icon="@IconFor(Sync.Status)" OnClick="Sync.Kick"
+             Icon="@IconFor(Sync.Status)" OnClick="Tapped"
              data-testid="sync-status" data-state="@Sync.Status.Connection.ToString().ToLowerInvariant()"
              data-pending="@Sync.Status.Pending">
         @Label(Sync.Status)
@@ -21,7 +21,18 @@
 </MudTooltip>
 
 @code {
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
     protected override void OnInitialized() => Sync.StatusChanged += Changed;
+
+    /// <summary>Syncs now - or, signed out, reloads: the page load reaches the sign-in proxy's login.</summary>
+    private void Tapped()
+    {
+        if (Sync.Status.Connection == SyncConnection.SignedOut)
+            Navigation.Refresh(forceReload: true);
+        else
+            Sync.Kick();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -42,6 +53,7 @@
     private static string Label(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Refused                      => "Update needed",
+        SyncConnection.SignedOut                    => "Signed out",
         SyncConnection.WaitingForChoice             => "Paused · needs you",
         SyncConnection.Failed when s.Pending > 0    => $"Sync problem · {s.Pending} waiting",
         SyncConnection.Failed                       => "Sync problem",
@@ -55,6 +67,7 @@
     private static string Tooltip(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Offline => "Can't reach the server. Changes are kept on this device and sent when it can.",
+        SyncConnection.SignedOut => "The sign-in has expired. Tap to reload and sign in again; changes are kept on this device.",
         SyncConnection.WaitingForChoice => "The server started again from empty. Nothing syncs until you choose what to do with this device's copy.",
         _ when s.LastSyncedAt is { } at => $"Last synced {at:HH:mm:ss}. Tap to sync now.",
         _ => "Tap to sync now.",
@@ -63,7 +76,7 @@
     private static Color ColorFor(SyncStatus s) => s.Connection switch
     {
         SyncConnection.Refused or SyncConnection.Failed => Color.Error,
-        SyncConnection.Offline or SyncConnection.WaitingForChoice => Color.Warning,
+        SyncConnection.Offline or SyncConnection.WaitingForChoice or SyncConnection.SignedOut => Color.Warning,
         _ when s.Note is not null => Color.Warning,
         _ => Color.Inherit,
     };
@@ -73,6 +86,7 @@
         SyncConnection.Refused => Icons.Material.Filled.SystemUpdate,
         SyncConnection.Failed  => Icons.Material.Filled.SyncProblem,
         SyncConnection.Offline => Icons.Material.Filled.CloudOff,
+        SyncConnection.SignedOut => Icons.Material.Filled.Login,
         SyncConnection.WaitingForChoice => Icons.Material.Filled.PauseCircle,
         _ when s.Pending > 0   => Icons.Material.Filled.CloudUpload,
         _                      => Icons.Material.Filled.CloudDone,

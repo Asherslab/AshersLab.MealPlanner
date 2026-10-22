@@ -29,6 +29,9 @@ if (args is [DatabaseSnapshot.Verb])
     return;
 }
 
+// The Home Assistant add-on's Configuration tab (/data/options.json): the sign-in proxy's address, set by the owner.
+AddOnOptions.AddTo(builder.Configuration);
+
 builder.AddServiceDefaults();
 
 builder.Services.AddCodeFirstGrpc();

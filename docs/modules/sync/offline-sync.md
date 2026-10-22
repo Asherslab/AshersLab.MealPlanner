@@ -18,6 +18,10 @@ code:
   - AshersLab.MealPlanner.LocalData/Sync
   - AshersLab.MealPlanner.WASM/Sync
   - AshersLab.MealPlanner.WASM/wwwroot/js/connectivity.js
+  - AshersLab.MealPlanner.WASM/wwwroot/service-worker.published.js
+  - AshersLab.MealPlanner.WASM/wwwroot/service-worker.js
+  - AshersLab.MealPlanner.WASM/wwwroot/js/app-update.js
+  - AshersLab.MealPlanner.WASM/wwwroot/manifest.webmanifest
   - AshersLab.MealPlanner.WASM/Features/Ingredients/IngredientsPage.razor
   - AshersLab.MealPlanner.WASM/Data/LocalDataPage.cs
   - AshersLab.MealPlanner.Grpc/Features/Catalogue/CatalogueSeed.cs
@@ -241,15 +245,20 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   pull that fails rolls back, the cursor stays put, and this browser receives nothing after that op until the cause
   is fixed. **While Failed, change notices do not start rounds** - the stream's 25 s heartbeat and every other
   device's edit would each re-run a round that cannot succeed - so it retries every 30 s, on the planner's own edits,
-  and when they tap the chip. A dropped stream never turns "Sync problem", "Update needed" or "Paused · needs you"
-  into "Offline".
+  and when they tap the chip. A dropped stream never turns "Sync problem", "Update needed", "Paused · needs you" or
+  "Signed out" into "Offline".
+- **Signed out is not offline either.** Behind a sign-in proxy an expired session answers a sync call with a 401, which
+  the client sees as `Unauthenticated`: "Signed out" (amber), the tooltip saying changes are kept. Waiting does not
+  fix it, so tapping the chip **reloads** - and the page load reaches the login (the service worker lets a redirect
+  through). The proxy must answer a sync call with the 401 itself, not a redirect: a redirect to the login domain would
+  reach the app as a failed fetch, "Offline" forever ([deployment](../infrastructure/deployment.md#behind-nginx-proxy-manager-and-authelia)).
 - **Every window runs its own loop.** Safe because every step is idempotent; two windows pushing the same outbox
   only do the work twice (seen: the server logged a second window's create exactly once).
 
 **What the planner sees** is the chip at the right of the app bar (`WASM/Sync/SyncStatusChip.razor`), on every
 page: "Synced", "Saving 2", "Offline · 3 waiting", "Sync problem · 3 waiting" (red; the tooltip says what failed
-and that changes are kept), "Update needed", or "Paused · needs you" (amber, while the question below is open). Tapping
-it syncs now.
+and that changes are kept), "Update needed", "Paused · needs you" (amber, while the question below is open), or "Signed
+out" (amber). Tapping it syncs now - or, signed out, reloads to the login.
 
 ## The server came back empty
 
@@ -291,7 +300,9 @@ but this browser has not yet pulled back - normally for well under a second.
 Every push, pull and stream carries `SyncProtocol.Current` as the browser was built
 (`Contracts/.../SyncProtocol.cs`). The server refuses anything outside
 [`OldestSupported`, `Current`] with `FailedPrecondition` and the detail `sync-protocol-unsupported`, before
-reading the ops. The browser's answer is to reload once (guarded by `sessionStorage`) to fetch the new build -
+reading the ops. The browser's answer is to reload once (guarded by `sessionStorage`) to fetch the new build - through
+the service worker, which is asked to fetch the new build and hand over first (`mealPlannerApp.update`), since a plain
+reload would serve the cached old one -
 its outbox is in SQLite, survives the reload, is migrated by the new build and then pushed. A second refusal in
 the same session shows "Update needed" instead of reloading in a loop.
 
@@ -320,8 +331,30 @@ The browser's reload-on-refusal has not been seen in a browser: it needs a serve
 | Situation | Works offline? |
 |---|---|
 | App already open, signal drops (the shop) | Yes - edits queue and go on reconnect. The main case, and the one tested. |
-| Standalone deployment, installed as a PWA, opened with no signal | Will, once a service worker caches the app. There is none yet. |
-| Inside Home Assistant (ingress), opened with no signal | **No.** Home Assistant's own frontend must load first, and the companion app's web view is unlikely to support service workers. Accepted. |
+| At its own HTTPS address, installed (Add to Home Screen), opened with no signal | **Yes**, once it has been opened online once since the last deploy: the service worker serves the cached build and the browser's SQLite has the data. See below. |
+| Inside Home Assistant (ingress), opened with no signal | **No.** The app is a frame inside Home Assistant's own page, which must load and connect first; and a browser installs the top-level page (Home Assistant), never the frame. The companion app's web view is unlikely to run service workers at all. Accepted. |
+
+### The service worker
+
+What makes the installed app open with no signal (`WASM/wwwroot/service-worker.published.js`, registered by
+`js/app-update.js`). **Only a published build has it**: a dev build's worker passes everything to the network, so a
+rebuild is what the next reload shows.
+
+- **What it caches**: every file of the build, listed with its hash in `service-worker-assets.js` (written by publish,
+  `ServiceWorkerAssetsManifest` in the csproj), under a cache named for the build - except the OCR engine
+  (`lib/tesseract`, about 7 MB), fetched as before when a Costco receipt is read. Plus the shell, fetched from the
+  server **as served** - its `<base href>` already rewritten for this path - not checked against the static file's hash,
+  which an ingress path would fail.
+- **Scope is the worker's own**, never "/": every URL is resolved against `registration.scope`, so the same worker runs
+  at "/" and under `/api/hassio_ingress/<token>/`.
+- **What it answers**: GETs of the build's files (from the cache) and page loads, deep links included (the cached
+  shell). Never a POST - every sync call is gRPC-Web over POST and always goes to the network - nor anything outside the
+  build (`/healthz`).
+- **A new deploy** installs beside the old build and waits; it takes over when every window has closed, or at once when
+  the app asks. The app asks when the server refuses this build's protocol version (`SyncLoop.Refused` calls
+  `mealPlannerApp.update`: fetch the new worker, `skip-waiting`, reload). A plain reload there would serve the same cached
+  old build and refuse again. `updateViaCache: 'none'`: the browser checks the worker and its asset list against the
+  server on every check, never its HTTP cache.
 | iOS Safari evicts site storage after weeks unused | Data re-syncs from the server (a snapshot); only unsynced edits are lost. Accepted. |
 | The Pi restored from a Home Assistant backup | Edits made since the backup come back from whichever browsers hold them, on their next round. Nothing to do on any phone. |
 | The add-on reinstalled with no backup | Each phone or computer that still has data asks once; "Send my copy" on each rebuilds the server from all of them. |

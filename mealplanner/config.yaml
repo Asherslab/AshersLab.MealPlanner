@@ -19,17 +19,23 @@ arch:
 startup: application
 boot: auto
 
-# Reachable only through Home Assistant's sidebar. No `ports:` - nothing is published on the host, so the only
-# client the app ever sees is the Supervisor.
-ingress: true
-ingress_port: 8099
-panel_icon: mdi:food
-panel_title: Meals
+# Reached through a sign-in proxy - Nginx Proxy Manager with Authelia in front - at its own HTTPS address, so it can
+# be installed on a phone and opened with no signal. Not through Home Assistant's sidebar: an app in Home Assistant's
+# frame can be neither (docs/modules/sync/offline-sync.md#where-offline-works).
+#
+# The proxy reaches it on Home Assistant's internal add-on network, on 8099. The port is not published on the host
+# unless the owner sets one on the Network tab - only needed if the proxy cannot reach the add-on network (a proxy on
+# another machine). Either way the app refuses every connection not from `trusted_proxies`.
+ingress: false
+ports:
+  8099/tcp: null
+ports_description:
+  8099/tcp: Only for a sign-in proxy on another machine. Leave empty for one on this Home Assistant.
 
-# The host refuses every request not from this address and believes X-Ingress-Path and X-Remote-User-* only
-# from it (AshersLab.MealPlanner.Grpc/Features/Ingress). 172.30.32.2 is the Supervisor on the hassio network.
+# A proxy that signs people in names them in a header; the host believes it only from `trusted_proxies`
+# (AshersLab.MealPlanner.Grpc/Features/Auth). Without a valid address the add-on does not start.
 environment:
-  Ingress__TrustedProxy: 172.30.32.2
+  Auth__Mode: TrustedHeader
 
 # Hot backups that are still consistent. The live SQLite file copied mid-write, or without the -wal holding its
 # newest commits, can be unusable; so before each hot backup the app writes a self-contained copy with VACUUM INTO
@@ -44,6 +50,16 @@ backup_exclude:
   - mealplanner.db-shm
   - mealplanner.snapshot.db.partial
 
-# The Actual Budget settings and S3 backup arrive with version 2; there is nothing to configure yet.
-options: {}
-schema: {}
+# The Configuration tab, read from /data/options.json (Grpc/Features/Auth/AddOnOptions.cs). trusted_proxies: where the
+# sign-in proxy connects from. The default is Home Assistant's whole internal network - every add-on on this machine
+# could claim to be the proxy; narrow it to the proxy's own address once known (DOCS.md says how). user_header: the
+# header the proxy names the signed-in person in - the Nginx Proxy Manager set-up in DOCS.md sets X-Forwarded-User from
+# Authelia's Remote-User. The mode itself is not an option: no setting here can turn the sign-in off.
+options:
+  trusted_proxies: "172.30.32.0/23"
+  user_header: "X-Forwarded-User"
+  display_name_header: "X-Forwarded-Name"
+schema:
+  trusted_proxies: str
+  user_header: str
+  display_name_header: str?

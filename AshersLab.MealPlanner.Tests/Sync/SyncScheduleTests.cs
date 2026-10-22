@@ -29,6 +29,16 @@ public class SyncScheduleTests
     }
 
     [Fact]
+    public void A_401_is_signed_out_never_offline_and_a_dropped_stream_does_not_hide_it()
+    {
+        // HTTP 401 through gRPC-Web: the sign-in proxy's session expired, or the app saw no user header.
+        Assert.Equal(SyncConnection.SignedOut, SyncSchedule.AfterFailure(new RpcException(new Status(StatusCode.Unauthenticated, "Bad gRPC response. HTTP status code: 401"))));
+        // A 403 is the app refusing whoever is not its proxy: a set-up problem, shown as one.
+        Assert.Equal(SyncConnection.Failed, SyncSchedule.AfterFailure(new RpcException(new Status(StatusCode.PermissionDenied, "403"))));
+        Assert.Null(SyncSchedule.AfterStreamDropped(SyncConnection.SignedOut));
+    }
+
+    [Fact]
     public void Offline_retries_quickly_and_everything_else_waits_the_fallback()
     {
         Assert.Equal(TimeSpan.FromSeconds(5), SyncSchedule.Wait(SyncConnection.Offline));

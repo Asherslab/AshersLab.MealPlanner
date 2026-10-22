@@ -167,6 +167,13 @@ public sealed class SyncLoop(
                 case SyncConnection.Refused:
                     await Refused();
                     break;
+                case SyncConnection.SignedOut:
+                    // The sign-in proxy's session expired. A reload goes to its login page: page loads try the network
+                    // first (service-worker.published.js), so the login is not hidden behind the cached app.
+                    logger.LogInformation("Sync round was refused a sign-in: {Message}", ex.Message);
+                    await SetStatus(SyncConnection.SignedOut,
+                        "Signed out. Reload the app to sign in again - changes are kept on this device until then.", Status.LastSyncedAt);
+                    break;
                 case SyncConnection.Offline:
                     // Offline, the server restarting, a proxy timing out: all the same to the planner. Edits wait.
                     logger.LogInformation("Sync round could not reach the server, will retry: {Message}", ex.Message);
@@ -244,7 +251,9 @@ public sealed class SyncLoop(
         if (await js.InvokeAsync<string?>("sessionStorage.getItem", ReloadedKey) is null)
         {
             await js.InvokeVoidAsync("sessionStorage.setItem", ReloadedKey, "1");
-            navigation.Refresh(forceReload: true);
+            // Not a plain reload: the service worker would serve the same cached old build. This fetches the new one,
+            // lets it take over, then reloads (js/app-update.js).
+            await js.InvokeVoidAsync("mealPlannerApp.update");
         }
     }
 

@@ -42,8 +42,9 @@ public static class AppShell
 
         string body = Rewrite(html, IngressRequest.BaseHref(context));
 
-        // no-cache: index.html is the whole update story (there is no service worker), and its body now
-        // depends on a header, so a cached copy from another base path would break the app outright.
+        // no-cache: its body depends on a header, so a cached copy from another base path would break the app
+        // outright. The installed app's service worker caches its own copy, fetched from here with its scope's base
+        // (WASM/wwwroot/service-worker.published.js); a browser without one reads this every load.
         context.Response.ContentType                 = "text/html; charset=utf-8";
         context.Response.Headers.CacheControl        = "no-cache";
         context.Response.Headers[HeaderNames.Vary]   = IngressPath.Header;
