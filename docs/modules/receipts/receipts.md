@@ -3,7 +3,7 @@ title: Receipts
 kind: reference
 status: current
 module: receipts
-verified: 2026-10-22
+verified: 2026-10-23
 code:
   - AshersLab.MealPlanner.Shared.Domain/Receipts
   - AshersLab.MealPlanner.Shared.Domain/Stores/StoreRules.cs
@@ -175,7 +175,9 @@ first place to look is the non-SIMD core older Safari falls back to.
    an alias to a product since deleted matches nothing.
 3. **Suggestions**, up to four: products at the store sharing the most words (Dice), then ingredients whose every word is in
    the description ("black beans" in "Woolworths black beans pdm 420g") to make a product of. Words drop the store's brand
-   words, `pdm`, pack words and sizes, and fold plurals. Ties by name, so every phone lists the same.
+   words, `pdm`, pack words and sizes, and fold plurals - the same way from either side, so "Peach" meets "peaches" and
+   "Bay leaves" meets "bay leaf" (`Singular`: -ies and -ie to -y, -oes, -ches/-shes/-sses/-xes, then -s, and a short list
+   of -ves words, since "olives" is not "olif"). Ties by name, so every phone lists the same.
 
 Matched any way but 1 or 2, importing writes the alias - unless the product will match by the line's code next time (a new
 product made from a coded line). A Costco line matched to an existing product with no code, or another code, teaches the

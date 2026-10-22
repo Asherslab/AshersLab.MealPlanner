@@ -72,6 +72,25 @@ public class ReceiptMatchingTests
         Assert.Empty(ReceiptMatching.Suggest("700g", Products, Ingredients));
     }
 
+    [Theory]
+    [InlineData("Apples", "Apple Granny Smith")]
+    [InlineData("Apple", "Pink lady apples 2kg")]
+    [InlineData("Peaches", "Peach yellow each")]
+    [InlineData("Peach", "Woolworths peaches in juice 410g")]
+    [InlineData("Radishes", "Radish bunch")]
+    [InlineData("Strawberry", "Strawberries 250g punnet")]
+    [InlineData("Potato", "Potatoes washed 2kg")]
+    [InlineData("Bay leaves", "Bay leaf 5g")]
+    [InlineData("Leaf spinach", "Baby spinach leaves 120g")]
+    [InlineData("Olives", "Kalamata olive 300g")]
+    [InlineData("Cookie", "Choc chip cookies 200g")]
+    [InlineData("Glass jar", "Glasses jars 6pk")]
+    public void An_ingredient_is_suggested_whichever_of_it_and_the_description_is_plural(string ingredient, string description)
+    {
+        Guid id = Guid.CreateVersion7();
+        Assert.Equal([id], ReceiptMatching.Suggest(description, [], [new MatchIngredient(id, ingredient)]).Select(s => s.IngredientId));
+    }
+
     [Fact]
     public void Suggestions_are_the_best_few_in_an_order_every_device_agrees_on()
     {

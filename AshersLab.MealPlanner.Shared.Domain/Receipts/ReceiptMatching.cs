@@ -92,9 +92,21 @@ public static partial class ReceiptMatching
             .Where(w => !Numeric().IsMatch(w) && !Noise.Contains(w) && w.Length > 1)
             .Select(Singular)];
 
+    // Plurals a suffix rule would get wrong: "leaves" is not "leave", but "olives" is "olive", so -ves cannot be a rule.
+    private static readonly Dictionary<string, string> Irregular = new(StringComparer.Ordinal)
+    {
+        ["leaves"] = "leaf", ["loaves"] = "loaf", ["halves"] = "half",
+    };
+
+    // Folded the same way from either side, so "Peach" meets "peaches" and "Cookies" meets "cookie": the result is a key
+    // for comparing, not a word to show - "cookie" and "berries" both fold to a -y.
     private static string Singular(string word) =>
-        word.EndsWith("ies", StringComparison.Ordinal) && word.Length > 4 ? word[..^3] + "y"
+        Irregular.TryGetValue(word, out string? one) ? one
+        : word.EndsWith("ies", StringComparison.Ordinal) && word.Length > 4 ? word[..^3] + "y"
+        : word.EndsWith("ie", StringComparison.Ordinal) && word.Length > 3 ? word[..^2] + "y"
         : word.EndsWith("oes", StringComparison.Ordinal) && word.Length > 4 ? word[..^2]
+        : (word.EndsWith("ches", StringComparison.Ordinal) || word.EndsWith("shes", StringComparison.Ordinal)
+           || word.EndsWith("sses", StringComparison.Ordinal) || word.EndsWith("xes", StringComparison.Ordinal)) && word.Length > 4 ? word[..^2]
         : word.EndsWith('s') && !word.EndsWith("ss", StringComparison.Ordinal) && word.Length > 3 ? word[..^1]
         : word;
 
