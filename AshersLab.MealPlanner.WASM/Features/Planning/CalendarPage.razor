@@ -556,7 +556,7 @@
 
     private async Task AddEntry(DateOnly date, Slot slot)
     {
-        CalendarEntryDraft start = new(null, null, false, date, slot.Id);
+        CalendarEntryDraft start = new(null, SlotRules.NewEntryPeople(slot.PeopleIds(), _people.Select(p => p.Id)), false, date, slot.Id);
         CalendarEntrySheetResult? result;
         while (true)
         {

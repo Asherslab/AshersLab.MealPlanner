@@ -82,6 +82,37 @@ public sealed class PlanSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Who_usually_eats_in_a_slot_reaches_another_browser_by_op_and_by_snapshot_and_back_to_everyone()
+    {
+        await using TestBrowser a     = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser byOps = await TestBrowser.OpenAsync(_server);
+        await byOps.SyncAsync();
+
+        Guid pip = Guid.CreateVersion7(a.Now);
+        await a.WriteAsync(SyncedEntities.Person, pip, OpKind.Create,
+            [new OpField(PersonRules.NameField, "Pip"), new OpField(PersonRules.ColourField, PersonRules.Palette[0])]);
+        await a.WriteAsync(SyncedEntities.Slot, CatalogueSeed.Slot(0), OpKind.Update, [new OpField(SlotRules.PeopleField, PlanPeople.Format([pip]))]);
+        await a.SyncAsync();
+        await byOps.SyncAsync();
+        await using TestBrowser bySnapshot = await TestBrowser.OpenAsync(_server);
+        await bySnapshot.SyncAsync();
+
+        foreach (TestBrowser b in new[] { byOps, bySnapshot })
+        {
+            await using LocalDbContext db = b.CreateDbContext();
+            Dictionary<Guid, Slot> slots = await db.Slots.AsNoTracking().ToDictionaryAsync(s => s.Id, Ct);
+            Assert.Equal([pip], slots[CatalogueSeed.Slot(0)].PeopleIds());
+            Assert.Null(slots[CatalogueSeed.Slot(4)].PeopleIds());
+        }
+
+        await byOps.WriteAsync(SyncedEntities.Slot, CatalogueSeed.Slot(0), OpKind.Update, [new OpField(SlotRules.PeopleField, null)]);
+        await byOps.SyncAsync();
+        await a.SyncAsync();
+        await using LocalDbContext dbA = a.CreateDbContext();
+        Assert.Null((await dbA.Slots.SingleAsync(s => s.Id == CatalogueSeed.Slot(0), Ct)).People);
+    }
+
+    [Fact]
     public async Task A_plan_with_its_people_and_choices_reaches_another_browser_by_op_and_by_snapshot()
     {
         await using TestBrowser a     = await TestBrowser.OpenAsync(_server);

@@ -3,7 +3,7 @@ title: People, slots and plan templates
 kind: reference
 status: current
 module: planning
-verified: 2026-10-22
+verified: 2026-10-23
 code:
   - AshersLab.MealPlanner.Shared.Domain/Planning
   - AshersLab.MealPlanner.Shared.Data/Planning
@@ -14,6 +14,7 @@ code:
   - AshersLab.MealPlanner.Tests/Planning
   - AshersLab.MealPlanner.Tests/Domain/PlanningRulesTests.cs
   - .claude/tools/chrome-plans-check.mjs
+  - .claude/tools/chrome-slot-people-check.mjs
 ---
 
 # People, slots and plan templates
@@ -40,6 +41,13 @@ The calendar - a template applied to real dates, overrides, skipping - is [the c
   household later is in every such entry - or the sorted ids (`PlanPeople.Format`, one spelling per set). Two phones
   changing it offline: the later one wins, as a rename does. That is right for one decision; it is not a list two
   phones add to.
+- **A slot says who usually eats in it, and that is only where a new entry starts.** Not everyone eats in every slot -
+  the toddler's breakfast and snacks are the toddler's. A slot's `People` (null for everyone, else `PlanPeople`'s
+  spelling) is what "Who eats it" starts as when an entry is added to it, on a plan or on the calendar
+  (`SlotRules.NewEntryPeople`, tested): its people still in the household, or everyone when none are. It is never
+  read for costs, serves or the shopping list - an entry's own `People` is - so changing it changes no entry already
+  planned, and an entry can still be for anyone. A person deleted while a slot names them is not refused; they drop
+  out of it. Set as a whole, last writer wins, like an entry's.
 - **Slot names need not be unique.** The day has two snacks. They are told apart by position, everywhere: the page
   allows the same name twice (`NameList.AllowSameName`), and the import maps the nth "Snack" row to the nth Snack slot.
 - **Fewer weeks hides entries, it does not delete them.** An entry's week may be beyond its template's `WeekCount`
@@ -51,7 +59,7 @@ The calendar - a template applied to real dates, overrides, skipping - is [the c
 | Row | Fields | Notes |
 |---|---|---|
 | `Person` | `Name`, `Colour`, `Portion` | `Colour` is `#rrggbb`, lower case, from `PersonRules.Palette`; a new person gets the first nobody has. `Portion`: how much of a serve they eat, a quarter to two in quarters; null is a full serve ([batches and serves](batches-and-serves.md)) |
-| `Slot` | `Name`, `Position` | a hand-set position like a meal group (`ListPosition`); seeded |
+| `Slot` | `Name`, `Position`, `People` | a hand-set position like a meal group (`ListPosition`); seeded. `People`: who usually eats in it, above; null (everyone) on the seeds and on every slot from before it existed (migration `AddSlotPeople`, both databases; sync protocol 3) |
 | `PlanTemplate` | `Name`, `WeekCount`, `StartsOn`, `Earlier` | 1 to 12 weeks; `StartsOn` is the Monday week 1 began on the calendar, set by applying it; `Earlier` the rotations before a change of start or week count, which keep the days before it as they were ([the calendar](calendar.md)) |
 | `TemplateEntry` | `TemplateId`, `Week`, `Day`, `SlotId`, `People` | `Day` by name ("Monday"); `People` above |
 | `TemplateChoice` | `EntryId`, `MealId` | one per meal the entry may be |
@@ -86,7 +94,10 @@ itself counts too, and is named as "the calendar on Tue 27 Oct" ([the calendar](
 change the name, pick one of eight colours, choose what they **Eat** ("a full serve", "half a serve" - a native select), or
 Delete. Someone not on a full serve says so on their row: "eats half a serve". One tap and a name to add someone.
 
-**Slots of the day** (`/slots`): the same list as meal groups - add, rename, arrows, delete.
+**Slots of the day** (`/slots`): the same list as meal groups - add, rename, arrows, delete - and under each slot's
+name a "Usually for" row of chips: Everyone, then each person with their magnet. A tap saves; tapping someone in or
+out of a slot that was Everyone makes it theirs, and nobody left is Everyone. The row is a `NameList` `RowDetail`.
+Hidden until someone is in the household.
 
 **Plans** (`/plans`; on a phone More → Plans): each plan with "4 weeks · 120 entries"; "New plan" and
 "Weeks" boxes, Add opens the new plan.
@@ -102,7 +113,7 @@ Delete. Someone not on a full serve says so on their row: "eats half a serve". O
 **The entry sheet** (full screen on a phone): "Week 2 · Tuesday · Dinner"; the search box, focused, lists meals as
 letters are typed; a tap adds one and the box stays up, so a second tap makes a choice ("One of"). Each choice has an
 x, and all but the first an arrow to make it the usual one. "Who eats it": Everyone, or one chip per person in their
-colour. Save, Cancel, and Remove for an existing entry. **Adding a meal to a slot: +, type a few letters, tap, Save -
+colour - a new entry starts as the slot's usual eaters. Save, Cancel, and Remove for an existing entry. **Adding a meal to a slot: +, type a few letters, tap, Save -
 three taps.** Saving with no meal says "Pick a meal, or Remove the entry." An entry and its choices are written in one
 transaction (`LocalDataPage.WriteAllAsync`); saving unchanged sends nothing.
 
@@ -125,8 +136,15 @@ phone entry sheet.
 plan (287 entries) and people from earlier runs: the new person took the first colour nobody else had, and B, a fresh
 profile, had the whole import within about 22 s of starting.
 
-The in-process tests: `Tests/Domain/PlanningRulesTests.cs` (every field's one spelling, who eats it, sheet day names,
+2026-10-23, `.claude/tools/chrome-slot-people-check.mjs <scratch> <person>` (ports 19377/19378; `--restore` sets it back),
+A desktop-sized and B phone-sized: B taps the person's chip under Breakfast and the server's `Slot` row holds their id;
+A's Slots page shows them chosen and not Everyone, and A's browser SQLite holds the same `People`; on A's calendar the
++ in a Breakfast cell opens the sheet with only that person chosen, and in a Dinner cell with Everyone. Screenshot of
+the phone's Slots page.
+
+The in-process tests: `Tests/Domain/PlanningRulesTests.cs` (every field's one spelling, who eats it, a slot's usual
+eaters and where a new entry starts from them, sheet day names,
 and what saving an entry sends: unchanged nothing, a removed choice, an added one last, a new usual one rewriting the
 rows after it, a meal two phones both added) and `Tests/Planning/PlanSyncTests.cs` (seeds, every field by op and by
 snapshot, choices added on two offline browsers both surviving in order, a deleted choice and a deleted template
-dropping out of `PlanBook`, who eats it last-writer-wins).
+dropping out of `PlanBook`, who eats it last-writer-wins, a slot's usual eaters by op, by snapshot and back to everyone).

@@ -15,7 +15,7 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("AshersLab.MealPlanner.Grpc.Data.Models.Sync.DbOp", b =>
                 {
@@ -389,6 +389,10 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("People")
+                        .HasMaxLength(740)
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("Position")

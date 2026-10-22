@@ -73,6 +73,7 @@
                                            OnClick="() => Delete(item)" data-testid="@($"{TestId}-delete")"/>
                         </span>
                     </div>
+                    @RowDetail?.Invoke(item)
                     @if (_inUse == item.Id)
                     {
                         <MudAlert Severity="Severity.Info" Dense="true" Class="name-in-use" ShowCloseIcon="true"
@@ -126,6 +127,9 @@
 
     /// <summary>Set to make the list reorderable: the item, and -1 for up or +1 for down.</summary>
     [Parameter] public Func<Guid, int, Task>? OnMove { get; set; }
+
+    /// <summary>More of the item under its name, while it is not being renamed: a slot's usual eaters.</summary>
+    [Parameter] public RenderFragment<NameListItem>? RowDetail { get; set; }
 
     private string? _newName;
     private string? _addError;

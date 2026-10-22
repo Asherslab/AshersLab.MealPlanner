@@ -420,6 +420,10 @@ namespace AshersLab.MealPlanner.LocalData.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("People")
+                        .HasMaxLength(740)
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("Position")
                         .HasColumnType("TEXT");
 

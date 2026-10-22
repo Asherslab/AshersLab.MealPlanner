@@ -311,9 +311,10 @@ the same session shows "Update needed" instead of reloading in a loop.
 Bump `Current` when an entity's fields or their meaning change in a way an older browser would misread; raise
 `OldestSupported` when the server can no longer accept the older shape. A change to *how* sync works counts, not
 only an entity's shape: version 2 is the restore check - a pull carries the chain at its cursor and may be answered
-with a `HistoryLost` snapshot - which a version-1 browser can neither send nor read, so both `Current` and
-`OldestSupported` are 2. **While nothing is in production, wipe both databases instead** of keeping an old version
-alive.
+with a `HistoryLost` snapshot - which a version-1 browser can neither send nor read. Version 3 adds a slot's `People`:
+a version-2 browser throws applying a slot op that carries a field it does not know, so both `Current` and
+`OldestSupported` are 3. **The app holds real data: never wipe either database to get past a version.** A new field
+is a migration on both sides that leaves existing rows meaning what they did, plus this bump.
 
 The refusal is tested over gRPC-Web for all three calls (`SyncEndToEndTests.Refuses_a_client_on_a_protocol_version_it_cannot_read`).
 The browser's reload-on-refusal has not been seen in a browser: it needs a server built with a higher

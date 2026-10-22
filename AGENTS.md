@@ -122,12 +122,19 @@ will complete. Say so.
 - **A cost that cannot be computed is shown as incomplete, never as zero.** An ingredient with no price
   makes every meal using it "from $X + 1 unpriced"; it does not quietly cost nothing.
 
-## This app is not in production yet
+## This app is in production
 
-**No data in this app's database is worth preserving** until the household starts using it. Wipe,
-rewrite schemas, squash migrations freely. That expires the day real meals are entered — after that,
-both the server SQLite and every browser's local SQLite hold real data, and a schema change needs a
-migration on **both** sides plus a sync-protocol version check.
+**The household is entering real data** (since 2026-10-23). Both the server SQLite and every browser's
+local SQLite hold rows worth keeping. Never wipe either, never squash or rewrite an applied migration.
+
+- A schema change is an **additive EF migration on both sides** — `Grpc` and `LocalData` — that keeps
+  existing rows meaningful. A new column is nullable or has a default that means "as before".
+- A new op field, or a changed meaning of one, **bumps `SyncProtocol.Current`** — an older browser throws
+  on a field it does not know. Raise `OldestSupported` to match when an older browser would misread what
+  the server now sends; it reloads into the new build with its outbox intact
+  ([offline sync](docs/modules/sync/offline-sync.md#protocol-version)).
+- A rename or removal of an op field must still apply the ops already in the log, which are replayed on
+  restore and on a fresh browser.
 
 ## When to stop and ask
 

@@ -207,6 +207,7 @@ public static class SyncedEntities
             slot.HasKey(s => s.Id);
             slot.Property(s => s.Id).ValueGeneratedNever();
             slot.Property(s => s.Name).HasMaxLength(Names.MaxLength);
+            slot.Property(s => s.People).HasMaxLength(PlanPeople.Max * 37);
         });
 
         modelBuilder.Entity<PlanTemplate>(template =>

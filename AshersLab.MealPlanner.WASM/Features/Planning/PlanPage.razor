@@ -224,7 +224,8 @@
     private async Task AddEntry(DayOfWeek day, Slot slot)
     {
         int week = _week;
-        TemplateEntrySheetResult? result = await PlanDialogs.EditEntryAsync(Dialogs, Viewport, new TemplateEntryDraft([], null),
+        IReadOnlyList<Guid>? people = SlotRules.NewEntryPeople(slot.PeopleIds(), _people.Select(p => p.Id));
+        TemplateEntrySheetResult? result = await PlanDialogs.EditEntryAsync(Dialogs, Viewport, new TemplateEntryDraft([], people),
             isNew: true, Where(day, slot), MealOptions(), PersonOptions());
         if (result?.Saved is not { } draft)
             return;

@@ -61,6 +61,30 @@ public class PlanningRulesTests
     }
 
     [Fact]
+    public void A_slot_says_who_usually_eats_in_it_in_the_one_spelling_of_a_list_of_people()
+    {
+        Guid a = Guid.Parse("00000000-0000-7000-8000-000000000001"), b = Guid.Parse("00000000-0000-7000-8000-000000000002");
+        Assert.Null(SlotRules.OpProblem(OpKind.Update, [new("People", PlanPeople.Format([b, a]))]));
+        Assert.Null(SlotRules.OpProblem(OpKind.Update, [new("People", null)]));
+        Assert.NotNull(SlotRules.OpProblem(OpKind.Update, [new("People", $"{b},{a}")]));
+        Assert.NotNull(SlotRules.OpProblem(OpKind.Update, [new("People", "the toddler")]));
+    }
+
+    [Fact]
+    public void A_new_entry_is_for_the_slots_usual_eaters_still_in_the_household_or_everyone()
+    {
+        Guid toddler = Guid.CreateVersion7(), adult = Guid.CreateVersion7(), gone = Guid.CreateVersion7();
+        Guid[] household = [toddler, adult];
+
+        Assert.Null(SlotRules.NewEntryPeople(null, household));
+        Assert.Equal([toddler], SlotRules.NewEntryPeople([toddler], household));
+        Assert.Equal([toddler], SlotRules.NewEntryPeople([toddler, gone], household));
+        // Nobody it names is still here: everyone, never an entry nobody eats.
+        Assert.Null(SlotRules.NewEntryPeople([gone], household));
+        Assert.Null(SlotRules.NewEntryPeople([toddler], []));
+    }
+
+    [Fact]
     public void An_entry_is_a_week_a_day_by_name_a_slot_and_who_eats_it()
     {
         string template = OpValues.FormatId(A)!, slot = OpValues.FormatId(B)!;

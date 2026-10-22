@@ -24,6 +24,9 @@ public sealed class SlotEntity : SyncedEntity<Slot>
                     ? position
                     : throw new ArgumentException($"'{field.Value}' is not a position.", nameof(field));
                 break;
+            case SlotRules.PeopleField:
+                row.People = field.Value;
+                break;
             default:
                 throw new ArgumentException($"A slot has no field '{field.Name}'.", nameof(field));
         }
@@ -33,5 +36,6 @@ public sealed class SlotEntity : SyncedEntity<Slot>
     [
         new(SlotRules.NameField, row.Name),
         new(SlotRules.PositionField, ListPosition.Format(row.Position)),
+        new(SlotRules.PeopleField, row.People),
     ];
 }

@@ -12,6 +12,9 @@
 @*
     The slots of the day - Breakfast, Snack, Lunch, Snack, Dinner - in the order a plan shows them. Seeded; arranged
     with the arrows, like the meal groups. Two may share a name. A slot a plan uses cannot be deleted.
+
+    Under each, who usually eats in it - the toddler's breakfast and snacks. A tap saves. It is only where a new
+    entry's "who eats it" starts: no entry already planned changes.
 *@
 
 <PageTitle>Slots - Meal Planner</PageTitle>
@@ -21,17 +24,41 @@
               Items="_items" Noun="slot" TestId="slot" NewLabel="New slot" UsedByNoun="plan" AllowSameName="true"
               NameProblem="SlotRules.NameProblem"
               InUseHint="Move its entries to another slot first."
-              OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move"/>
+              OnAdd="Add" OnRename="Rename" OnDelete="Delete" OnMove="Move">
+        <RowDetail>
+            @if (_people.Count > 0 && _slots.FirstOrDefault(s => s.Id == context.Id) is { } slot)
+            {
+                IReadOnlyList<Guid>? usual = SlotRules.NewEntryPeople(slot.PeopleIds(), _people.Select(p => p.Id));
+                <div class="slot-people" role="group" aria-label="@($"Who usually eats {slot.Name}")" data-testid="slot-people">
+                    <span class="slot-people-label">Usually for</span>
+                    <MudChip T="string" Size="Size.Small" Color="@(usual is null ? Color.Primary : Color.Default)"
+                             Variant="@(usual is null ? Variant.Filled : Variant.Outlined)"
+                             OnClick="() => SetPeople(slot, null)" data-testid="slot-everyone">Everyone</MudChip>
+                    @foreach (Person person in _people)
+                    {
+                        bool chosen = usual?.Contains(person.Id) == true;
+                        <MudChip T="string" Size="Size.Small" Color="@(chosen ? Color.Primary : Color.Default)"
+                                 Variant="@(chosen ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="() => Toggle(slot, usual, person.Id)" data-testid="slot-person" data-id="@person.Id">
+                            <span class="magnet slot-magnet" style="@($"background:{person.Colour}")"></span>@person.Name
+                        </MudChip>
+                    }
+                </div>
+            }
+        </RowDetail>
+    </NameList>
 </LocalDataGate>
 
 @code {
     private List<Slot>         _slots = [];
+    private List<Person>       _people = [];
     private List<NameListItem> _items = [];
     private HashSet<Guid>      _unsent = [];
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
         _slots = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
+        _people = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];
         _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
         PlanBook plans = await PlanBook.LoadAsync(db);
         DateOnly today = DateOnly.FromDateTime(DateTime.Now);
@@ -52,6 +79,24 @@
 
     private Task Rename(Guid id, string name) =>
         WriteAsync(SyncedEntities.Slot, id, OpKind.Update, [new OpField(SlotRules.NameField, name)]);
+
+    /// <summary>A person's chip: in or out of the slot's usual eaters. Nobody left is everyone.</summary>
+    private Task Toggle(Slot slot, IReadOnlyList<Guid>? usual, Guid person)
+    {
+        List<Guid> people = [.. usual ?? []];
+        if (!people.Remove(person))
+            people.Add(person);
+        return SetPeople(slot, people);
+    }
+
+    private Task SetPeople(Slot slot, IReadOnlyList<Guid>? people)
+    {
+        string? value = PlanPeople.Format(people);
+        // Unchanged: no op - it would still win against a change made meanwhile on another device.
+        return value == PlanPeople.Format(SlotRules.NewEntryPeople(slot.PeopleIds(), _people.Select(p => p.Id)))
+            ? Task.CompletedTask
+            : WriteAsync(SyncedEntities.Slot, slot.Id, OpKind.Update, [new OpField(SlotRules.PeopleField, value)]);
+    }
 
     private Task Delete(Guid id) => WriteAsync(SyncedEntities.Slot, id, OpKind.Delete, []);
 

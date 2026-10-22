@@ -1,0 +1,24 @@
+/* Who usually eats in the slot: a row of chips under its name, the label in the sheet's bottle green. */
+.slot-people {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px 12px 0;
+}
+
+.slot-people ::deep .mud-chip {
+    margin: 0;
+}
+
+.slot-people-label {
+    margin-right: 4px;
+    font: 700 0.8125rem/1.25 var(--font-body);
+    color: var(--bottle);
+}
+
+.slot-magnet {
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
+}
