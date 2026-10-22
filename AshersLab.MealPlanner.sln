@@ -98,6 +98,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "open-questions", "open-ques
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "work", "work", "{E246D070-6AAB-4CF7-B7DE-F885A8F04473}"
 	ProjectSection(SolutionItems) = preProject
+		docs\work\2026-10-after-v1-handover.md = docs\work\2026-10-after-v1-handover.md
 		docs\work\2026-10-v1-acceptance.md = docs\work\2026-10-v1-acceptance.md
 		docs\work\2026-10-v1-scope.md = docs\work\2026-10-v1-scope.md
 		docs\work\2026-10-version-2-integrations.md = docs\work\2026-10-version-2-integrations.md
