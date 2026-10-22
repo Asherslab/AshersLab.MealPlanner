@@ -253,10 +253,14 @@
                    ("Ayam Red Curry Paste 185g" is curry paste), its pack read from the description. *@
                 @if (state.Choice == "" && state.Review.Match.Suggestions.FirstOrDefault(s => s.ProductId is not null || s.IngredientId is not null) is { } guess)
                 {
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2 line-suggest"
-                               OnClick="@(() => Choose(state, guess.ProductId is { } p ? "p:" + p : "n:" + guess.IngredientId))" data-testid="receipt-line-suggest">
-                        Is it @guess.Name?
-                    </MudButton>
+                    @* A question with its answer to tap, not a question as the button. *@
+                    <div class="d-flex align-center flex-wrap gap-2 mt-2">
+                        <MudText Typo="Typo.body1">Is it @guess.Name?</MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="line-suggest"
+                                   OnClick="@(() => Choose(state, guess.ProductId is { } p ? "p:" + p : "n:" + guess.IngredientId))" data-testid="receipt-line-suggest">
+                            Yes
+                        </MudButton>
+                    </div>
                 }
                 <label class="native-select mt-2 d-block">
                     <span>It is</span>
@@ -267,7 +271,7 @@
                             <optgroup label="Suggested">
                                 @foreach (MatchSuggestion s in state.Review.Match.Suggestions)
                                 {
-                                    <option value="@(s.ProductId is { } p ? $"p:{p}" : $"n:{s.IngredientId}")">@(s.ProductId is null ? $"New product of {s.Name}" : s.Name)</option>
+                                    <option value="@(s.ProductId is { } p ? $"p:{p}" : $"n:{s.IngredientId}")">@(s.ProductId is null ? $"{s.Name} (first time from {StoreName(import.StoreId)})" : s.Name)</option>
                                 }
                             </optgroup>
                         }
@@ -277,7 +281,8 @@
                                 <option value="p:@p.Id">@p.Name</option>
                             }
                         </optgroup>
-                        <optgroup label="A new product of">
+                        @* Picking one makes a product of that ingredient at this store - never a new ingredient, so it is not worded "new". *@
+                        <optgroup label="@($"Your ingredients, first time from {StoreName(import.StoreId)}")">
                             @foreach (Ingredient i in _ingredients)
                             {
                                 <option value="n:@i.Id">@i.Name</option>

@@ -247,11 +247,13 @@ $16.10 · Paper bags $2.00 · Total $18.10", or Costco's "Total $91.45 · 5 item
 Then a card per line: on a Costco receipt **the strip of the receipt it was read from, above it on a phone, beside it on a
 desktop** - its name, codes and numbers as printed, and a discount's line under the item it came off. Its description,
 "#700303 · 2 × $6.99 = $10.98 · $3.00 off" (or "700 g at $13.00/kg = $9.10", "not supplied", "a substitute"), a green
-"matched" chip when its code or alias matched, an "Is it Black beans 420g?" button for the best suggestion (one tap confirms) -
-a product, or the first time something is bought a new product of an ingredient ("Is it Curry paste?" on "Ayam Red Curry
-Paste 185g", its pack read as 185 g), so a first receipt is not a dropdown per line,
-and **It is** - a native select: the suggestions, the store's products, "a new product of" each ingredient, "a new product,
-not food", "leave it out". A new product shows its name and pack size, read from the description ("420g", "= 420 g"). A food
+"matched" chip when its code or alias matched, "Is it Black beans 420g?" and a **Yes** button for the best suggestion (one tap
+confirms; the question is text, the answer is what is tapped) - a product, or the first time something is bought a new product
+of an ingredient ("Is it Curry paste?" on "Ayam Red Curry Paste 185g", its pack read as 185 g), so a first receipt is not a
+dropdown per line, and **It is** - a native select: the suggestions, the store's products, "Your ingredients, first time from
+Woolworths" (each ingredient, as "Curry paste (first time from Woolworths)" among the suggestions), "a new product, not food",
+"leave it out". It never says "new product of": that read as making a new ingredient, when it makes a product of the one
+there is. A new product shows its name and pack size, read from the description ("420g", "= 420 g"). A food
 line whose purchase a tick noted shows "Replaces the shopping list's tick of Thu 22 Oct (500 g)", ticked. Under each line,
 what importing does: "Prices it at $1.00 a pack; 840 g of Black beans into the pantry."
 
