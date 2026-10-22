@@ -121,6 +121,17 @@
                     @totals @(ocr ? "Check the lines marked below against the receipt, and correct what was misread." : "It cannot be imported.")
                 </MudAlert>
             }
+            @* An old shop's food is long eaten: on its old date it would sit in the pantry, nothing planned since to use it up. *@
+            <div class="mt-2" data-testid="receipt-into-pantry" data-on="@_intoPantry">
+                <MudCheckBox T="bool" Value="_intoPantry" ValueChanged="v => _intoPantry = v" Dense="true">
+                    Add this shop's food to the pantry
+                </MudCheckBox>
+                @if (!_intoPantry)
+                {
+                    <p class="lines-help">Prices only: @(ReceiptStock.IntoPantryByDefault(parsed.PurchasedOn, DateOnly.FromDateTime(DateTime.Now))
+                        ? "nothing from it goes into the pantry." : "a shop this old is long eaten, so nothing from it goes into the pantry.")</p>
+                }
+            </div>
             @if (import.Earlier is { } earlier)
             {
                 <MudAlert Severity="Severity.Warning" Class="mt-2" data-testid="receipt-earlier">
@@ -285,7 +296,7 @@
                                       HelperText="@PackHelp(state)"/>
                     </div>
                 }
-                @if (state.Tick is { } tick)
+                @if (state.Tick is { } tick && _intoPantry)
                 {
                     <div data-testid="receipt-line-cover" data-on="@state.Cover">
                         <MudCheckBox T="bool" Value="state.Cover" ValueChanged="v => { state.Cover = v; }" Dense="true" Class="mt-1">
@@ -358,6 +369,9 @@
     private IJSObjectReference? _module;
     private DotNetObjectReference<ReceiptsPage>? _self;
     private ReceiptImport? _review;
+
+    // "Add this shop's food to the pantry": on for a shop in the last week, off for an older one (ReceiptStock.IntoPantryByDefault).
+    private bool _intoPantry = true;
     private List<LineState>? _lines;
     private List<Store> _stores = [];
     private List<Product> _products = [];
@@ -471,6 +485,8 @@
     {
         // A correction re-opens the review: the planner's choices so far are kept, by line - unless the line is now another item.
         Dictionary<int, LineState> before = _lines?.ToDictionary(l => l.Review.Line.Position) ?? [];
+        if (_lines is null)   // a new receipt, not a correction: the default for its date
+            _intoPantry = ReceiptStock.IntoPantryByDefault(parsed.PurchasedOn, DateOnly.FromDateTime(DateTime.Now));
         await using (LocalDbContext db = await Database.Contexts.CreateDbContextAsync())
             _review = await ReceiptImport.LoadAsync(db, store, parsed);
         _lines = [.. _review.Review().Select(r => before.GetValueOrDefault(r.Line.Position) is { } old && ReviewChoice.Survives(old.Review.Line, r.Line)
@@ -598,6 +614,8 @@
             return $"{price}. Not food: nothing into the pantry.";
         if (ingredient.IsStaple)
             return $"{price}. {ingredient.Name} is a staple: its stock is what you set on the pantry page.";
+        if (!_intoPantry)
+            return $"{price}. Not into the pantry.";
         decimal pack = decision.New?.PackQuantity ?? (product is { } p ? _review.Products.GetValueOrDefault(p)?.PackQuantity ?? 0 : 0);
         return ReceiptStock.Quantity(line, pack, ingredient.BaseUnit) is { } q
             ? $"{price}; {Quantity.Format(q, ingredient.BaseUnit)} of {ingredient.Name} into the pantry."
@@ -621,7 +639,7 @@
                 return;
             }
             List<LineDecision> decisions = [.. _lines.Select(l => DecisionOf(l)!)];
-            List<ReceiptEdit> edits = fresh.Edits(decisions, DateOnly.FromDateTime(DateTime.Now), Guid.CreateVersion7);
+            List<ReceiptEdit> edits = fresh.Edits(decisions, DateOnly.FromDateTime(DateTime.Now), Guid.CreateVersion7, _intoPantry);
             await WriteAllAsync([.. edits.Select(e => new LocalEdit(e.Type, e.Id, e.Kind, e.Fields))]);
             int prices = edits.Count(e => e.Type == SyncedEntities.PriceObservation);
             int stock = edits.Count(e => e.Type == SyncedEntities.StockMovement);

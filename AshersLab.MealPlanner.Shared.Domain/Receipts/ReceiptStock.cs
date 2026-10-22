@@ -29,6 +29,16 @@ public static class ReceiptStock
 {
     public const int DaysBefore = 7;
 
+    /// <summary>A shop this many days old or newer goes into the pantry unless the planner says not; an older one does not.</summary>
+    public const int RecentDays = 7;
+
+    /// <summary>
+    /// Whether the review starts with "add this shop's food to the pantry" on. An old receipt - the first import of the
+    /// last few months' receipts, for their prices - would otherwise put long-eaten food into the pantry on its old date,
+    /// nothing having been planned since to draw it down, and every shopping list after would think it is still there.
+    /// </summary>
+    public static bool IntoPantryByDefault(DateOnly purchasedOn, DateOnly today) => today.DayNumber - purchasedOn.DayNumber <= RecentDays;
+
     public const int DaysAfter = 2;
 
     /// <summary>The tick a receipt line for <paramref name="ingredient"/> bought on <paramref name="purchasedOn"/> covers, if any.</summary>

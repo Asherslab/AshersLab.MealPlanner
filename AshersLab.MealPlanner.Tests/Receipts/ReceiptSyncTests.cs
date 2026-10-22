@@ -116,6 +116,31 @@ public sealed class ReceiptSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_old_shop_imported_for_its_prices_puts_nothing_into_the_pantry()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        Kitchen k = await KitchenAsync(a);
+        ReceiptImport import = await ReviewAsync(a, Invoice());
+
+        List<ReceiptEdit> pricesOnly = import.Edits(Reviewed(import, k), Today, () => NextId(a), intoPantry: false);
+        List<ReceiptEdit> stocked = import.Edits(Reviewed(import, k), Today, () => NextId(a));
+
+        Assert.DoesNotContain(pricesOnly, e => e.Type == SyncedEntities.StockMovement);
+        Assert.Contains(stocked, e => e.Type == SyncedEntities.StockMovement);
+        // Everything else the same: the receipt, its lines, the products, the prices and the aliases.
+        Assert.Equal(stocked.Count(e => e.Type != SyncedEntities.StockMovement), pricesOnly.Count);
+        Assert.Equal(stocked.Count(e => e.Type == SyncedEntities.PriceObservation), pricesOnly.Count(e => e.Type == SyncedEntities.PriceObservation));
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(7, true)]    // a week ago: still in the cupboard
+    [InlineData(8, false)]   // older: long eaten
+    [InlineData(40, false)]
+    public void A_shop_goes_into_the_pantry_by_default_only_if_it_was_in_the_last_week(int daysAgo, bool expected) =>
+        Assert.Equal(expected, ReceiptStock.IntoPantryByDefault(Today.AddDays(-daysAgo), Today));
+
+    [Fact]
     public void The_synthetic_invoice_reads_as_its_six_lines_and_adds_up()
     {
         ParsedReceipt receipt = Invoice();

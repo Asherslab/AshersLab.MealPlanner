@@ -188,7 +188,13 @@ ingredient's kind of unit - "500g - 800g" is the heaviest tray; "EGGS 24PK 1.4KG
 | a `Product` | each line the planner made one for: under an ingredient, or none ("not food"); with the line's code |
 | a `ProductAlias` | each line matched any way but its alias or code, unless its code will match next time |
 | a `PriceObservation`, `Source = Receipt`, on the receipt's date | each matched line that came home: the shelf price; weighed meat, what that tray cost and its per-kg price |
-| a `Bought` `StockMovement`, on the receipt's date | each food line that came home: packs supplied × the product's pack, or weighed meat in grams by its weight |
+| a `Bought` `StockMovement`, on the receipt's date | each food line that came home: packs supplied × the product's pack, or weighed meat in grams by its weight - **only while "Add this shop's food to the pantry" is on** |
+
+**An old shop is imported for its prices only.** The review's "Add this shop's food to the pantry" starts on for a shop in
+the last week and off for an older one (`ReceiptStock.IntoPantryByDefault`, 7 days). Its food is long eaten, but nothing
+planned since its date would draw it down, so on its old date it would sit in the pantry and every shopping list after
+would subtract it. Off, the import writes everything but the stock - receipt, lines, products, prices, aliases - each line
+says "Not into the pantry", and no shopping-list tick is offered to replace. The planner can turn it either way.
 
 A line's kind (`ReceiptLineKind`): **Food** - its product has an ingredient; **Household** - its product has none; **Fee**;
 **Ignored** - the planner left it out (nothing written but the line). An unmatched line is imported, prices nothing and

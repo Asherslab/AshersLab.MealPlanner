@@ -202,11 +202,12 @@ public sealed class ReceiptImport
     /// <item>an alias for every line matched any way but its alias or code - <b>the next receipt then matches by itself</b>;</item>
     /// <item>for each matched line something came home for, a <c>Receipt</c> price for its product, seen on the receipt's date;</item>
     /// <item>for each food line, a <c>Bought</c> movement of what came home, naming the tick it replaces. Staples have no
-    ///   movements: their stock is the hand-set state.</item>
+    ///   movements: their stock is the hand-set state. None at all when <paramref name="intoPantry"/> is off - an old shop,
+    ///   imported for its prices (<see cref="ReceiptStock.IntoPantryByDefault"/>).</item>
     /// </list>
     /// </summary>
     /// <exception cref="InvalidOperationException">The receipt does not add up, or was imported before.</exception>
-    public List<ReceiptEdit> Edits(IReadOnlyList<LineDecision> decisions, DateOnly today, Func<Guid> newId)
+    public List<ReceiptEdit> Edits(IReadOnlyList<LineDecision> decisions, DateOnly today, Func<Guid> newId, bool intoPantry = true)
     {
         if (Parsed.TotalsProblem() is { } problem)
             throw new InvalidOperationException(problem);
@@ -275,7 +276,7 @@ public sealed class ReceiptImport
                 edits.Add(new(SyncedEntities.PriceObservation, ReceiptRules.PriceId(lineId), OpKind.Create,
                     new PriceEntry(matched, price, Parsed.PurchasedOn, PriceSource.Receipt, line.PerKgCents).Fields()));
 
-            if (ingredientId is { } ing && Ingredients.GetValueOrDefault(ing) is { IsStaple: false } ingredient
+            if (intoPantry && ingredientId is { } ing && Ingredients.GetValueOrDefault(ing) is { IsStaple: false } ingredient
                 && ReceiptStock.Quantity(line, pack, ingredient.BaseUnit) is { } quantity && StockRules.QuantityProblem(StockReason.Bought, quantity) is null)
             {
                 Guid? covers = decision.Covers is { } tick && covered.Add(tick) ? tick : null;
