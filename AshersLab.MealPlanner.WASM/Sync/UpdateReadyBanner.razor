@@ -1,0 +1,53 @@
+@implements IDisposable
+@inject IJSRuntime JS
+
+@*
+    Across the top of every page once a new build of the app has downloaded and is waiting (js/app-update.js): without
+    this it waits until every window of the app is closed, which a Home Assistant tab or an installed phone app seldom
+    is - a reload is not enough. Reload lets it take over and reloads. Nothing is lost: unsent changes are in this
+    device's database, and go once the new build is open.
+*@
+
+@if (_ready)
+{
+    <div class="update-ready" role="status" data-testid="update-ready">
+        <span>A new version of the app is ready.</span>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="_busy" OnClick="Reload"
+                   StartIcon="@Icons.Material.Filled.Refresh" data-testid="update-ready-reload">Reload</MudButton>
+    </div>
+}
+
+@code {
+    private bool _ready, _busy;
+    private DotNetObjectReference<UpdateReadyBanner>? _self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        _self = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("mealPlannerApp.onUpdateReady", _self);
+        }
+        catch (JSException)
+        {
+            // No app-update.js: no banner, and the new build arrives once every window is closed.
+        }
+    }
+
+    [JSInvokable]
+    public Task UpdateReady() => InvokeAsync(() =>
+    {
+        _ready = true;
+        StateHasChanged();
+    });
+
+    private async Task Reload()
+    {
+        _busy = true;
+        await JS.InvokeVoidAsync("mealPlannerApp.update");
+    }
+
+    public void Dispose() => _self?.Dispose();
+}

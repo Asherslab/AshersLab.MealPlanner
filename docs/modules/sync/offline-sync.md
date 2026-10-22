@@ -354,10 +354,19 @@ rebuild is what the next reload shows.
   shell). Never a POST - every sync call is gRPC-Web over POST and always goes to the network - nor anything outside the
   build (`/healthz`).
 - **A new deploy** installs beside the old build and waits; it takes over when every window has closed, or at once when
-  the app asks. The app asks when the server refuses this build's protocol version (`SyncLoop.Refused` calls
-  `mealPlannerApp.update`: fetch the new worker, `skip-waiting`, reload). A plain reload there would serve the same cached
-  old build and refuse again. `updateViaCache: 'none'`: the browser checks the worker and its asset list against the
-  server on every check, never its HTTP cache.
+  the app asks. **A plain reload does not end the wait** - the old page is still open while the new one loads - and a
+  Home Assistant tab or an installed phone app is seldom closed outright, so on its own a deploy could go unseen for
+  days (0.0.44's removed spreadsheet import was still on screen after it shipped). So the app asks in two cases, both
+  `mealPlannerApp.update` (fetch the new worker, `skip-waiting`, reload):
+  - the server refuses this build's protocol version: `SyncLoop.Refused` calls it by itself;
+  - a new build is waiting: `js/app-update.js` looks for one whenever the app comes back to the foreground
+    (`visibilitychange`, at most once a minute) and when it starts, and `Sync/UpdateReadyBanner.razor` says "A new
+    version of the app is ready." with **Reload** across the top of every page. Not automatic: a reload mid-edit would
+    lose an open sheet. Nothing synced or waiting in the outbox is lost - it is in SQLite.
+
+  `updateViaCache: 'none'`: the browser checks the worker and its asset list against the server on every check, never
+  its HTTP cache. Seen 2026-10-23 with `.claude/tools/chrome-app-update-check.mjs` against the add-on sim: two images, the
+  container swapped between them under an open page.
 | iOS Safari evicts site storage after weeks unused | Data re-syncs from the server (a snapshot); only unsynced edits are lost. Accepted. |
 | The Pi restored from a Home Assistant backup | Edits made since the backup come back from whichever browsers hold them, on their next round. Nothing to do on any phone. |
 | The add-on reinstalled with no backup | Each phone or computer that still has data asks once; "Send my copy" on each rebuilds the server from all of them. |

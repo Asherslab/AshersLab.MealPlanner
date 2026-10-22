@@ -369,7 +369,7 @@ table, .num { font-variant-numeric: tabular-nums; }
 }
 
 /* Signed out: across the top of every page, in the unsent edge's colours - nothing is lost, it is waiting. */
-.signed-out {
+.signed-out, .update-ready {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -382,6 +382,6 @@ table, .num { font-variant-numeric: tabular-nums; }
     font-size: 0.9375rem;
 }
 
-.signed-out span {
+.signed-out span, .update-ready span {
     flex: 1 1 14rem;
 }
