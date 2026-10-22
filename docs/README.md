@@ -61,7 +61,7 @@ Present tense, kept current, no dates.
 - [The shopping list](modules/shopping/shopping-list.md) — the days' meals less the pantry in whole packs by store, why it
   reads the pantry without its own ticks, what Bought and Have it write to stock, derived ids for two phones, and the
   Spend and Eaten costs.
-- [Receipts](modules/receipts/receipts.md) — a Woolworths invoice read in the browser by position (its traps: overprinted
+- [Receipts](modules/receipts/receipts.md) — a Woolworths invoice or in-store eReceipt read in the browser by position (its traps: overprinted
   bold, ligatures, wrapped descriptions) and a Costco receipt by OCR in the browser (one bitmap across two pages; the amount
   column's misreads, measured; correcting a line beside its strip of the picture), refused unless it adds up, the store the
   reader's, matched by code then alias then a confirmed suggestion, derived ids so a second import is refused, and the rule

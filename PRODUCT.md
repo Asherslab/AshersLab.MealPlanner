@@ -39,8 +39,9 @@ its own copy and syncs when it can.
 
 - Phone in a supermarket aisle, one hand holding a basket or a toddler; reception drops.
 - Phone at the bench while cooking; glancing at today.
-- Weekly: Woolworths online order (text PDF invoice) and a Costco trip (image-only receipt exported from the Costco
-  app), both imported afterwards to update prices and the pantry.
+- Weekly: a Woolworths online order (text PDF invoice) or shop in store (the Woolworths app's eReceipt, a text PDF of
+  the till roll), and a Costco trip (image-only receipt exported from the Costco app), all imported afterwards to update
+  prices and the pantry.
 - Runs as a Home Assistant add-on on a Raspberry Pi, opened through Home Assistant (its ingress frame, and its
   phone app); also standalone.
 

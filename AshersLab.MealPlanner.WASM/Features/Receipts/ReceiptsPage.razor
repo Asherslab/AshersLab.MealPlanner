@@ -42,7 +42,8 @@
         <PadSheet Title="Add a receipt" Subtitle="Its prices update, and what came home goes into the pantry.">
             <div class="pick">
                 <p class="pick-help">
-                    A Woolworths invoice (the PDF from the order's page) or a Costco receipt (the PDF the Costco app saves).
+                    A Woolworths invoice (the PDF from the order's page), a Woolworths eReceipt (the PDF the Woolworths app
+                    saves after a shop in store) or a Costco receipt (the PDF the Costco app saves).
                     It is read on this device only, and not kept.
                 </p>
                 <label class="@($"file-pick{(_reading ? " busy" : "")}")">
@@ -81,10 +82,11 @@
         ParsedReceipt parsed = import.Parsed;
         string? totals = parsed.TotalsProblem();
         bool ocr = _spans is not null;
+        bool receipt = ocr || _till;   // a receipt, not an online order's invoice
         <div class="receipt-summary" data-testid="receipt-summary" data-order="@parsed.OrderNumber" data-date="@parsed.PurchasedOn.ToString("yyyy-MM-dd")"
              data-store="@import.StoreId">
         <PadSheet Title="@($"{StoreName(import.StoreId)} · {ShoppingText.Day(parsed.PurchasedOn)} {parsed.PurchasedOn.Year}")"
-                  Subtitle="@($"{(ocr ? "Receipt" : "Order")} {parsed.OrderNumber} · {parsed.Lines.Count} lines")">
+                  Subtitle="@($"{(receipt ? "Receipt" : "Order")} {parsed.OrderNumber} · {parsed.Lines.Count} lines")">
         <div class="summary-body">
             <p class="summary-totals num" data-testid="receipt-totals">
                 @if (parsed.Fees.Count > 0 || parsed.SubtotalCents != parsed.TotalCents)
@@ -122,7 +124,7 @@
             @if (import.Earlier is { } earlier)
             {
                 <MudAlert Severity="Severity.Warning" Class="mt-2" data-testid="receipt-earlier">
-                    This @(ocr ? "receipt" : "order") was imported already, on @ShoppingText.Day(earlier.ImportedOn) @earlier.ImportedOn.Year. It cannot be imported twice.
+                    This @(receipt ? "receipt" : "order") was imported already, on @ShoppingText.Day(earlier.ImportedOn) @earlier.ImportedOn.Year. It cannot be imported twice.
                 </MudAlert>
             }
             @if (ocr && _editingTotal)
@@ -149,7 +151,7 @@
             }
             <div class="d-flex flex-wrap gap-1 mt-2 summary-tools">
                 <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" OnClick="ShowFile" data-testid="receipt-show-file">
-                    @(_showingFile ? $"Hide the {(ocr ? "receipt" : "invoice")}" : $"Show the {(ocr ? "receipt" : "invoice")}")
+                    @(_showingFile ? $"Hide the {(receipt ? "receipt" : "invoice")}" : $"Show the {(receipt ? "receipt" : "invoice")}")
                 </MudButton>
                 @if (ocr && !_editingTotal)
                 {
@@ -366,6 +368,9 @@
     private string? _error, _done;
     private double? _progress;
 
+    // A Woolworths eReceipt from the till, not an online order's invoice: worded "receipt".
+    private bool _till;
+
     // A picture's receipt (Costco): where each line was read from, and the lines whose amount OCR could not read.
     private IReadOnlyDictionary<int, IReadOnlyList<PictureSpan>>? _spans;
     private IReadOnlySet<int>? _unsure;
@@ -425,15 +430,16 @@
             List<PdfPage> pages = PdfJson.Read(await module.InvokeAsync<string>("read", bytes));
 
             // The reader names the store, by its seeded id: never a name, never a choice - a receipt's id is derived from it.
-            if (WoolworthsInvoice.Recognises(pages))
+            if (WoolworthsInvoice.Recognises(pages) || WoolworthsEReceipt.Recognises(pages))
             {
-                ParsedReceipt parsed = WoolworthsInvoice.Parse(pages);
+                _till = !WoolworthsInvoice.Recognises(pages);
+                ParsedReceipt parsed = _till ? WoolworthsEReceipt.Parse(pages) : WoolworthsInvoice.Parse(pages);
                 (_spans, _unsure) = (null, null);
                 await OpenAsync(Store(StoreRules.Woolworths, "Woolworths"), parsed);
                 return;
             }
             if (pages.Any(p => p.Items.Count > 0))
-                throw new ReceiptFormatException("This is not a Woolworths invoice or a Costco receipt.");
+                throw new ReceiptFormatException("This is not a Woolworths invoice or eReceipt, or a Costco receipt.");
 
             // A picture, no text: read it with OCR, here on this device.
             _progress = 0;

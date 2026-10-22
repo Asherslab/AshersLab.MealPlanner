@@ -18,11 +18,13 @@ code:
   - .claude/tools/chrome-costco-check.mjs
   - .claude/tools/lib/synthetic-invoice.mjs
   - .claude/tools/lib/synthetic-costco.mjs
+  - .claude/tools/chrome-ereceipt-check.mjs
+  - .claude/tools/lib/synthetic-ereceipt.mjs
 ---
 
 # Receipts
 
-A Woolworths invoice or a Costco receipt read on the phone, its lines matched to products, and imported: prices from what
+A Woolworths invoice or eReceipt, or a Costco receipt, read on the phone, its lines matched to products, and imported: prices from what
 was paid, stock from what came home, and a way for the next receipt to match by itself - Costco's item numbers, Woolworths'
 descriptions. Read before touching a reader, the import, the matching, or anything that adds stock from a purchase.
 
@@ -88,6 +90,31 @@ positions and traps; nothing from a real invoice is in the repo).
 | Totals | `Sub Total`, `Paper bags`, `Collection fee`, `Service fees`, `Invoice Total`, `Paid Amount`, sometimes `Refund Amount` | fees named by the label just left of their amount; a refund is weighed meat supplied under the maximum |
 
 No Woolworths invoice prints a stockcode, so its lines match by alias.
+
+## Reading a Woolworths eReceipt
+
+A shop at the till, not online: the Woolworths app saves its **eReceipt** as a text PDF of the till roll - one tall page,
+monospaced, every word its own run. `WoolworthsEReceipt.Parse` (`Shared.Domain/Receipts/WoolworthsEReceipt.cs`), tested on
+`Tests/Receipts/SyntheticEReceipt.cs` (the real layout's positions, nothing from a real receipt):
+
+| Part | As printed | Read as |
+|---|---|---|
+| Header | the store, `TAX INVOICE - ABN ...`, then `Description ... $` | where the items start |
+| An item | `WW Full Cream Milk 2L  3.40`; `#` in front for GST, `^` for a promotional price | one pack at its amount; markers stripped, `#` kept as `Gst` |
+| More than one | the name alone, then `Qty 2 @ $9.00 each  18.00` | 2 packs at $9.00 |
+| Weighed | the name alone, then `1.250 kg NET @ $4.00/kg  5.00` | one line: 1250 g at $4.00/kg, $5.00 - like the invoice's weighed meat |
+| An offer | `COLA MULTIBUY OFFER  -4.00`, a row of its own | not a line: off the item before it (`DiscountCents`), as Costco's discounts are. Its price stays the shelf price |
+| A name alone that nothing follows | `^Promotional Price`, the legend under the items | dropped |
+| A name alone followed by a row it does not know | | **refused**, naming both: how many came home is not guessed |
+| Sub total | `12 SUBTOTAL $64.20` | the sub total, and the count as `ItemsSold` (a weighed item is one) |
+| Between it and the total | a rewards discount, if any | a fee, named as printed |
+| Total | the first `TOTAL` after the sub total | the total; the payment and GST blocks after it are not read |
+| Stamp | `WOOLWORTHS 1234`, `POS 004 TRANS 5108 10:41 12/03/2026` | the date; the receipt number `2026-03-12 10:41 1234 004 5108` - the dedupe key |
+
+Its descriptions are the till's abbreviations ("Choc Chip Bscts 300g"), not the online invoice's, so the first eReceipt
+teaches aliases of its own. The paper bag is an item (`#Woolworths Paper Bag  0.25`), not a fee as on the invoice: GST-marked,
+it is imported as household when left unmatched. The reader is chosen by what the file holds: the invoice's order-number
+header, else the eReceipt's headings, sub total and stamp, else (no text) a Costco picture.
 
 ## Reading a Costco receipt
 
@@ -189,8 +216,9 @@ The same for both stores (`ReceiptStock`, `StockMovement.Counting`):
 
 ## What the planner sees
 
-**Receipts** (`/receipts`; on a phone More → Receipts, or Today's "Import a receipt"). "Pick a Woolworths invoice (the PDF from the order's page) or a Costco receipt (the PDF
-the Costco app saves)". A Woolworths invoice opens its review at once; a Costco receipt shows "Reading the receipt's
+**Receipts** (`/receipts`; on a phone More → Receipts, or Today's "Import a receipt"). "A Woolworths invoice (the PDF from the order's page), a Woolworths eReceipt (the PDF
+the Woolworths app saves after a shop in store) or a Costco receipt (the PDF the Costco app saves)". A Woolworths invoice or
+eReceipt opens its review at once (an eReceipt worded "receipt", not "order"); a Costco receipt shows "Reading the receipt's
 picture… 45%" for a few seconds first. The review: the store and date, the order or receipt number, the totals ("Sub total
 $16.10 · Paper bags $2.00 · Total $18.10", or Costco's "Total $91.45 · 5 items sold"), and "The lines add up to the sub total"
 / "...to the total, and to the 5 items sold" - or, in red, what does not add up. "Show the invoice/receipt" draws its pages.
@@ -244,8 +272,16 @@ every check passing:
   line marked, import disabled, the other lines matched by item number; A corrects the amount to $8.99, it adds up, imports,
   three more prices. Both real receipts: read in 1.7 and 1.5 s, add up and match their items sold with no correction, 5
   lines each, imported. Both profiles' SQLite hold the server's receipts, lines, products, prices and stock, outboxes empty.
+- `.claude/tools/chrome-ereceipt-check.mjs` with the real eReceipt: B picks a synthetic eReceipt (`lib/synthetic-ereceipt.mjs`):
+  "Total $25.30 · 6 items sold", adds up, numbered by the till's stamp, worded as a receipt, five lines (the offer not one);
+  imported as read. The server holds it, the bananas 1250 g at $4.00/kg, two colas at $9.00 less $4.00, milk, butter and the
+  bag. The same file on A: refused. The real eReceipt: adds up to its 18 items sold, 16 lines, imported. Both profiles'
+  SQLite hold the server's receipts and lines, outboxes empty.
 
-In-process: `Tests/Receipts/WoolworthsInvoiceTests.cs` (header, lines, headings and totals; any storage order; bold once and
+In-process: `Tests/Receipts/WoolworthsEReceiptTests.cs` (items, counted, weighed and offer lines, totals and stamp; any
+storage order; weighed items as one item sold; a rewards discount as a fee; a second row it does not know refused, a wrong
+count failing the totals; no count or store number; an offer before any item; an eReceipt and an invoice each refused by the
+other's reader), `Tests/Receipts/WoolworthsInvoiceTests.cs` (header, lines, headings and totals; any storage order; bold once and
 ligatures joined; wrapped descriptions and nearby headings; weighed meat, also in kilos; substitutions; lines over two pages;
 lines it cannot place failing the totals; a wrong total; not an invoice; money as printed), `CostcoReceiptTests.cs` (synthetic
 OCR lines with the measured misreads: items, repeats merged, a discount off the item before it, total, items sold, stamp and
