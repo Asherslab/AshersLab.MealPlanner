@@ -9,17 +9,22 @@ public class AddOnOptionsTests
     public void Each_option_sets_its_auth_key_and_empty_or_unknown_ones_set_nothing()
     {
         IReadOnlyDictionary<string, string?> settings = AddOnOptions.Read("""
-            { "trusted_proxies": " 172.30.32.0/23 ", "user_header": "X-Forwarded-User", "display_name_header": "",
-              "something_else": "ignored", "Auth:Mode": "None" }
+            { "public_url": " https://meals.example.com ", "reset_access": false,
+              "something_else": "ignored", "Auth:Mode": "None", "mode": "None" }
             """);
 
         Assert.Equal(new Dictionary<string, string?>
         {
-            ["Auth:TrustedProxies"] = "172.30.32.0/23",
-            ["Auth:UserHeader"]     = "X-Forwarded-User",
+            ["Auth:PublicUrl"]   = "https://meals.example.com",
+            ["Auth:ResetAccess"] = "false",
         }, settings);
     }
 
     [Fact]
-    public void An_options_file_that_is_not_an_object_sets_nothing() => Assert.Empty(AddOnOptions.Read("[]"));
+    public void An_empty_address_sets_nothing_so_the_host_says_it_is_missing()
+    {
+        Assert.Equal(new Dictionary<string, string?> { ["Auth:ResetAccess"] = "true" },
+            AddOnOptions.Read("""{ "public_url": "", "reset_access": true }"""));
+        Assert.Empty(AddOnOptions.Read("[]"));
+    }
 }

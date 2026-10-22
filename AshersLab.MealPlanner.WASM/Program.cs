@@ -2,6 +2,7 @@ using AshersLab.MealPlanner.LocalData;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server;
 using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Sync;
 using AshersLab.MealPlanner.WASM;
+using AshersLab.MealPlanner.WASM.Account;
 using AshersLab.MealPlanner.WASM.Data;
 using AshersLab.MealPlanner.WASM.Extensions;
 using AshersLab.MealPlanner.WASM.Sync;
@@ -37,5 +38,10 @@ builder.Services.AddScoped<LocalDatabase>();
 
 // One per window, started by the app bar's SyncStatusChip once the local database is ready.
 builder.Services.AddScoped<SyncLoop>();
+
+// The app's own sign-in (Account/): plain JSON to the server's /account endpoints, from this same origin - so the
+// session cookie goes with every call, and with every gRPC-Web one.
+builder.Services.AddScoped(_ => new HttpClient { BaseAddress = api });
+builder.Services.AddScoped<AccountClient>();
 
 await builder.Build().RunAsync();

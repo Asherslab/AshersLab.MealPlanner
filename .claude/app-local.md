@@ -353,19 +353,19 @@ file").
 
 ## The image, behind a simulated Home Assistant ingress
 
-**The add-on as it is now** (behind Nginx Proxy Manager and Authelia, not ingress) and **the service worker** (only a
-published build has the caching one; the AppHost's is network-only): build the image, then
+**The add-on as it is now** (behind Nginx Proxy Manager, the app's own passkey sign-in, not ingress) and **the service
+worker** (only a published build has the caching one; the AppHost's is network-only, and the AppHost runs with no
+sign-in): build the image, then
 
 ```bash
 DATA_DIR=<scratch>/addon-data sh .claude/tools/addon-sim/run.sh mealplanner:local   # --app-down / --app-up / --down
-node .claude/tools/chrome-pwa-check.mjs <scratch>/pwa                               # sign-in, offline open, signed out
+node .claude/tools/chrome-pwa-check.mjs <scratch>/pwa      # passkeys, invitations, offline open, signed out, removal
 ```
 
-| Port | What |
-|---|---|
-| 18410 | "Nginx Proxy Manager" with DOCS.md's Advanced tab — redirects to the login until signed in |
-| 18411 | the stub "Authelia" login, another origin — its Sign in sets the session cookie |
-| 18412 | the app's own port, as if published — must answer 403 |
+`http://localhost:18410/` is "Nginx Proxy Manager" and the `public_url`; the setup link is in
+`docker logs mealplanner-addon-app`. Headless Chrome makes passkeys with a **virtual authenticator** (the DevTools
+`WebAuthn` domain: `addVirtualAuthenticator` with `transport: internal`, resident keys and user verification) - the check
+shows how. Each run of `run.sh` starts from an empty database.
 
 The AppHost serves the app at `/`, which hides every base-path bug. To see what ingress sees (still supported by the
 image, no longer used by the add-on), build the image and run it behind nginx playing the Supervisor (why and what it proves: `docs/modules/infrastructure/deployment.md`):

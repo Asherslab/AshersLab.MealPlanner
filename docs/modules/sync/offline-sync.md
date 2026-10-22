@@ -247,11 +247,13 @@ something another row refers to is [the catalogue](../catalogue/catalogue.md)'s.
   device's edit would each re-run a round that cannot succeed - so it retries every 30 s, on the planner's own edits,
   and when they tap the chip. A dropped stream never turns "Sync problem", "Update needed", "Paused · needs you" or
   "Signed out" into "Offline".
-- **Signed out is not offline either.** Behind a sign-in proxy an expired session answers a sync call with a 401, which
-  the client sees as `Unauthenticated`: "Signed out" (amber), the tooltip saying changes are kept. Waiting does not
-  fix it, so tapping the chip **reloads** - and the page load reaches the login (the service worker lets a redirect
-  through). The proxy must answer a sync call with the 401 itself, not a redirect: a redirect to the login domain would
-  reach the app as a failed fetch, "Offline" forever ([deployment](../infrastructure/deployment.md#behind-nginx-proxy-manager-and-authelia)).
+- **Signed out is not offline either.** With no session a sync call is a 401 - from the app's own sign-in
+  ([signing in](../infrastructure/accounts.md)), or a sign-in proxy's - which the client sees as `Unauthenticated`:
+  "Signed out" (amber), and a banner across every page saying changes stay on the device. Waiting does not fix it, so
+  tapping the chip or the banner's **Sign in** opens the sign-in page (where a proxy does the signing in, it says to
+  reload: the service worker lets that page load's redirect to the login through). A proxy must answer a sync call with
+  the 401 itself, not a redirect: a redirect to a login on another domain would reach the app as a failed fetch -
+  "Offline" forever.
 - **Every window runs its own loop.** Safe because every step is idempotent; two windows pushing the same outbox
   only do the work twice (seen: the server logged a second window's create exactly once).
 

@@ -29,8 +29,8 @@ code:
 # How the app is deployed
 
 One image, built by GitHub Actions, run as a Home Assistant add-on on a Raspberry Pi and reached at its own HTTPS
-address through Nginx Proxy Manager with Authelia signing people in - or standalone, on Kubernetes or plain Docker,
-behind a proxy that signs people in. (The image still supports Home Assistant's ingress - the sidebar - but the add-on
+address through Nginx Proxy Manager, the app signing people in itself with passkeys ([signing in](accounts.md)) - or
+standalone, on Kubernetes or plain Docker, behind a proxy that signs people in. (The image still supports Home Assistant's ingress - the sidebar - but the add-on
 no longer uses it: an app in Home Assistant's frame can be neither installed on a phone nor opened offline.) Read this
 before touching the `Dockerfile`, the workflow, `mealplanner/config.yaml`, the chart, anything that decides who may
 connect, or anything that builds a URL. Why it is one image and not the GSBC repos' four is in the
@@ -100,31 +100,31 @@ The repository is a Home Assistant add-on repository: `repository.yaml` at the r
 | `image: ghcr.io/asherslab/asherslab-mealplanner`, no `{arch}` | One multi-arch manifest. Whether the Supervisor pulls it by platform is still to be seen on the Pi — [home-assistant-ingress](../../open-questions/home-assistant-ingress.md). |
 | `arch: [aarch64, amd64]` | The Pi, and anything else. |
 | `ingress: false`; `ports: 8099/tcp: null` | Reached by Nginx Proxy Manager (itself an add-on) on Home Assistant's internal network, at the add-on's hostname, port 8099. Nothing published on the host unless the owner sets the port on the Network tab - only for a proxy on another machine. |
-| `environment: Auth__Mode: TrustedHeader` | The sign-in proxy mode ([standalone](#standalone-kubernetes-docker)). In the environment, not an option: nothing on the Configuration tab can turn the sign-in off. |
-| `options`/`schema`: `trusted_proxies`, `user_header`, `display_name_header` | Where the proxy connects from, and its headers. The Supervisor writes them to `/data/options.json`, not the environment; `Grpc/Features/Auth/AddOnOptions.cs` reads that file into `Auth:*` at start (only those three keys). Default `172.30.32.0/23`, Home Assistant's whole internal network - every add-on could claim to be the proxy; `DOCS.md` tells the owner to narrow it to the proxy's address. |
+| `environment: Auth__Mode: Accounts` | The app's own passkey sign-in ([signing in](accounts.md)). In the environment, not an option: nothing on the Configuration tab can turn sign-in off. |
+| `options`/`schema`: `public_url`, `reset_access` | The address people open (passkeys are bound to it) and the way back in when nobody can sign in. The Supervisor writes them to `/data/options.json`, not the environment; `Grpc/Features/Auth/AddOnOptions.cs` reads that file into `Auth:*` at start - only those two keys. `public_url` empty: the add-on does not start, and its log says why. |
 | `backup: hot`, `backup_pre`, `backup_exclude` | A consistent hot backup - below. |
 
 No icon or logo yet — Home Assistant shows a placeholder.
 
-### Behind Nginx Proxy Manager and Authelia
+### The add-on behind Nginx Proxy Manager
 
-`mealplanner/DOCS.md` is the owner's set-up: the proxy host, and its Advanced tab - an `auth_request` to Authelia, the
-user and name set from Authelia's `Remote-User`/`Remote-Name` (`proxy_set_header` **replaces** anything the browser sent
-under those names), no buffering and a long read for the change stream, a 5 s connect timeout. Signed out, **a page
-load is redirected to the login, a gRPC-Web call gets a plain 401** (`@signin` checks the content type): a redirect to
-another domain would reach the app as a failed fetch, which it reads as having no signal, and it would wait offline
-forever. The 401 is `StatusCode.Unauthenticated` to the client, which the sync chip shows as **Signed out**
-(`SyncSchedule.AfterFailure`); tapping it reloads, and the service worker lets that page load reach the login
-([offline sync](../sync/offline-sync.md#the-service-worker)).
+`mealplanner/DOCS.md` is the owner's set-up: `public_url`, the setup link from the Log tab, a plain proxy host forwarding to
+the add-on's hostname on 8099 with their certificate, and optionally no buffering, a long read for the change stream and a
+5 s connect timeout - without that, a stopped add-on leaves nginx waiting a minute before the app hears anything and says
+"Offline". The proxy does nothing about who is asking: [signing in](accounts.md) is the app's.
 
-**Seen working** (2026-10-22) with `.claude/tools/addon-sim` - the published image on a network laid out like the hassio
-network, configured from an `options.json`, plain nginx with DOCS.md's Advanced tab and a stub for Authelia on another
-origin - by `.claude/tools/chrome-pwa-check.mjs`, phone-sized: the address goes to the login, signing in comes back and
-syncs; the worker installs, controls the page and caches the build (141 files); the app stopped (502) and then nothing
-answering at all, it still opens, "Offline"; back, online; the session cookie deleted, "Signed out", and a tap reaches
-the login; signed in again, online; straight at the app's port with a forged user header, 403; through the proxy with a
-forged header and no session, the login. **Not yet seen with the real Nginx Proxy Manager and Authelia on the Pi**, nor
-a new deploy taking over an installed app (`mealPlannerApp.update` after a protocol refusal).
+**Seen working** (2026-10-23) with `.claude/tools/addon-sim` - the published image on a network laid out like the hassio
+network, `Auth__Mode=Accounts`, configured from an `options.json`, plain nginx as the proxy - by
+`.claude/tools/chrome-pwa-check.mjs`, two phone-sized Chromes with virtual platform authenticators: a fresh phone opens
+the app signed out, with the banner; the setup link from the log makes the first passkey and its code leaves the address
+bar; signed in, syncing; the worker installs, controls the page and caches the build (143 files); the app stopped (502)
+and then nothing answering at all, it still opens, "Offline"; back, online and still signed in; an invitation for "Alex
+Example" opens on the second phone with the name, makes a passkey, signs in and syncs; the same link again is "used
+already"; the list shows both; signing out shows the banner and signing in with the passkey comes back online; a POST from
+another site 403 and a sync call with no session 401 through the proxy; removing Alex signs the second phone out 56 s
+later. `reset_access` on: a new setup link at start with members present. **Not yet seen with the real Nginx Proxy
+Manager on the Pi or a real iPhone's passkeys**, nor a new deploy taking over an installed app (`mealPlannerApp.update`
+after a protocol refusal).
 
 ## Backups
 

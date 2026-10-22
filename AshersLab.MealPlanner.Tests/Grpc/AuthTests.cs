@@ -63,7 +63,7 @@ public class AuthTests
     [InlineData("", null, ProxyNetwork, "No authentication is configured")]
     [InlineData("TrustedHeader", "172.30.32.2", ProxyNetwork, "cannot also be set")]
     [InlineData("None", "172.30.32.2", ProxyNetwork, "cannot also be set")]
-    [InlineData("Password", null, ProxyNetwork, "is not TrustedHeader or None")]
+    [InlineData("Password", null, ProxyNetwork, "is not Accounts, TrustedHeader or None")]
     [InlineData("TrustedHeader", null, "", "TrustedProxies is empty")]
     [InlineData("TrustedHeader", null, "10.42/16", "'10.42/16' is not an address")]
     public void A_setting_that_cannot_work_is_refused_and_says_what_to_set(string? mode, string? supervisor, string proxies, string expected)

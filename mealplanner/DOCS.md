@@ -4,78 +4,49 @@ Plan the household's meals on a calendar, build the shopping list per store, and
 
 ## How it is reached
 
-At its own web address - `https://meals.example.com` - through **Nginx Proxy Manager**, with **Authelia** asking who
-you are first. Not from the Home Assistant sidebar: an app inside Home Assistant's frame can't be installed on a
-phone or opened with no signal, and this one is meant to be both.
+At its own web address - `https://meals.example.com` - through **Nginx Proxy Manager**, and installed on each phone
+like an app. Not from the Home Assistant sidebar: an app inside Home Assistant's frame can't be installed on a phone or
+opened with no signal, and this one is meant to be both.
 
-The app itself has no login. It believes the name the sign-in proxy gives it, and only from the proxy's address: a
-connection from anywhere else is refused. So two things are on you:
-
-- **Never forward this add-on's port on your router.** Only Nginx Proxy Manager should reach it.
-- **Nginx Proxy Manager must replace the user header** with Authelia's answer (the set-up below does), never pass on
-  whatever the browser sent.
+**You sign in with a passkey** - Face ID, a fingerprint or the phone's PIN; there are no passwords. Every change syncs
+only for someone signed in. Signed out, a phone keeps working with what it has and sends its changes once someone
+signs in again.
 
 ## Set-up
 
-1. **Authelia.** Running anywhere Nginx Proxy Manager can reach (a community add-on, or Docker on another machine),
-   with an access-control rule for the meal planner's domain. Two-factor and a long "remember me" are worth having: a
-   phone left signed out shows **Signed out** on the sync chip until someone signs in again, and keeps every change on
-   the phone until then.
-2. **Install and start this add-on.** Its Configuration tab:
-   - `trusted_proxies`: where Nginx Proxy Manager connects from. The default, `172.30.32.0/23`, is all of Home
-     Assistant's internal network, so any add-on could pretend to be the proxy. Narrow it: in Settings → Add-ons →
-     Nginx Proxy Manager, or `ha addons info <its slug>` in the Terminal add-on, find its IP address and put that
-     here, written out in full (`172.30.33.4`). If that add-on uses the host's network, it connects from `172.30.32.1`.
-   - `user_header`, `display_name_header`: leave as they are for the set-up below.
-3. **In Nginx Proxy Manager**, a proxy host for the meal planner's domain: forward to this add-on's **Hostname** (on
-   its Info tab, like `abcd1234-mealplanner`), port `8099`, scheme `http`; your SSL certificate with **Force SSL**;
-   **Websockets support** off (the app does not use them). On the **Advanced** tab, with the Authelia address in place
-   of `authelia:9091` and the add-on's hostname in place of `abcd1234-mealplanner`:
+1. **Pick the address** - a name in your domain, say `meals.yourdomain` - and point it at Nginx Proxy Manager, as for
+   anything else you expose.
+2. **Install this add-on.** On its Configuration tab set `public_url` to that address, `https://meals.yourdomain`, and
+   save. **Passkeys are tied to this address for good**: change it later and everyone has to set up again.
+3. **Start the add-on and open its Log tab.** It prints a setup link: *"Nobody can sign in yet. Open this link to set up
+   a passkey ..."*. It works once, for a week.
+4. **In Nginx Proxy Manager**, add a proxy host for the address: forward to this add-on's **Hostname** (on its Info tab,
+   like `abcd1234-mealplanner`), port `8099`, scheme `http`; your SSL certificate, with **Force SSL** and **HTTP/2**.
+   Nothing on the Advanced tab is needed. Optional, but worth it: on the Advanced tab,
 
    ```nginx
-   location /internal/authelia/authz {
-       internal;
-       proxy_pass http://authelia:9091/api/authz/auth-request;
-       proxy_set_header X-Original-Method $request_method;
-       proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
-       proxy_set_header X-Forwarded-For $remote_addr;
-       proxy_set_header Content-Length "";
-       proxy_set_header Connection "";
-       proxy_pass_request_body off;
-   }
-
-   location / {
-       auth_request /internal/authelia/authz;
-       auth_request_set $user $upstream_http_remote_user;
-       auth_request_set $name $upstream_http_remote_name;
-       auth_request_set $redirection_url $upstream_http_location;
-       error_page 401 = @signin;
-
-       # Replaces anything the browser sent under these names.
-       proxy_set_header X-Forwarded-User $user;
-       proxy_set_header X-Forwarded-Name $name;
-
-       # The app holds a change stream open: no buffering, a long read. A stopped add-on answers nothing at all, so give
-       # up connecting quickly - the app then says "Offline" at once instead of waiting a minute.
-       proxy_connect_timeout 5s;
-       proxy_buffering off;
-       proxy_read_timeout 1h;
-       proxy_http_version 1.1;
-       proxy_pass http://abcd1234-mealplanner:8099;
-   }
-
-   # Signed out: a page goes to Authelia's login; a sync call (gRPC-Web) gets a plain 401, which the app shows as
-   # "Signed out" - a redirect to another domain would look to it like having no signal.
-   location @signin {
-       if ($http_content_type ~* "grpc-web") { return 401; }
-       return 302 $redirection_url;
-   }
+   # The app holds a sync stream open; a stopped add-on answers nothing, so give up connecting quickly.
+   proxy_buffering off;
+   proxy_read_timeout 1h;
+   proxy_connect_timeout 5s;
    ```
 
-4. **Open the address on each phone and install it**: Safari → Share → Add to Home Screen; Chrome → Install app.
-   Opened once online, it opens with no signal after that.
+5. **On your phone, open the setup link** from step 3. Write your name and tap **Make my passkey**. You're in.
+6. **Invite your household**: in the app, Settings → **Who can sign in** → *Make an invitation link*, and send it to
+   them. It works once, for a day; they make their own passkey from it.
+7. **Install the app on each phone**: Safari → Share → *Add to Home Screen*; Chrome → *Install app*.
+
+## If something goes wrong
+
+- **A new phone**: passkeys sync through iCloud Keychain or Google Password Manager, so a new phone usually signs in
+  with the old one's. If not, someone signed in sends an invitation, or adds a passkey from Settings on a device of theirs.
+- **A lost phone**: on another device, Settings → Who can sign in → remove that phone's passkey, or *Sign out on all my
+  devices*. Within a minute the lost phone is signed out.
+- **Nobody can sign in at all**: turn on `reset_access` on the Configuration tab, restart the add-on, and open the new
+  setup link from the Log tab. Turn `reset_access` off again afterwards.
 
 ## Your data
 
-Everything is stored in this add-on's own data folder, which is included in Home Assistant backups. Each phone or
-browser also keeps its own copy so the app keeps working with poor reception, and catches up when it is back online.
+Everything is stored in this add-on's own data folder, which is included in Home Assistant backups - the passkeys too,
+so a restore keeps everyone able to sign in. Each phone or browser also keeps its own copy so the app keeps working with
+poor reception, and catches up when it is back online.

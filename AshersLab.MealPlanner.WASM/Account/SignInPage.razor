@@ -1,0 +1,87 @@
+@page "/sign-in"
+@using AshersLab.MealPlanner.WASM.Sync
+@inject AccountClient Account
+@inject SyncLoop Sync
+@inject NavigationManager Navigation
+
+@*
+    Signing in, with the passkey this phone already has: one button, then Face ID or the phone's PIN. Reached from the
+    sync chip and the signed-out banner. Nothing on this phone is lost while signed out - the banner says so - so this
+    page only has to get the session back. Where the app has no sign-in of its own (Home Assistant, a sign-in proxy), it
+    says to reload instead: the proxy's login comes first.
+*@
+
+<PageTitle>Sign in - Meal Planner</PageTitle>
+
+<div class="account">
+    <PadSheet Title="Sign in" Subtitle="With the passkey on this phone - Face ID, a fingerprint, or its PIN." TestId="sign-in">
+        <div class="account-body">
+            @if (_state is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
+            }
+            else if (!_state.Available)
+            {
+                <p>Signing in happens before the app opens here. Reload to sign in again.</p>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Navigation.Refresh(forceReload: true)">Reload</MudButton>
+            }
+            else if (_state.SignedIn)
+            {
+                <p data-testid="sign-in-done">Signed in as <b>@_state.Name</b>.</p>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@Back">Carry on</MudButton>
+            }
+            else
+            {
+                @if (!_supported)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">This browser can't use passkeys. Open the app in Safari or Chrome.</MudAlert>
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" StartIcon="@Icons.Material.Filled.Key"
+                           Disabled="_busy || !_supported" OnClick="SignIn" data-testid="sign-in-passkey">Sign in with a passkey</MudButton>
+                @if (_problem is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3" data-testid="sign-in-problem">@_problem</MudAlert>
+                }
+                <p class="account-help">
+                    No passkey on this phone? Ask someone who is signed in for an invitation: Settings → Who can sign in.
+                    Until then, everything on this phone stays here and is sent once you sign in.
+                </p>
+            }
+        </div>
+    </PadSheet>
+</div>
+
+@code {
+    /// <summary>Where to go once signed in: the page the planner came from.</summary>
+    [SupplyParameterFromQuery(Name = "back")] public string? BackParameter { get; set; }
+
+    private AccountState? _state;
+    private bool _supported = true, _busy;
+    private string? _problem;
+
+    /// <summary>Only a path in this app - never somewhere else a link could name.</summary>
+    private string Back => BackParameter is { Length: > 0 } b && !b.Contains("//", StringComparison.Ordinal) && !b.Contains(':') ? b.TrimStart('/') : "./";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _state = await Account.StateAsync();
+        if (_state is { Available: true, SignedIn: false })
+            _supported = await Account.SupportedAsync();
+    }
+
+    private async Task SignIn()
+    {
+        (_busy, _problem) = (true, null);
+        AccountResult result = await Account.SignInAsync();
+        _busy = false;
+        if (result.Cancelled)
+            return;
+        if (!result.Ok)
+        {
+            _problem = result.Problem;
+            return;
+        }
+        Sync.Kick();
+        Navigation.NavigateTo(Back);
+    }
+}

@@ -28,9 +28,12 @@ Present tense, kept current, no dates.
 
 - [How the app is hosted](modules/infrastructure/hosting.md) — the projects, one process serving
   gRPC-Web and the WASM app, the request pipeline and its `UseRouting` trap, and where the data lives.
+- [Signing in](modules/infrastructure/accounts.md) — the app's own sign-in with passkeys: setup and invitation links
+  stored as hashes, the public address passkeys are bound to, the session, the cross-site check, what is public, and
+  what the planner sees.
 - [How the app is deployed](modules/infrastructure/deployment.md) — the one image, the Home Assistant add-on behind
-  Nginx Proxy Manager and Authelia (its options, a page redirected to the login but a sync call given a 401), ingress
-  (still supported, no longer used: base path, the gRPC-Web prefix trap, the HA user), CI to GHCR, and the owner's
+  Nginx Proxy Manager (its options), ingress (still supported, no longer used: base path, the gRPC-Web prefix trap, the
+  HA user), CI to GHCR, and the owner's
   install steps; standalone on Kubernetes or Docker: refusing to start with no auth, a sign-in proxy's header believed
   only from the proxy, the chart, Litestream to S3, and what the owner must do to deploy it.
 - [The browser database](modules/sync/browser-database.md) — EF Core SQLite in OPFS, the `wasm-tools`

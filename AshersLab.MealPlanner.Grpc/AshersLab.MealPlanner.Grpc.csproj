@@ -17,6 +17,8 @@
         <PackageReference Include="Grpc.AspNetCore.Web" Version="2.76.0" />
         <!-- 10.0.13 at least: <= 10.0.12 carries two RCE advisories (CVE-2026-102870, CVE-2026-96230). -->
         <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.13" />
+        <!-- The app's own sign-in: members and their passkeys, no passwords (Features/Accounts). -->
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.13" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
             <PrivateAssets>all</PrivateAssets>

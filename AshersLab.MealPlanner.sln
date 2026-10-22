@@ -50,6 +50,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "import", "import", "{ED4F04
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{F5CEBEAF-8131-46D3-BF40-5BD5B8E554B1}"
 	ProjectSection(SolutionItems) = preProject
+		docs\modules\infrastructure\accounts.md = docs\modules\infrastructure\accounts.md
 		docs\modules\infrastructure\deployment.md = docs\modules\infrastructure\deployment.md
 		docs\modules\infrastructure\hosting.md = docs\modules\infrastructure\hosting.md
 		docs\modules\infrastructure\README.md = docs\modules\infrastructure\README.md

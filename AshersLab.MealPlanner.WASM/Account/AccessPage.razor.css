@@ -1,0 +1,66 @@
+/* Who can sign in: a ruled block per member, their passkeys under them. Shared .account styles are in app.css. */
+
+/* As on Diagnostics: on a phone the app bar names the page; from Md up the page names itself. */
+.page-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    margin: 0;
+}
+
+@media (min-width: 960px) {
+    .page-title {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip-path: none;
+        white-space: normal;
+        margin: 4px 4px 12px;
+        font: 700 1.5rem/1.15 var(--font-body);
+        letter-spacing: -0.01em;
+        color: var(--ink);
+    }
+}
+.access-member {
+    padding: 14px 18px;
+    border-top: 1px solid var(--rule);
+}
+
+.access-member-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 36px;
+    font-size: 1.0625rem;
+}
+
+.access-passkey {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+}
+
+.access-passkey > span {
+    flex: 1 1 auto;
+}
+
+.access-link {
+    margin-top: 14px;
+}
+
+.access-link code {
+    display: block;
+    padding: 10px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--laminate);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+}

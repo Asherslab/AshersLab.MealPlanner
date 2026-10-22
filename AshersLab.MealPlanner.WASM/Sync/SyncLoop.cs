@@ -36,7 +36,6 @@ public sealed class SyncLoop(
     LocalDatabase     database,
     ISyncService      server,
     IJSRuntime        js,
-    NavigationManager navigation,
     ILogger<SyncLoop> logger
 ) : IAsyncDisposable
 {

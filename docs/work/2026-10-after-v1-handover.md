@@ -109,18 +109,19 @@ serve ([batches and serves](../modules/planning/batches-and-serves.md)); and the
 so it opens with no signal ([offline sync](../modules/sync/offline-sync.md#the-service-worker)).
 
 **The add-on is no longer a Home Assistant panel.** An app in Home Assistant's frame can be neither installed nor opened
-offline, so the owner chose its own HTTPS address through their Nginx Proxy Manager (an add-on on the same Pi) with
-Authelia signing people in; external access is wanted. The add-on runs in sign-in-proxy mode, trusting only
-`trusted_proxies` from its Configuration tab; `mealplanner/DOCS.md` is the owner's set-up
-([deployment](../modules/infrastructure/deployment.md#behind-nginx-proxy-manager-and-authelia)).
+offline, so the owner chose its own HTTPS address through their Nginx Proxy Manager (an add-on on the same Pi), reachable
+from outside. Running an identity provider beside it was not an option, so **the app signs people in itself, with
+passkeys** ([signing in](../modules/infrastructure/accounts.md)): the first from a setup link in the add-on's log, the rest
+by invitation. `mealplanner/DOCS.md` is the owner's set-up. (A detour first used a sign-in proxy with Authelia; replaced
+the same day.)
 
 ## Next step 4 - the add-on on the Pi (the owner)
 
-Replaces most of step 2's Pi items: install the add-on, set it up per `mealplanner/DOCS.md` (Authelia, the proxy host
-and its Advanced tab, `trusted_proxies` narrowed to the proxy's own address), install the app on both phones, and note
-what differed from DOCS.md - the Advanced tab is written from Authelia's and Nginx Proxy Manager's documentation and
-proven only against `.claude/tools/addon-sim`. Still from step 2: the multi-arch pull, first load and RAM, a real backup
-and restore, then wiping the test data and the first real import.
+Replaces most of step 2's Pi items: install the add-on, set `public_url`, add the proxy host, open the setup link from
+the Log tab on a phone, invite the household, install the app on both phones - per `mealplanner/DOCS.md` - and note what
+differed from it: it is proven only against `.claude/tools/addon-sim` and Chrome's virtual authenticator, not a real
+iPhone's passkeys. Still from step 2: the multi-arch pull, first load and RAM, a real backup and restore (the passkeys
+must survive it), then wiping the test data and the first real import.
 
 ## Next step 5 - Actual Budget, read only (this leg, after the Pi)
 

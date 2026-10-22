@@ -1,0 +1,199 @@
+@page "/settings/access"
+@using System.Globalization
+@inject AccountClient Account
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@*
+    Who can sign in, and how: each member and their passkeys (synced through iCloud or Google, or this device only), an
+    invitation link to send someone new, another passkey for this device, and signing out - here, or on every device.
+    Only where the app signs people in itself; under Home Assistant or a sign-in proxy it says so and nothing else.
+*@
+
+<PageTitle>Who can sign in - Meal Planner</PageTitle>
+
+<div class="account">
+    <h1 class="page-title">Who can sign in</h1>
+
+    @if (_state is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
+    }
+    else if (!_state.Available)
+    {
+        <PadSheet Title="Who can sign in">
+            <p class="pad-note">Signing in is handled before the app here - by Home Assistant or the sign-in proxy in front of it.</p>
+        </PadSheet>
+    }
+    else if (!_state.SignedIn)
+    {
+        <PadSheet Title="Who can sign in">
+            <p class="pad-note">You are signed out. <a href="sign-in?back=settings/access">Sign in</a> to see who else can.</p>
+        </PadSheet>
+    }
+    else
+    {
+        <PadSheet Title="Who can sign in" Subtitle="@($"Signed in as {_state.Name}.")" TestId="access-members">
+            @if (_members is null)
+            {
+                <p class="pad-note">Can't reach the server just now.</p>
+            }
+            else
+            {
+                @foreach (MemberView member in _members)
+                {
+                    <div class="access-member" data-testid="access-member" data-id="@member.Id">
+                        <div class="access-member-head">
+                            <b>@member.Name@(member.IsYou ? " (you)" : "")</b>
+                            @if (!member.IsYou && _members.Count > 1)
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => RemoveMember(member)"
+                                           data-testid="access-remove-member">Remove</MudButton>
+                            }
+                        </div>
+                        @foreach (PasskeyView passkey in member.Passkeys)
+                        {
+                            <div class="access-passkey" data-testid="access-passkey">
+                                <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small"/>
+                                <span>
+                                    @(passkey.Name ?? "A passkey") · added @passkey.CreatedAt.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture)
+                                    · @(passkey.Synced ? "synced to their other devices" : "this device only")
+                                </span>
+                                @if (member.Passkeys.Count > 1)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Remove this passkey"
+                                                   OnClick="() => RemovePasskey(member, passkey)"/>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </PadSheet>
+
+        <PadSheet Title="Invite someone" Subtitle="A link that works once, for a day. They make their own passkey from it." Class="mt-4">
+            <div class="account-body">
+                <MudTextField T="string" @bind-Value="_inviteName" Label="Their name (or let them write it)" Variant="Variant.Outlined"
+                              Immediate="true" MaxLength="100" InputId="access-invite-name"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" StartIcon="@Icons.Material.Filled.PersonAdd"
+                           Disabled="_busy" OnClick="Invite" data-testid="access-invite">Make an invitation link</MudButton>
+                @if (_inviteLink is not null)
+                {
+                    <div class="access-link" data-testid="access-invite-link">
+                        <code>@_inviteLink</code>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Share" OnClick="Share">Send it</MudButton>
+                        </div>
+                        <p class="account-help">Send it to them only - whoever opens it first gets in. It stops working once used, or tomorrow.</p>
+                    </div>
+                }
+            </div>
+        </PadSheet>
+
+        <PadSheet Title="This device" Class="mt-4">
+            <div class="account-body d-flex flex-column gap-2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Key" Disabled="_busy" OnClick="AddPasskey"
+                           data-testid="access-add-passkey">Add a passkey on this device</MudButton>
+                <p class="account-help">Only needed when this device doesn't already have your passkey from iCloud or Google.</p>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Logout" Disabled="_busy" OnClick="SignOut"
+                           data-testid="access-sign-out">Sign out on this device</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.PhonelinkErase" Disabled="_busy" OnClick="SignOutEverywhere"
+                           data-testid="access-sign-out-everywhere">Sign out on all my devices</MudButton>
+                <p class="account-help">For a lost phone: every device of yours has to sign in again, within a minute.</p>
+            </div>
+        </PadSheet>
+    }
+
+    @if (_message is not null)
+    {
+        <MudAlert Severity="@(_messageOk ? Severity.Success : Severity.Error)" Dense="true" Class="mt-3" data-testid="access-message">@_message</MudAlert>
+    }
+</div>
+
+@code {
+    private AccountState? _state;
+    private IReadOnlyList<MemberView>? _members;
+    private string? _inviteName, _inviteLink, _message;
+    private bool _busy, _messageOk;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _state = await Account.StateAsync();
+        if (_state is { Available: true, SignedIn: true })
+            _members = await Account.MembersAsync();
+    }
+
+    private void Say(AccountResult result, string done)
+    {
+        if (result.Cancelled)
+            return;
+        (_message, _messageOk) = result.Ok ? (done, true) : (result.Problem, false);
+    }
+
+    private async Task Invite()
+    {
+        _busy = true;
+        (InvitationCreated? created, string? problem) = await Account.InviteAsync(_inviteName);
+        _busy = false;
+        if (created is null)
+        {
+            (_message, _messageOk) = (problem, false);
+            return;
+        }
+        _inviteLink = Navigation.ToAbsoluteUri($"welcome#{created.Token}").ToString();
+        _message = null;
+    }
+
+    /// <summary>The phone's share sheet (Messages, WhatsApp); without one, the clipboard.</summary>
+    private async Task Share()
+    {
+        if (!await JS.InvokeAsync<bool>("mealPlannerApp.share", "The meal planner", _inviteLink))
+            (_message, _messageOk) = ("Copied - paste it into a message to them.", true);
+    }
+
+    private async Task AddPasskey()
+    {
+        _busy = true;
+        Say(await Account.AddPasskeyAsync(), "Added a passkey for this device.");
+        _busy = false;
+        await Load();
+    }
+
+    private async Task RemovePasskey(MemberView member, PasskeyView passkey)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Remove this passkey?", $"The device using it can no longer sign in as {member.Name}.",
+                yesText: "Remove", cancelText: "Cancel") != true)
+            return;
+        Say(await Account.RemovePasskeyAsync(member.Id, passkey.Id), "Removed.");
+        await Load();
+    }
+
+    private async Task RemoveMember(MemberView member)
+    {
+        if (await Dialogs.ShowMessageBoxAsync($"Remove {member.Name}?",
+                $"{member.Name} can no longer sign in, on any device, within a minute. What they planned stays.",
+                yesText: "Remove", cancelText: "Cancel") != true)
+            return;
+        Say(await Account.RemoveMemberAsync(member.Id), $"Removed {member.Name}.");
+        await Load();
+    }
+
+    private async Task SignOut()
+    {
+        Say(await Account.SignOutAsync(), "Signed out. Everything on this device stays here until you sign in again.");
+        await Load();
+    }
+
+    private async Task SignOutEverywhere()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Sign out on all your devices?",
+                "Every phone and computer signed in as you has to sign in again. Changes they haven't sent stay on them until then.",
+                yesText: "Sign out everywhere", cancelText: "Cancel") != true)
+            return;
+        Say(await Account.SignOutEverywhereAsync(), "Signed out on all your devices.");
+        await Load();
+    }
+}

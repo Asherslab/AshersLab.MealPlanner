@@ -15,6 +15,12 @@ public enum AuthMode
 
     /// <summary>Standalone behind a reverse proxy that signs people in and names them in a header (<see cref="TrustedHeaderRequest"/>).</summary>
     TrustedHeader,
+
+    /// <summary>
+    /// The app signs people in itself, with passkeys (<c>Features/Accounts</c>): the Home Assistant add-on behind a proxy
+    /// that only does HTTPS. Nobody's headers are believed.
+    /// </summary>
+    Accounts,
 }
 
 /// <summary>
@@ -31,8 +37,17 @@ public sealed class AuthOptions
 {
     public const string Section = "Auth";
 
-    /// <summary><c>TrustedHeader</c> or <c>None</c>; unset is Home Assistant when <c>Ingress:TrustedProxy</c> is set.</summary>
+    /// <summary><c>Accounts</c>, <c>TrustedHeader</c> or <c>None</c>; unset is Home Assistant when <c>Ingress:TrustedProxy</c> is set.</summary>
     public string? Mode { get; set; }
+
+    /// <summary>
+    /// <c>Accounts</c>: the address people open, <c>https://meals.example.com</c>. Passkeys are bound to its host, and a
+    /// passkey ceremony from any other origin is refused (<see cref="Accounts.AccountRules.PublicUrl"/>).
+    /// </summary>
+    public string? PublicUrl { get; set; }
+
+    /// <summary><c>Accounts</c>: print a new setup link at start even though members exist - for when nobody can sign in.</summary>
+    public bool ResetAccess { get; set; }
 
     /// <summary>
     /// The proxy's addresses, comma-separated: <c>10.42.0.0/16, 192.168.1.5</c>. In Kubernetes the ingress controller's pod
@@ -54,16 +69,19 @@ public sealed class AuthOptions
         {
             null or "" when homeAssistant => null,
             null or "" when development => null,
-            null or "" => "No authentication is configured, so the app will not serve anyone. Behind a proxy that signs people in, " +
-                          "set Auth__Mode=TrustedHeader and Auth__TrustedProxies to its addresses; to serve without any, set Auth__Mode=None.",
+            null or "" => "No authentication is configured, so the app will not serve anyone. For the app's own passkey sign-in, set " +
+                          "Auth__Mode=Accounts and Auth__PublicUrl; behind a proxy that signs people in, set Auth__Mode=TrustedHeader " +
+                          "and Auth__TrustedProxies to its addresses; to serve without any, set Auth__Mode=None.",
             _ when homeAssistant => $"{IngressOptions.Section}:TrustedProxy is the Home Assistant add-on's; {Section}:Mode cannot also be set.",
             "None" => null,
             "TrustedHeader" => TrustedHeaderProblem(),
-            _ => $"{Section}:Mode '{Mode}' is not TrustedHeader or None.",
+            "Accounts" => Accounts.AccountRules.PublicUrl(PublicUrl, out string? bad) is null ? $"{Section}:PublicUrl {bad}." : null,
+            _ => $"{Section}:Mode '{Mode}' is not Accounts, TrustedHeader or None.",
         };
         if (problem is not null)
             return null;
-        return homeAssistant ? AuthMode.HomeAssistant : Mode == "TrustedHeader" ? AuthMode.TrustedHeader : AuthMode.None;
+        return homeAssistant ? AuthMode.HomeAssistant
+            : Mode switch { "TrustedHeader" => AuthMode.TrustedHeader, "Accounts" => AuthMode.Accounts, _ => AuthMode.None };
     }
 
     private string? TrustedHeaderProblem()

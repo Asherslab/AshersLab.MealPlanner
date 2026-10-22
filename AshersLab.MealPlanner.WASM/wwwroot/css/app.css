@@ -320,3 +320,38 @@ table, .num { font-variant-numeric: tabular-nums; }
     right: 0.75rem;
     top: 0.5rem;
 }
+
+/* ---- Signing in (Account/): one narrow sheet, a big button, plain help under it. ---------------------------------- */
+.account {
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.account-body {
+    padding: 16px 18px 18px;
+}
+
+.account-help {
+    margin: 12px 0 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--ink-soft);
+}
+
+/* Signed out: across the top of every page, in the unsent edge's colours - nothing is lost, it is waiting. */
+.signed-out {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    border: 1px dashed var(--ink-soft);
+    border-radius: var(--pad-radius);
+    background: var(--enamel);
+    font-size: 0.9375rem;
+}
+
+.signed-out span {
+    flex: 1 1 14rem;
+}

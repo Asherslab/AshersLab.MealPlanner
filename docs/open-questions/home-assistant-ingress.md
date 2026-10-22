@@ -15,11 +15,11 @@ code:
 # Blazor WASM behind Home Assistant ingress
 
 > **2026-10-22: the add-on no longer uses ingress.** The owner chose to reach it at its own HTTPS address through Nginx
-> Proxy Manager and Authelia, so it can be installed on a phone and opened offline
-> ([deployment](../modules/infrastructure/deployment.md#behind-nginx-proxy-manager-and-authelia)). What is below about
-> the panel, ingress headers and the companion app no longer decides anything. **Still open on the Pi**, unchanged:
-> whether the Supervisor pulls the multi-arch image (3), first-load time and RAM (4), and a real backup and restore (6) -
-> plus, new, the real Nginx Proxy Manager and Authelia in front, per the add-on's `DOCS.md`.
+> Proxy Manager, signing in with passkeys in the app itself, so it can be installed on a phone and opened offline
+> ([signing in](../modules/infrastructure/accounts.md), [deployment](../modules/infrastructure/deployment.md#the-add-on-behind-nginx-proxy-manager)).
+> What is below about the panel, ingress headers and the companion app no longer decides anything. **Still open on the
+> Pi**, unchanged: whether the Supervisor pulls the multi-arch image (3), first-load time and RAM (4), and a real backup
+> and restore (6) - plus, new, the real Nginx Proxy Manager in front and a real iPhone's passkeys, per the add-on's `DOCS.md`.
 
 Does the app load and work as a Home Assistant add-on panel, on a Raspberry Pi, in the HA companion app on
 an iPhone? Slice 3 of [the v1 scope](../work/2026-10-v1-scope.md) built everything it needs and proved what

@@ -10,6 +10,16 @@ window.mealPlannerApp = {
             .catch(e => console.warn('No offline copy of the app:', e?.message ?? e));
     },
 
+    /** The phone's share sheet for a link; without one, the clipboard. True when the share sheet opened. */
+    async share(title, url) {
+        if (navigator.share) {
+            try { await navigator.share({ title, url }); } catch { /* closed without sending */ }
+            return true;
+        }
+        await navigator.clipboard.writeText(url);
+        return false;
+    },
+
     /**
      * Reloads into the newest build: asks the server for it, lets it take over (it would otherwise wait for every window
      * to close), then reloads. Without a worker, or if anything fails, a plain reload - what the app did before it had

@@ -25,11 +25,14 @@
 
     protected override void OnInitialized() => Sync.StatusChanged += Changed;
 
-    /// <summary>Syncs now - or, signed out, reloads: the page load reaches the sign-in proxy's login.</summary>
+    /// <summary>
+    /// Syncs now - or, signed out, opens Sign in (which, where a proxy does the signing in, says to reload: the page load
+    /// then reaches the proxy's login).
+    /// </summary>
     private void Tapped()
     {
         if (Sync.Status.Connection == SyncConnection.SignedOut)
-            Navigation.Refresh(forceReload: true);
+            Navigation.NavigateTo($"sign-in?back={Uri.EscapeDataString(Navigation.ToBaseRelativePath(Navigation.Uri))}");
         else
             Sync.Kick();
     }

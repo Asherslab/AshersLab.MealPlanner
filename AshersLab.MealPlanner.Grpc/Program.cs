@@ -1,4 +1,5 @@
 using AshersLab.MealPlanner.Grpc.Data;
+using AshersLab.MealPlanner.Grpc.Features.Accounts;
 using AshersLab.MealPlanner.Grpc.Features.Auth;
 using AshersLab.MealPlanner.Grpc.Features.Ingress;
 using AshersLab.MealPlanner.Grpc.Features.Server;
@@ -29,7 +30,7 @@ if (args is [DatabaseSnapshot.Verb])
     return;
 }
 
-// The Home Assistant add-on's Configuration tab (/data/options.json): the sign-in proxy's address, set by the owner.
+// The Home Assistant add-on's Configuration tab (/data/options.json): the public address, and reset_access.
 AddOnOptions.AddTo(builder.Configuration);
 
 builder.AddServiceDefaults();
@@ -52,6 +53,13 @@ builder.Services.AddOptions<IngressOptions>()
 // Who is asking, outside Home Assistant (Features/Auth/AuthOptions.cs). Outside Development, nothing configured is a
 // host that will not start - the same image with no setting would otherwise serve everything to anyone.
 builder.Services.AddOptions<AuthOptions>().Bind(builder.Configuration.GetSection(AuthOptions.Section)).ValidateOnStart();
+
+// The app's own passkey sign-in (Features/Accounts), when that is the mode. A mode it cannot use stops the host at the
+// check below, with the reason; so only a usable one is set up here.
+AuthOptions auth = builder.Configuration.GetSection(AuthOptions.Section).Get<AuthOptions>() ?? new AuthOptions();
+bool accounts = auth.Mode == "Accounts" && AccountRules.PublicUrl(auth.PublicUrl, out _) is not null;
+if (accounts)
+    builder.AddAccounts(auth);
 builder.Services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsCheck>();
 
 var app = builder.Build();
@@ -68,6 +76,8 @@ using (IServiceScope scope = app.Services.CreateScope())
 {
     MealPlannerDbContext db = scope.ServiceProvider.GetRequiredService<MealPlannerDbContext>();
     await db.Database.MigrateAsync();
+    if (accounts)
+        await Accounts.StartAsync(app, auth);
     await SyncStartup.InitialiseAsync(db, app.Services.GetRequiredService<SyncSignal>());
 }
 
@@ -80,6 +90,10 @@ app.UseHomeAssistantIngress();
 
 // The same for a standalone image behind a sign-in proxy: does nothing unless Auth:Mode is TrustedHeader.
 app.UseTrustedHeaderAuth();
+
+// Or the app's own sign-in: a POST from another site refused, then who the session cookie says.
+if (accounts)
+    app.UseAccounts(auth);
 
 if (app.Environment.IsDevelopment())
     app.UseWebAssemblyDebugging();
@@ -110,8 +124,21 @@ app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
 app.MapDefaultEndpoints();
 
 // A service that compiles and is not mapped fails at the client as an unimplemented method, not at build.
-app.MapGrpcService<ServerInfoService>();
-app.MapGrpcService<SyncService>();
+if (accounts)
+{
+    app.UseAccountsAfterRouting();
+    app.MapAccounts();
+    // Every call needs a signed-in member; without one it is a 401, which the app shows as "Signed out".
+    app.MapGrpcService<ServerInfoService>().RequireAuthorization();
+    app.MapGrpcService<SyncService>().RequireAuthorization();
+}
+else
+{
+    app.MapGrpcService<ServerInfoService>();
+    app.MapGrpcService<SyncService>();
+    // No sign-in of the app's own: say so with a 404. Left unmapped, the shell's fallback would answer 200 with HTML.
+    app.MapGet("/account/{**rest}", () => Results.NotFound());
+}
 
 app.MapStaticAssets();
 

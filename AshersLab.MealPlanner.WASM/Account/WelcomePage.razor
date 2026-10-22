@@ -1,0 +1,97 @@
+@page "/welcome"
+@using AshersLab.MealPlanner.WASM.Sync
+@inject AccountClient Account
+@inject SyncLoop Sync
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@*
+    An invitation link: /welcome#<token>. The token is in the fragment, so it never reaches the proxy's or the server's
+    request logs; this page reads it and hands it to the server. The person writes their name (unless the inviter did),
+    makes a passkey, and is signed in. The first link - from the add-on's log - makes the first member.
+*@
+
+<PageTitle>Welcome - Meal Planner</PageTitle>
+
+<div class="account">
+    <PadSheet Title="@(_invitation?.Setup == true ? "Set up the meal planner" : "You're invited")"
+              Subtitle="A passkey lets you in with Face ID, a fingerprint or this phone's PIN - no password." TestId="welcome">
+        <div class="account-body">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
+            }
+            else if (_problem is not null && _invitation is null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" data-testid="welcome-problem">@_problem</MudAlert>
+            }
+            else if (_done)
+            {
+                <p data-testid="welcome-done">You're in, <b>@_name</b>. Install the app from your browser's menu to open it like any other.</p>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="./">Open the meal planner</MudButton>
+            }
+            else if (_invitation is not null)
+            {
+                @if (_invitation.ForName is { } forName)
+                {
+                    <p>This passkey is for <b>@forName</b>.</p>
+                }
+                else
+                {
+                    <MudTextField T="string" @bind-Value="_name" Label="Your name" Variant="Variant.Outlined" Immediate="true"
+                                  MaxLength="100" InputId="welcome-name"/>
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-3"
+                           StartIcon="@Icons.Material.Filled.Key" Disabled="_busy || !_supported" OnClick="Accept"
+                           data-testid="welcome-create">Make my passkey</MudButton>
+                @if (!_supported)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">This browser can't make passkeys. Open the link in Safari or Chrome.</MudAlert>
+                }
+                @if (_problem is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3" data-testid="welcome-problem">@_problem</MudAlert>
+                }
+            }
+        </div>
+    </PadSheet>
+</div>
+
+@code {
+    private string? _token, _name, _problem;
+    private InvitationView? _invitation;
+    private bool _loading = true, _busy, _done, _supported = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _token = new Uri(Navigation.Uri).Fragment.TrimStart('#');
+        if (_token.Length == 0)
+        {
+            (_loading, _problem) = (false, "This link is missing its code. Open the whole link you were sent.");
+            return;
+        }
+        (_invitation, _problem) = await Account.InvitationAsync(_token);
+        _name = _invitation?.ForName;
+        if (_invitation is not null)
+            _supported = await Account.SupportedAsync();
+        _loading = false;
+    }
+
+    private async Task Accept()
+    {
+        (_busy, _problem) = (true, null);
+        AccountResult result = await Account.AcceptAsync(_token!, _name);
+        _busy = false;
+        if (result.Cancelled)
+            return;
+        if (!result.Ok)
+        {
+            _problem = result.Problem;
+            return;
+        }
+        _done = true;
+        // The code has done its job: off the address bar and out of the history.
+        await JS.InvokeVoidAsync("history.replaceState", null, "", "welcome");
+        Sync.Kick();
+    }
+}

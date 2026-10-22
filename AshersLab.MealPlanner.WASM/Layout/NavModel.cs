@@ -78,6 +78,8 @@ public static class NavModel
 
         new("people",      "people",      "People",           Icons.Material.Filled.People,     NavGroup.Household, SettingsRoute,
             "Who eats, and how many serves a meal needs"),
+        new("settings/access", "access",  "Who can sign in",  Icons.Material.Filled.Key,        NavGroup.Household, SettingsRoute,
+            "Passkeys, invitations, and signing out"),
         new("slots",       "slots",       "Slots of the day", Icons.Material.Filled.Schedule,   NavGroup.Household, SettingsRoute,
             "Breakfast, lunch, dinner - the times you plan for"),
         new("meal-groups", "meal-groups", "Meal groups",      Icons.Material.Filled.ViewList,   NavGroup.Household, SettingsRoute,
