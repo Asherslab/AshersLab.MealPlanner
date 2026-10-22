@@ -82,12 +82,12 @@ itself counts too, and is named as "the calendar on Tue 27 Oct" ([the calendar](
 
 ## What the planner sees
 
-**People** (`/people`, "People" in the menu): a "New person" box; each person a row with their colour, tapped to
+**People** (`/people`; on a phone More → Settings → People): a "New person" box; each person a row with their colour, tapped to
 change the name or pick one of eight colours, or Delete. One tap and a name to add someone.
 
 **Slots of the day** (`/slots`): the same list as meal groups - add, rename, arrows, delete.
 
-**Plans** (`/plans`, "Plans", first in the menu after Home): each plan with "4 weeks · 120 entries"; "New plan" and
+**Plans** (`/plans`; on a phone More → Plans): each plan with "4 weeks · 120 entries"; "New plan" and
 "Weeks" boxes, Add opens the new plan.
 
 **A plan** (`/plans/{id}`): its name, "4 weeks, then it repeats", Edit (name, weeks, delete), and Week 1..n buttons.

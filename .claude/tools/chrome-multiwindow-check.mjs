@@ -23,7 +23,8 @@ import { spawn } from 'node:child_process';
 
 const [profile] = process.argv.slice(2);
 const PORT = 19334;
-const APP = process.env.APP_URL ?? 'https://localhost:7283/';
+// The windows open on Diagnostics: the device card the checks read lives there.
+const APP = (process.env.APP_URL ?? 'https://localhost:7283/') + 'settings/diagnostics';
 const NO_RETRY = process.env.NO_RETRY === '1';
 const WARMUP_MS = Number(process.env.WARMUP_MS ?? 3000);
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

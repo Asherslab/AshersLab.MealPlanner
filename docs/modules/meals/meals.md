@@ -35,7 +35,7 @@ They behave exactly like [shopping categories](../catalogue/catalogue.md#categor
 zero with fixed ids (`CatalogueSeed.MealGroups`, `00000000-5eed-7000-8000-000000000301` onwards), so a renamed or
 deleted seed stays that way. Sort in memory, never in SQL (`MealGroupEntity.InOrder`).
 
-**What the planner sees** (`/meal-groups`, "Meal groups" in the menu): the groups in order under "The meals are
+**What the planner sees** (`/meal-groups`; on a phone More → Settings → Meal groups): the groups in order under "The meals are
 grouped in this order."; a "New meal group" box; per row up and down arrows, a pencil and a bin - the same list as
 Stores and Categories (`Components/NameList.razor`).
 
@@ -75,7 +75,7 @@ What each kind means, and which fields the editor asks for:
   single op sees both `Kind` and `FixedCostCents`. The editor refuses to save one without it; a fixed-cost meal that
   still has none (two phones racing) costs as incomplete.
 
-**What the planner sees** (`/meals`, "Meals" in the menu): one box, "New meal, or search" - typing filters, Add (or
+**What the planner sees** (`/meals`, the phone's Meals tab): one box, "New meal, or search" - typing filters, Add (or
 Enter) opens the editor with the name filled in. Meals are listed under their group in the groups' order, "No group"
 last, each with "makes 4 serves", "single serve", "leftovers", "no cost" or "$45.00 · feeds 3" beneath. Tapping one
 opens its page (`/meals/{id}`): the name, "Beef · makes 4 serves", the notes, and Edit. The editor (full screen on a

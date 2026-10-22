@@ -1,18 +1,15 @@
 @page "/"
 @using AshersLab.MealPlanner.LocalData
-@using AshersLab.MealPlanner.Shared.Contracts.Entities.Features.Server
-@using AshersLab.MealPlanner.Shared.Contracts.Services.Features.Server
 @using AshersLab.MealPlanner.Shared.Data.Planning
 @using AshersLab.MealPlanner.Shared.Domain.Planning
 @using AshersLab.MealPlanner.WASM.Data
 @using AshersLab.MealPlanner.WASM.Features.Planning
 @using Microsoft.EntityFrameworkCore
 @inherits LocalDataPage
-@inject IServerInfoService ServerInfoService
 
 @*
     Where the app opens: today's meals, and one tap to each of the four things the planner comes to do - plan the
-    week, shop, add a meal, import a receipt. Below them, the server and this device, for when something is wrong.
+    week, shop, add a meal, import a receipt. The server and this device are on Settings > Diagnostics.
 *@
 
 <PageTitle>Meal Planner</PageTitle>
@@ -53,77 +50,11 @@
                StartIcon="@Icons.Material.Filled.Receipt" data-testid="home-receipts">Import a receipt</MudButton>
 </div>
 
-<MudText Typo="Typo.subtitle2" Class="mt-8 mb-2 mud-text-secondary">About this app</MudText>
-
-<MudCard Outlined="true" Class="home-server">
-    <MudCardHeader>
-        <CardHeaderContent>
-            <MudText Typo="Typo.h6">Server</MudText>
-        </CardHeaderContent>
-        <CardHeaderActions>
-            <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Check the server again"
-                           Disabled="_loading" OnClick="Load"/>
-        </CardHeaderActions>
-    </MudCardHeader>
-    <MudCardContent>
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
-        }
-        else if (_error is not null)
-        {
-            <MudAlert Severity="Severity.Error">Could not reach the server: @_error</MudAlert>
-        }
-        else if (_info is not null)
-        {
-            <MudSimpleTable Dense="true" Elevation="0">
-                <tbody>
-                <tr>
-                    <th scope="row">Version</th>
-                    <td data-testid="server-version">@_info.Version</td>
-                </tr>
-                <tr>
-                    <th scope="row">Server time</th>
-                    <td data-testid="server-time">@_info.ServerTimeUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
-                </tr>
-                <tr>
-                    <th scope="row">Database</th>
-                    <td data-testid="server-migration">@(_info.LatestMigration ?? "not migrated")</td>
-                </tr>
-                <tr>
-                    <th scope="row">Signed in as</th>
-                    <td data-testid="server-user">
-                        @if (_info.UserName is null)
-                        {
-                            <span>nobody - not opened through Home Assistant</span>
-                        }
-                        else
-                        {
-                            <span>@(_info.UserDisplayName ?? _info.UserName) (@_info.UserName)</span>
-                        }
-                    </td>
-                </tr>
-                </tbody>
-            </MudSimpleTable>
-        }
-    </MudCardContent>
-</MudCard>
-
-<div class="mt-4">
-    <ThisDeviceCard/>
-</div>
-
 @code {
-    private ServerInfo? _info;
-    private string?     _error;
-    private bool        _loading;
-
     private List<(string Slot, string Meal, bool Skipped)> _today = [];
     private bool _noPeople;
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
-
-    protected override Task OnInitializedAsync() => Load();
 
     protected override async Task LoadAsync(LocalDbContext db)
     {
@@ -137,25 +68,5 @@
             .Select(e => (slots.FirstOrDefault(s => s.Id == e.SlotId)?.Name ?? "",
                           e.MealId is { } id ? meals.GetValueOrDefault(id) ?? "meal removed" : "nothing chosen",
                           e.Skipped))];
-    }
-
-    private async Task Load()
-    {
-        _loading = true;
-        _error   = null;
-
-        try
-        {
-            _info = await ServerInfoService.Get();
-        }
-        catch (Exception ex)
-        {
-            _info  = null;
-            _error = ex.Message;
-        }
-        finally
-        {
-            _loading = false;
-        }
     }
 }

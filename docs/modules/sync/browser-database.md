@@ -10,6 +10,7 @@ code:
   - AshersLab.MealPlanner.WASM/Data/LocalDataGate.razor
   - AshersLab.MealPlanner.WASM/Data/ResetDeviceDialog.razor
   - AshersLab.MealPlanner.WASM/Components/ThisDeviceCard.razor
+  - AshersLab.MealPlanner.WASM/Pages/Diagnostics.razor
   - AshersLab.MealPlanner.WASM/Program.cs
   - AshersLab.MealPlanner.WASM/AshersLab.MealPlanner.WASM.csproj
   - AshersLab.MealPlanner.WASM/wwwroot/js/storage.js
@@ -117,7 +118,8 @@ the same.
 The result is cached, so a start is counted once however many components ask.
 
 `Device` (`LocalData/Device.cs`) is one row per browser profile: its `Id` is the device id every op
-carries, and what starts the sync loop (`WASM/Sync/SyncStatusChip.razor`, once the start is `READY`). It is also the visible proof that the database persists — the home page's "This device" card shows
+carries, and what starts the sync loop (`WASM/Sync/SyncStatusChip.razor`, once the start is `READY`). It is also the visible proof that the database persists — the "This device" card on Diagnostics (More → Settings →
+Diagnostics, `/settings/diagnostics`) shows
 the id, when it was first opened, how many starts it has seen, and which window holds the database. A new
 id, or the count back at 1, means the browser lost the storage.
 
@@ -161,7 +163,7 @@ not passed, where Node is missing).
 ## When this browser's copy cannot be opened
 
 A start that ends in anything but `READY` shows the reason in every page's `LocalDataGate` (`local-db-state`);
-Home's "This device" card points at it rather than repeating it. When the failure is one a reset can cure
+on Diagnostics the gate sits above the "This device" card, which points at it rather than repeating it. When the failure is one a reset can cure
 (`LocalDatabaseStart.CanReset`: any failure to open or migrate - `SCHEMA_INCOMPATIBLE`, `FAILED`, `TIMEOUT` - but
 not `TAB_LOCKED`, where a window outside the shim holds the files, nor the cross-window script failing to
 download, where a reload is the cure) the gate offers **Reset this device's copy** (`local-db-reset`). Never

@@ -203,7 +203,7 @@ Ids are a millisecond apart so a meal's lines list in the sheet's order.
 
 ## What the planner sees
 
-"Import spreadsheet" in the menu (`/import`). Under a line on how to download the sheet as .xlsx, a file box. Picking
+"Import spreadsheet" (`/import`; on a phone More → Settings → Import spreadsheet). Under a line on how to download the sheet as .xlsx, a file box. Picking
 the file shows a box "This adds 71 ingredients, 31 meals, 107 meal ingredients, 1 meal group, 8 products, 1 price." with
 **Import**, then the questions above (native selects, the phone's own picker), the new ingredients with their unit
 switches, and "Not imported" - every cell or price left out and why. Import, and it says what it added, with buttons

@@ -189,7 +189,7 @@ The same for both stores (`ReceiptStock`, `StockMovement.Counting`):
 
 ## What the planner sees
 
-**Receipts** in the menu (`/receipts`). "Pick a Woolworths invoice (the PDF from the order's page) or a Costco receipt (the PDF
+**Receipts** (`/receipts`; on a phone More → Receipts, or Today's "Import a receipt"). "Pick a Woolworths invoice (the PDF from the order's page) or a Costco receipt (the PDF
 the Costco app saves)". A Woolworths invoice opens its review at once; a Costco receipt shows "Reading the receipt's
 picture… 45%" for a few seconds first. The review: the store and date, the order or receipt number, the totals ("Sub total
 $16.10 · Paper bags $2.00 · Total $18.10", or Costco's "Total $91.45 · 5 items sold"), and "The lines add up to the sub total"

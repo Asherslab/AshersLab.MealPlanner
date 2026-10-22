@@ -53,7 +53,7 @@ const plant = (b, sql) => b.evaluate(`new Promise(resolve => {
 const text = (b, testid) => b.evaluate(`document.querySelector('[data-testid=${testid}]')?.textContent.trim()`);
 const failed = (b, ms = 60_000) => until(b, `/SCHEMA_INCOMPATIBLE/.test(document.querySelector('[data-testid=local-db-state]')?.textContent ?? '')
   && !!document.querySelector('[data-testid=local-db-reset]')`, ms);
-// Home's device card, or the ingredients page's box - each appears only once the database has opened.
+// Diagnostics' device card, or the ingredients page's box - each appears only once the database has opened.
 const opened = (b, ms = 60_000) => until(b, `!!document.querySelector('[data-testid=device-id]') || !!document.getElementById('ingredient-new-name')`, ms);
 const dialog = b => b.evaluate(`!!document.querySelector('[data-testid=device-reset]')`);
 const noScroll = b => b.evaluate(`document.documentElement.scrollWidth <= innerWidth`);
@@ -73,7 +73,7 @@ check(await until(a, `document.querySelector('[data-testid=sync-status]')?.datas
 
 console.log(`  plant: ${await plant(a, `DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" = '${NEWEST_MIGRATION}'`)}`);
 if (UNREADABLE) console.log(`  plant: ${await plant(a, 'DROP TABLE "Outbox"')}`);
-await a.send('Page.navigate', { url: APP_URL });
+await a.send('Page.navigate', { url: APP_URL + 'settings/diagnostics' });
 check(await failed(a), 'A, reloaded: SCHEMA_INCOMPATIBLE, with the reset offer');
 await a.send('Network.setBlockedURLs', { urls: [] });
 
@@ -83,7 +83,7 @@ check(await failed(w), 'a second window shows it too');
 check(await noScroll(a), 'no sideways scroll at 390 px');
 console.log(`  ${await screenshot(a, 'failed')}`);
 check(await text(a, 'device-not-open') !== undefined && (await a.evaluate(`document.querySelectorAll('[data-testid=local-db-state]').length`)) === 1,
-  'Home shows the error once; the device card points at it');
+  'Diagnostics shows the error once; the device card points at it');
 
 // Cancel, and Go back, change nothing.
 await click(a, '[data-testid=local-db-reset]');

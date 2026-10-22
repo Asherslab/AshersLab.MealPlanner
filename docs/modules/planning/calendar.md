@@ -117,7 +117,7 @@ leftovers that would have eaten it.
 
 ## What the planner sees
 
-**Calendar** (`/calendar`, first in the menu): "Week of Mon 26 Oct" with arrows either side, "This week" when elsewhere,
+**Calendar** (`/calendar`, the phone's Plan tab): "Week of Mon 26 Oct" with arrows either side, "This week" when elsewhere,
 and **Fill from a plan**. Under the title, which week of each plan this is ("Spreadsheet plan: week 3"). The week is in the
 address (`?week=2026-10-26`), so a reload stays on it.
 

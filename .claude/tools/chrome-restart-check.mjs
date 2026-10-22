@@ -37,9 +37,14 @@ function cdp(url) {
 }
 
 await json('/json/version');
-const target = await json('/json/new?https://localhost:7283/', 'PUT');
+// A brand-new profile drops requests for about its first second (ERR_CERT_VERIFIER_CHANGED - see
+// chrome-multiwindow-check.mjs): without this wait the first run on a fresh profile reads no card. Then Diagnostics,
+// where the device card is.
+await sleep(3000);
+const target = await json('/json/new?about:blank', 'PUT');
 const page = cdp(target.webSocketDebuggerUrl);
 await page.opened;
+await page.send('Page.navigate', { url: 'https://localhost:7283/settings/diagnostics' });
 
 const read = `(() => {
   const t = s => document.querySelector('[data-testid=' + s + ']')?.textContent.trim();

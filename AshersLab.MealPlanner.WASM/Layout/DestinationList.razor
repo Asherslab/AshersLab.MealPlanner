@@ -1,0 +1,37 @@
+@*
+    One group of pages on More or Settings: a heading, then a row per page - its icon, its name and one line saying what
+    it is for. Each row is a plain link the full width of the screen, so the whole row is the tap target.
+*@
+
+<section class="destination-group">
+    @if (Heading is not null)
+    {
+        <MudText Typo="Typo.subtitle2" Component="h2" Class="mud-text-secondary destination-heading">@Heading</MudText>
+    }
+    <MudPaper Outlined="true">
+        @foreach ((NavDestination d, int i) in Destinations.Select((d, i) => (d, i)))
+        {
+            @if (i > 0)
+            {
+                <MudDivider/>
+            }
+            <a href="@d.Route" class="destination-row" data-testid="@TestIdPrefix-@d.Key">
+                <MudIcon Icon="@d.Icon" Class="destination-icon"/>
+                <span class="destination-text">
+                    <MudText Typo="Typo.body1">@d.Title</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@d.Description</MudText>
+                </span>
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="mud-text-secondary"/>
+            </a>
+        }
+    </MudPaper>
+</section>
+
+@code {
+    [Parameter] public string? Heading { get; set; }
+
+    [Parameter, EditorRequired] public IEnumerable<NavDestination> Destinations { get; set; } = [];
+
+    /// <summary><c>more</c> or <c>settings</c>: each row's testid is the prefix and the page's key.</summary>
+    [Parameter, EditorRequired] public string TestIdPrefix { get; set; } = "";
+}

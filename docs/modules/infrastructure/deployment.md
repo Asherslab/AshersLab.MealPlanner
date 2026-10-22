@@ -76,7 +76,7 @@ docs out of it).
   only copies. A local arm64 build took 80 s on 2026-10-21.
 - **`wasm-tools` is installed in the build stage**, with `python3` for its Emscripten. The browser's SQLite
   relinks the WASM runtime (see [the browser database](../sync/browser-database.md)).
-- `-p:Version=` is the semantic version, which the home page's Server card shows.
+- `-p:Version=` is the semantic version, which the Server card on Diagnostics (`/settings/diagnostics`) shows.
 - **Runs as root.** The Supervisor mounts `/data` root-owned and offers no way to change it; as the base
   image's `app` user the first migration fails "unable to open database file".
 - `ASPNETCORE_HTTP_PORTS=8099` (the add-on's `ingress_port`), `DataDirectory=/data`. Plain HTTP/1.1 —
@@ -181,7 +181,7 @@ The same image, told who to believe by configuration. `AuthOptions.Resolve` pick
 | nothing, otherwise; both of the first two; an unknown mode; a proxy that is not an address | **the host does not start** | | |
 
 `Grpc/Features/Auth/TrustedHeaderRequest.cs` is the same rule as Home Assistant's: **a header is believed only on a
-connection that could only have come from the proxy**. It gives the same claims, so the home page's Server card cannot
+connection that could only have come from the proxy**. It gives the same claims, so the Diagnostics page's Server card cannot
 tell the two apart. Two things rest on the operator:
 
 - **The proxy must replace the browser's own copy of the user header**, not pass it on. oauth2-proxy and Authentik's
@@ -268,7 +268,7 @@ Nothing here has been run against any real cluster, registry setting or secret.
    ingress.enabled=true --set ingress.host=<host> …` plus the proxy's annotations under `ingress.annotations` (the values
    file has an ingress-nginx + oauth2-proxy example). Keep proxy buffering off and the read timeout long: the change
    stream is one long response.
-5. Open the host: the home page's Server card should name you. Then `kubectl exec` a request to the pod from a pod
+5. Open the host's `/settings/diagnostics`: the Server card should name you. Then `kubectl exec` a request to the pod from a pod
    outside the ingress namespace - it should time out.
 
 The cluster pulls from GHCR without credentials only while the package is public - the add-on needs that too; see the
@@ -309,7 +309,8 @@ arm64 image:
 
 - the shell under `/api/hassio_ingress/<token>/` and a deep link (`…/ingredients`) both carry the prefixed
   base; `_framework/`, `_content/MudBlazor/` load; direct requests to the app's own port are 403;
-- the home page shows the fake HA user from the headers; the sync chip goes online;
+- Diagnostics (`/settings/diagnostics`; it was the home page when this was seen) shows the fake HA user from the
+  headers; the sync chip goes online;
 - `.claude/tools/chrome-sync-check.mjs` (`APP_URL`, `SERVER_DB` pointed at the simulation) passes in full: two
   profiles, the change stream, an offline rename syncing on reconnect, concurrent renames converging, rows
   read from both browsers' SQLite and from the container's `/data`;

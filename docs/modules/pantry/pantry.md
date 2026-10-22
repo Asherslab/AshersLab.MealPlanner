@@ -79,7 +79,7 @@ was.
 
 ## What the planner sees
 
-**Pantry** in the menu (`/pantry`), phone and desktop alike:
+**Pantry** (`/pantry`; on a phone More → Pantry, two taps), phone and desktop alike:
 
 - Every ingredient with stock, under its category: "Mince · about 1 kg", and beneath it "runs out Sun 25 Oct" when this
   week's plan uses the last of it, or "500 g left after Thu 29 Oct". "out" and "probably out" are amber.

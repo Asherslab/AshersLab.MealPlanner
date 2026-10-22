@@ -1,85 +1,120 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 
+@*
+    The components' scoped CSS (*.razor.css). index.html has no link to the bundle, so it is added here; it belongs in
+    index.html beside css/app.css, and this goes when it is there.
+*@
+<HeadContent>
+    <link href="AshersLab.MealPlanner.WASM.styles.css" rel="stylesheet"/>
+</HeadContent>
+
 <MudThemeProvider/>
 <MudPopoverProvider/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
 
 @*
-    The menu is a drawer, not buttons in the app bar: on a phone the bar has room for the menu button, the title
-    and the sync chip, and nothing else. Wide screens keep it open beside the page; narrow ones slide it over and
-    close it when a page is picked.
+    Two ways around, both read from NavModel so they list the same pages. A phone has the bottom bar (Today, Plan,
+    Shop, Meals, More) and, on a page reached through More or Settings, a back arrow in the app bar; no drawer. From
+    Md up there is no bottom bar, and the drawer sits open beside the page: the four daily pages, Kitchen, Settings.
+    Which one shows is plain CSS (MainLayout.razor.css, BottomNav.razor.css), not the viewport service, so the first
+    paint is already right.
 *@
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                       aria-label="Menu" OnClick="() => _drawerOpen = !_drawerOpen" data-testid="nav-menu"/>
-        <MudLink Href="" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
+        <span class="wide-only">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                           aria-label="Menu" OnClick="() => _drawerOpen = !_drawerOpen" data-testid="nav-menu"/>
+        </span>
+        @if (_back is not null && _here is not null)
+        {
+            <span class="phone-only app-bar-page">
+                <MudIconButton Href="@Link(_back)" Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Inherit"
+                               Edge="Edge.Start" aria-label="@($"Back to {_back.Title}")" data-testid="app-back"/>
+                <MudText Typo="Typo.h6" Class="app-bar-title">@_here.Title</MudText>
+            </span>
+            <span class="wide-only">
+                <MudLink Href="./" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
+            </span>
+        }
+        else
+        {
+            <MudLink Href="./" Color="Color.Inherit" Underline="Underline.None" Typo="Typo.h6">Meal Planner</MudLink>
+        }
         <MudSpacer/>
         <SyncStatusChip/>
         <ServerReplacedPrompt/>
     </MudAppBar>
+    @* Responsive: open beside the page from Md up, and closed below it - where nothing opens it. *@
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1"
                Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md">
         <MudNavMenu>
-            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home"
-                        data-testid="nav-home">Home</MudNavLink>
-            <MudNavLink Href="calendar" Icon="@Icons.Material.Filled.CalendarMonth"
-                        data-testid="nav-calendar">Calendar</MudNavLink>
-            <MudNavLink Href="plans"Icon="@Icons.Material.Filled.CalendarViewWeek"
-                        data-testid="nav-plans">Plans</MudNavLink>
-            <MudNavLink Href="shopping" Icon="@Icons.Material.Filled.ShoppingCart"
-                        data-testid="nav-shopping">Shopping</MudNavLink>
-            <MudNavLink Href="pantry" Icon="@Icons.Material.Filled.Kitchen"
-                        data-testid="nav-pantry">Pantry</MudNavLink>
-            <MudNavLink Href="receipts" Icon="@Icons.Material.Filled.Receipt"
-                        data-testid="nav-receipts">Receipts</MudNavLink>
-            <MudNavLink Href="meals" Icon="@Icons.Material.Filled.RestaurantMenu"
-                        data-testid="nav-meals">Meals</MudNavLink>
-            <MudNavLink Href="ingredients" Icon="@Icons.Material.Filled.Egg"
-                        data-testid="nav-ingredients">Ingredients</MudNavLink>
-            <MudNavLink Href="prices" Icon="@Icons.Material.Filled.Sell"
-                        data-testid="nav-prices">Prices</MudNavLink>
-            <MudNavLink Href="people" Icon="@Icons.Material.Filled.People"
-                        data-testid="nav-people">People</MudNavLink>
-            <MudNavLink Href="slots" Icon="@Icons.Material.Filled.Schedule"
-                        data-testid="nav-slots">Slots of the day</MudNavLink>
-            <MudNavLink Href="meal-groups" Icon="@Icons.Material.Filled.ViewList"
-                        data-testid="nav-meal-groups">Meal groups</MudNavLink>
-            <MudNavLink Href="categories" Icon="@Icons.Material.Filled.Category"
-                        data-testid="nav-categories">Categories</MudNavLink>
-            <MudNavLink Href="stores" Icon="@Icons.Material.Filled.Storefront"
-                        data-testid="nav-stores">Stores</MudNavLink>
-            <MudNavLink Href="import" Icon="@Icons.Material.Filled.UploadFile"
-                        data-testid="nav-import">Import spreadsheet</MudNavLink>
+            @foreach (NavDestination d in NavModel.In(NavGroup.Main))
+            {
+                <MudNavLink Href="@Link(d)" Match="@(d.Route.Length == 0 ? NavLinkMatch.All : NavLinkMatch.Prefix)"
+                            Icon="@d.Icon" data-testid="@($"nav-{d.Key}")">@d.Title</MudNavLink>
+            }
+            <div class="drawer-heading">
+                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Kitchen</MudText>
+            </div>
+            @foreach (NavDestination d in NavModel.In(NavGroup.Kitchen))
+            {
+                <MudNavLink Href="@Link(d)" Icon="@d.Icon" data-testid="@($"nav-{d.Key}")">@d.Title</MudNavLink>
+            }
+            <MudDivider Class="my-2"/>
+            @foreach (NavDestination d in NavModel.In(NavGroup.Settings))
+            {
+                <MudNavLink Href="@Link(d)" Icon="@d.Icon" data-testid="@($"nav-{d.Key}")">@d.Title</MudNavLink>
+            }
         </MudNavMenu>
     </MudDrawer>
     <MudMainContent Class="pt-14">
         <MudContainer MaxWidth="MaxWidth.Medium" Class="py-4">
-            @Body
+            <div class="page-body">
+                @Body
+            </div>
         </MudContainer>
     </MudMainContent>
 </MudLayout>
+
+<BottomNav Active="_tab"/>
 
 @code {
     // A responsive drawer closes itself below its breakpoint, so this is open on a desktop and closed on a phone.
     private bool _drawerOpen = true;
 
-    [Inject] private IBrowserViewportService Viewport { get; set; } = null!;
-    [Inject] private NavigationManager       Navigation { get; set; } = null!;
+    private NavDestination? _here;
+    private NavDestination? _back;
+    private NavDestination? _tab;
 
-    // On any navigation, not on the menu link's click: MudNavLink's OnClick never reached this on a phone (seen
-    // 2026-10-22 - the menu stayed over the page it had just opened), and a link inside a page should close it too.
-    protected override void OnInitialized() => Navigation.LocationChanged += ClosedOnPhone;
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
 
-    private async void ClosedOnPhone(object? sender, LocationChangedEventArgs e)
+    // The bar and the back arrow follow every navigation, wherever it came from - a tab, a row on More, a link
+    // inside a page, the browser's own back button.
+    protected override void OnInitialized()
     {
-        if (!_drawerOpen || await Viewport.GetCurrentBreakpointAsync() >= Breakpoint.Md)
-            return;
-        _drawerOpen = false;
-        await InvokeAsync(StateHasChanged);
+        Locate();
+        Navigation.LocationChanged += Moved;
     }
 
-    public void Dispose() => Navigation.LocationChanged -= ClosedOnPhone;
+    private void Moved(object? sender, LocationChangedEventArgs e)
+    {
+        Locate();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Locate()
+    {
+        string path = Navigation.ToBaseRelativePath(Navigation.Uri);
+        _here = NavModel.Find(path);
+        _back = NavModel.BackFrom(path);
+        _tab  = NavModel.TabFor(path);
+    }
+
+    // "./" rather than "" for Today: an empty href is the current page, not the app's base (Home Assistant's ingress
+    // path, under the add-on).
+    private static string Link(NavDestination d) => d.Route.Length == 0 ? "./" : d.Route;
+
+    public void Dispose() => Navigation.LocationChanged -= Moved;
 }

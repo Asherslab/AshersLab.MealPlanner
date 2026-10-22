@@ -124,7 +124,7 @@ cross-multiplying, so no rounding picks a product. Shown per kg, per L, or each:
 
 ## What the planner sees
 
-`/prices`, "Prices" in the menu. Every ingredient, under its category in the household's order (the order of the
+`/prices`; on a phone More → Prices. Every ingredient, under its category in the household's order (the order of the
 spreadsheet's price columns), with what costing will use beneath its name - "$16.66/kg at Costco", "$15.00/kg -
 cheapest, at Woolworths" when the usual store has no price, or "unpriced" - and its products beneath that: the name, then "Costco · 2 kg · #12345", and on the right
 its latest price and the day seen ("$24.99 / 21 Oct", or "no price"). A search box

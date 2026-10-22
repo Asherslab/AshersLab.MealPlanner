@@ -102,10 +102,17 @@ can use the app while it runs.
 
 Chrome (`mcp__claude-in-chrome__*`) works against `https://localhost:7283` with no sign-in. The home
 page is where the planner lands: `home-today` (today's entries `home-today-entry`, or `home-today-empty`), `home-no-people`
-while nobody is on People, and the buttons `home-calendar`, `home-shopping`, `home-meals`, `home-receipts`. Under "About
-this app" is the wiring check: it calls `IServerInfoService.Get` over gRPC-Web and shows the
-server version, server time and the newest applied migration. The refresh icon (aria-label "Check the
+while nobody is on People, and the buttons `home-calendar`, `home-shopping`, `home-meals`, `home-receipts`. The wiring
+check is on **Diagnostics** (`/settings/diagnostics`): its Server card calls `IServerInfoService.Get` over gRPC-Web and
+shows the server version, server time and the newest applied migration. The refresh icon (aria-label "Check the
 server again") repeats the call — the server time changing is the evidence that it went to the server.
+
+**Navigation** (all from `Layout/NavModel.cs`): on a phone-sized viewport the bottom bar `bottom-nav` with
+`bottom-nav-today|plan|shop|meals|more` (an `<a>`; the current one has class `active` and `aria-current=page`); `/more`
+rows `more-pantry|receipts|prices|ingredients|plans|settings`; `/settings` rows `settings-people|slots|meal-groups|
+categories|stores|import|diagnostics`; on any page under More or Settings the app bar's back arrow `app-back`. No
+drawer on a phone. Desktop-wide: no bottom bar; the drawer's `nav-<key>` testids sit on a `div` around the link -
+`.click()` the `a` inside it, not the div.
 
 **Driving it as the phone does**, one step at a time rather than a whole check script: the 2026-10-22 acceptance walk
 (`docs/work/2026-10-v1-acceptance.md`) used a small throwaway HTTP driver over two `launch()`ed profiles - touch events at
@@ -128,7 +135,7 @@ Costco"), `ingredient-staple-chip`; group headings `ingredient-group`. The edito
 but not yet pulled back). Sync calls are
 `/gRPC/AshersLab.MealPlanner.Sync/Push|Pull|Changes`; `Changes` stays open.
 
-**Stores** (`/stores`, "Stores" in the menu - a drawer behind `nav-menu` on a phone, `nav-stores`) is a `NameList`:
+**Stores** (`/stores`; on a phone More → Settings → Stores, `settings-stores`) is a `NameList`:
 `store-new-name` (input id too) and `store-add`; per row `store-row` (`data-id`), `store-name`, `store-rename` →
 `store-rename-input` / `store-rename-save`, `store-delete` (opens a MudBlazor message box - not a browser dialog -
 with a "Delete" button; or, when something uses it, shows `store-in-use` instead). **Categories** (`/categories`,
@@ -418,8 +425,9 @@ the folder to start over (stop the app first; SQLite holds `-wal`/`-shm` files b
 
 How it works is in `docs/modules/sync/browser-database.md`. How to look at it:
 
-- **In the page** — the home page's "This device" card (`data-testid` `device-id`, `device-open-count`,
-  `device-storage`, `device-role`, or `local-db-state` when it could not open) reads the `Device` row
+- **In the page** — the "This device" card on Diagnostics (`/settings/diagnostics`; `data-testid` `device-id`,
+  `device-open-count`, `device-storage`, `device-role`, or `device-not-open` under the gate's `local-db-state` when it
+  could not open) reads the `Device` row
   through EF. In the console, `mealPlannerDatabase.role()` and `mealPlannerDatabase.events` show what the
   cross-window shim did.
 - **Independently, with `sqlite3`** — copy the file out of OPFS. The Chrome extension's output filter
@@ -450,7 +458,7 @@ How it works is in `docs/modules/sync/browser-database.md`. How to look at it:
   The Chrome extension cannot do this: closing the first tab of its tab group drops the whole group, and
   the other tabs can no longer be driven.
 - **Across a browser restart** — never quit the user's Chrome. `.claude/tools/chrome-restart-check.mjs`
-  launches a separate headless Chrome on a throwaway profile, reads the card, and ends the browser with
+  launches a separate headless Chrome on a throwaway profile, reads the card on Diagnostics, and ends the browser with
   `Browser.close` or `SIGKILL`; run it repeatedly on the same profile directory.
 - **Wiping it** — when it cannot be opened, the page's own **Reset this device's copy** (`local-db-reset`)
   does it with other windows open. Otherwise DevTools → Application → Storage → "Clear site data", or in the page

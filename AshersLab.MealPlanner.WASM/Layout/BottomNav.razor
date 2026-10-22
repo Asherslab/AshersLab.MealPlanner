@@ -1,0 +1,24 @@
+@*
+    The phone's way around: the four daily pages and More, under the thumb. Plain links rather than buttons, so a long
+    press opens a page in a new tab like any other link. Hidden from Md up by its own CSS, where the drawer does this.
+*@
+
+<nav class="bottom-nav" aria-label="Main" data-testid="bottom-nav">
+    @foreach (NavDestination tab in NavModel.Tabs)
+    {
+        bool active = tab == Active;
+        <a href="@(tab.Route.Length == 0 ? "./" : tab.Route)" class="@(active ? "bottom-nav-tab active" : "bottom-nav-tab")"
+           aria-current="@(active ? "page" : null)" data-testid="bottom-nav-@TabKey(tab)">
+            <MudIcon Icon="@tab.Icon"/>
+            <span class="bottom-nav-label">@tab.TabLabel</span>
+        </a>
+    }
+</nav>
+
+@code {
+    /// <summary>The tab the current page belongs to, or null on a page no tab holds.</summary>
+    [Parameter] public NavDestination? Active { get; set; }
+
+    // The testids name the tabs as the bar labels them, not by route: bottom-nav-today, -plan, -shop, -meals, -more.
+    private static string TabKey(NavDestination tab) => tab.TabLabel!.ToLowerInvariant();
+}

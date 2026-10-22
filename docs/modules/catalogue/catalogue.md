@@ -10,6 +10,7 @@ code:
   - AshersLab.MealPlanner.Shared.Domain/ListPosition.cs
   - AshersLab.MealPlanner.Shared.Domain/Stores
   - AshersLab.MealPlanner.Shared.Domain/Categories
+  - AshersLab.MealPlanner.WASM/Layout
   - AshersLab.MealPlanner.Shared.Domain/Ingredients
   - AshersLab.MealPlanner.Shared.Domain/Sync/OpValues.cs
   - AshersLab.MealPlanner.Shared.Data/Ingredients
@@ -80,7 +81,7 @@ the shape checks every entity shares - plus its own per-field checks.
 
 `Store (Id, Name, Deleted)`. Only a name: what a store sells and for how much is the product slice's.
 
-**What the planner sees** (`/stores`, "Stores" in the menu): the stores by name; a "New store" box (Enter adds it);
+**What the planner sees** (`/stores`; on a phone More → Settings → Stores): the stores by name; a "New store" box (Enter adds it);
 per row a pencil (rename in place) and a bin. The bin asks "Delete Costco? It goes from this list on every device."
 - one more tap. A store is deleted as a tombstone ([offline sync](../sync/offline-sync.md), merge rules).
 
@@ -103,7 +104,7 @@ earlier one. Two phones moving the *same* category: the later move wins, like an
 - **Sort in memory, never in SQL.** EF's SQLite providers store `decimal` as text and will not `ORDER BY` it - and
   they do not even agree on the text: the server writes `1.0`, the browser `1`. Compare positions as numbers.
 
-**What the planner sees** (`/categories`, "Categories" in the menu): the categories in order, under "The
+**What the planner sees** (`/categories`; on a phone More → Settings → Categories): the categories in order, under "The
 ingredients and the shopping list are grouped in this order."; a "New category" box; per row up and down arrows
 (one tap moves one place; the top's up and the bottom's down are greyed), a pencil and a bin.
 
@@ -174,8 +175,15 @@ write path (`LocalOps.WriteAsync`, then a sync kick). `LocalDataGate` shows the 
 ([browser database](../sync/browser-database.md)).
 `Components/NameList.razor` is the add / rename / delete (and reorder) list stores and categories share.
 
-The menu is a drawer (`Layout/MainLayout.razor`): open beside the page from the `Md` breakpoint up, behind the
-menu button on a phone, closing when a page is picked.
+**Every menu reads one list, `Layout/NavModel.cs`** - route, title, icon, group, parent and the one line More and
+Settings show. Add or move a page there, not in a menu. On a phone (below MudBlazor's `Md`, 960 px) the bottom bar
+(`Layout/BottomNav.razor`) holds Today, Plan, Shop, Meals and More, one tap each; there is no drawer. More lists
+Pantry, Receipts, Prices, Ingredients and Plans, then Settings, which holds the lists set up once a season - People,
+Slots of the day, Meal groups, Categories, Stores, Import spreadsheet - and Diagnostics last. So a store is three taps
+away (More, Settings, Stores), and every page reached that way has a back arrow to its parent in the app bar
+(`app-back`). From `Md` up there is no bottom bar: the drawer (`Layout/MainLayout.razor`) sits open with the four
+daily pages, a Kitchen group, and Settings. Which of the two shows is CSS (`MainLayout.razor.css`,
+`BottomNav.razor.css`), so the first paint is already right.
 
 ## As seen
 

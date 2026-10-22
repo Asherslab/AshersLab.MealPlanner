@@ -1,0 +1,44 @@
+/* Below MudBlazor's Md breakpoint (960px) a phone: bottom bar, back arrow, no drawer button. */
+.wide-only {
+    display: none;
+}
+
+.phone-only {
+    display: flex;
+}
+
+/* The page scrolls clear of the fixed bottom bar and the iOS home indicator under it. */
+.page-body {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 960px) {
+    .wide-only {
+        display: flex;
+    }
+
+    .phone-only {
+        display: none;
+    }
+
+    .page-body {
+        padding-bottom: 0;
+    }
+}
+
+.app-bar-page {
+    align-items: center;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+/* A long title gives way to the sync chip rather than pushing it off the bar. */
+.app-bar-page ::deep .app-bar-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.drawer-heading {
+    padding: 16px 16px 4px;
+}
