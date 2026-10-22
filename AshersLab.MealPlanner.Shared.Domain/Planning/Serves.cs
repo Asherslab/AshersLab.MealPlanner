@@ -12,7 +12,10 @@ public enum ServesRole
 /// One calendar entry as the serves read it, where it is now.
 /// </summary>
 /// <param name="SlotPosition">Its slot's position: what orders two entries on one day (lunch before dinner).</param>
-/// <param name="Eaters">How many eat it - the people chosen, or the whole household for everyone. A serve each.</param>
+/// <param name="Eaters">
+/// The serves it eats - each eater's portion added up, the people chosen or the whole household for everyone
+/// (<see cref="Serves.PortionsOf"/>). Two adults and a toddler on half a serve eat 2.5.
+/// </param>
 /// <param name="Made">A cooked entry's serves: the planner's number, or the meal's serves per batch.</param>
 /// <param name="EatsFrom">A leftovers entry's chosen batch (the cooked entry's id); null eats whatever is left, oldest first.</param>
 public sealed record ServesEntry(
@@ -21,7 +24,7 @@ public sealed record ServesEntry(
     decimal    SlotPosition,
     ServesRole Role,
     bool       Skipped,
-    int        Eaters,
+    decimal    Eaters,
     int        Made = 0,
     Guid?      EatsFrom = null
 );
@@ -48,25 +51,25 @@ public enum LeftoversProblem
 }
 
 /// <summary>Serves taken from a batch: by its own meal, or by a leftovers entry, and what the batch has after.</summary>
-public sealed record ServesDraw(Guid EntryId, DateOnly Day, int Serves, int LeftAfter);
+public sealed record ServesDraw(Guid EntryId, DateOnly Day, decimal Serves, decimal LeftAfter);
 
 /// <summary>A cooked entry's batch: what it made, who ate from it in order, and what is left at the end.</summary>
 /// <param name="Cooked">False when the entry was skipped: nothing was made.</param>
 /// <param name="Short">Serves its own meal needed beyond what it made: "makes 2, 3 eat it".</param>
-public sealed record BatchServes(Guid Id, DateOnly Day, bool Cooked, int Made, int Short, IReadOnlyList<ServesDraw> Draws)
+public sealed record BatchServes(Guid Id, DateOnly Day, bool Cooked, int Made, decimal Short, IReadOnlyList<ServesDraw> Draws)
 {
     /// <summary>Left after everything planned has eaten from it: more than nothing "will go uneaten".</summary>
-    public int Left => Cooked ? Made - Draws.Sum(d => d.Serves) : 0;
+    public decimal Left => Cooked ? Made - Draws.Sum(d => d.Serves) : 0;
 
     /// <summary>The draws by leftovers entries, its own meal's left out.</summary>
     public IEnumerable<ServesDraw> Leftovers => Draws.Where(d => d.EntryId != Id);
 }
 
 /// <summary>A leftovers entry: the batch it eats (or would have), what it needs and what it gets.</summary>
-public sealed record LeftoversServes(Guid Id, Guid? BatchId, int Need, int Got, LeftoversProblem Problem)
+public sealed record LeftoversServes(Guid Id, Guid? BatchId, decimal Need, decimal Got, LeftoversProblem Problem)
 {
     /// <summary>What the batch has left once this has eaten; null with no batch.</summary>
-    public int? LeftAfter { get; init; }
+    public decimal? LeftAfter { get; init; }
 }
 
 /// <summary>Every batch and every leftovers entry in the entries given.</summary>
@@ -95,9 +98,26 @@ public static class Serves
     /// <summary>Leftovers eat batches cooked at most this many days before them, unless one is chosen.</summary>
     public const int KeepsDays = 7;
 
-    /// <summary>The household's size for "everyone": nobody added yet still eats a serve.</summary>
-    public static int EatersOf(IReadOnlyList<Guid>? people, int household) =>
-        people is { Count: > 0 } ? people.Count : Math.Max(1, household);
+    /// <summary>
+    /// The serves an entry eats: each eater's portion (a full serve unless set; a toddler's half), added up - the people
+    /// chosen, or for everyone the whole household. Someone chosen who is no longer in the household eats a full serve;
+    /// a household with nobody added yet still eats one.
+    /// </summary>
+    /// <param name="household">Each live person's portion, by id.</param>
+    public static decimal PortionsOf(IReadOnlyList<Guid>? people, IReadOnlyDictionary<Guid, decimal> household) =>
+        people is { Count: > 0 } ? people.Sum(p => household.GetValueOrDefault(p, 1m))
+        : household.Count > 0 ? household.Values.Sum()
+        : 1m;
+
+    /// <summary>"2", "2½", "1¼", "¾" - serves as the planner reads them, in quarters.</summary>
+    public static string Format(decimal serves)
+    {
+        decimal whole = decimal.Truncate(serves);
+        string? fraction = ((serves - whole) * 4) switch { 0 => "", 1 => "¼", 2 => "½", 3 => "¾", _ => null };
+        return fraction is null ? serves.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : whole == 0 && fraction.Length > 0 ? fraction
+            : whole.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + fraction;
+    }
 
     public static ServesLedger Count(IEnumerable<ServesEntry> entries)
     {
@@ -117,7 +137,7 @@ public static class Serves
                     Batch batch = new(entry);
                     if (!entry.Skipped)
                     {
-                        int own = Math.Min(entry.Eaters, entry.Made);
+                        decimal own = Math.Min(entry.Eaters, entry.Made);
                         batch.Left  = entry.Made - own;
                         batch.Short = entry.Eaters - own;
                         batch.Draws.Add(new ServesDraw(entry.Id, entry.Day, own, batch.Left));
@@ -142,13 +162,13 @@ public static class Serves
     {
         public ServesEntry      Entry { get; } = entry;
         public List<ServesDraw> Draws { get; } = [];
-        public int              Left  { get; set; }
-        public int              Short { get; set; }
+        public decimal          Left  { get; set; }
+        public decimal          Short { get; set; }
     }
 
     private static LeftoversServes Eat(ServesEntry entry, HashSet<Guid> cooked, List<Batch> batches)
     {
-        int need = entry.Eaters;
+        decimal need = entry.Eaters;
 
         if (entry.EatsFrom is { } chosen)
         {
@@ -172,8 +192,8 @@ public static class Serves
 
     private static LeftoversServes Draw(ServesEntry entry, Batch batch)
     {
-        int need = entry.Eaters;
-        int got  = Math.Min(need, batch.Left);
+        decimal need = entry.Eaters;
+        decimal got  = Math.Min(need, batch.Left);
         batch.Left -= got;
         if (got > 0)
             batch.Draws.Add(new ServesDraw(entry.Id, entry.Day, got, batch.Left));

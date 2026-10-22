@@ -15,6 +15,9 @@ public class Person : ISyncedRow
     /// <summary>"#rrggbb" (<c>PersonRules.Palette</c>): their magnet's colour.</summary>
     public string Colour { get; set; } = "";
 
+    /// <summary>How much of a serve they eat (<c>PersonRules.PortionField</c>); null is a full serve.</summary>
+    public decimal? Portion { get; set; }
+
     public bool Deleted { get; set; }
 
     /// <summary>The household in a fixed order: by name, then id so it is the same everywhere.</summary>

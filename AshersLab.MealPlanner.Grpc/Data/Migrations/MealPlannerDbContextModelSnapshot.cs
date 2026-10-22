@@ -342,6 +342,9 @@ namespace AshersLab.MealPlanner.Grpc.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("Portion")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.ToTable("Person", (string)null);

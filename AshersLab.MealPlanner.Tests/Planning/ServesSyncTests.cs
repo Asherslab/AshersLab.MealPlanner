@@ -122,6 +122,34 @@ public sealed class ServesSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_toddler_put_on_half_a_serve_on_one_phone_leaves_more_of_the_batch_on_the_other()
+    {
+        await using TestBrowser a = await TestBrowser.OpenAsync(_server);
+        await using TestBrowser b = await TestBrowser.OpenAsync(_server);
+        var w = await WeekAsync(a);
+        a.Now = a.Now.AddMilliseconds(50);
+        Guid pip = Guid.CreateVersion7(a.Now);
+        await a.WriteAsync(SyncedEntities.Person, pip, OpKind.Create,
+            [new OpField(PersonRules.NameField, "Pip"), new OpField(PersonRules.ColourField, PersonRules.Palette[2])]);
+        await a.SyncAsync();
+        await b.SyncAsync();
+
+        // Three at a full serve each: 6 made, Monday's 3 and Tuesday's 3, nothing for Wednesday.
+        ServesBook onB = await ServesAsync(b);
+        Assert.Equal([3m, 0m], onB.BatchOf(w.Cook)!.Draws.Select(d => d.LeftAfter));
+        Assert.Equal(LeftoversProblem.NothingLeft, onB.LeftoversOf(w.Wed)!.Problem);
+
+        // B puts the toddler on half a serve: 2½ a meal, so Wednesday gets the last 1 of its 2½.
+        b.Now = b.Now.AddSeconds(1);
+        await b.WriteAsync(SyncedEntities.Person, pip, OpKind.Update, [new OpField(PersonRules.PortionField, "0.5")]);
+        await b.SyncAsync();
+        await a.SyncAsync();
+        ServesBook onA = await ServesAsync(a);
+        Assert.Equal([3.5m, 1m, 0m], onA.BatchOf(w.Cook)!.Draws.Select(d => d.LeftAfter));
+        Assert.Equal((1m, 2.5m, LeftoversProblem.NotEnough), (onA.LeftoversOf(w.Wed)!.Got, onA.LeftoversOf(w.Wed)!.Need, onA.LeftoversOf(w.Wed)!.Problem));
+    }
+
+    [Fact]
     public async Task Leftovers_added_offline_on_two_phones_both_eat_and_a_skipped_one_gives_its_serves_back()
     {
         await using TestBrowser a = await TestBrowser.OpenAsync(_server);

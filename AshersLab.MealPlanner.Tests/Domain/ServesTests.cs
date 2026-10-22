@@ -18,10 +18,10 @@ public class ServesTests
 
     private static Guid Id() => new($"00000000-0000-7000-8000-{Interlocked.Increment(ref _next):D12}");
 
-    private static ServesEntry Cook(DateOnly day, int made, int eaters = 2, bool skipped = false, decimal slot = Dinner) =>
+    private static ServesEntry Cook(DateOnly day, int made, decimal eaters = 2, bool skipped = false, decimal slot = Dinner) =>
         new(Id(), day, slot, ServesRole.Cooked, skipped, eaters, made);
 
-    private static ServesEntry Eat(DateOnly day, int eaters = 2, Guid? from = null, bool skipped = false, decimal slot = Lunch) =>
+    private static ServesEntry Eat(DateOnly day, decimal eaters = 2, Guid? from = null, bool skipped = false, decimal slot = Lunch) =>
         new(Id(), day, slot, ServesRole.Leftovers, skipped, eaters, EatsFrom: from);
 
     [Fact]
@@ -51,11 +51,35 @@ public class ServesTests
         Assert.Equal([5, 2, 1], ledger.Batches[cook.Id].Draws.Select(d => d.LeftAfter));
         // "1 serve will go uneaten"
         Assert.Equal(1, ledger.Batches[cook.Id].Left);
-        Assert.Equal(3, Serves.EatersOf([Id(), Id(), Id()], household: 2));
-        Assert.Equal(2, Serves.EatersOf(null, household: 2));
-        Assert.Equal(1, Serves.EatersOf(null, household: 0));
-        Assert.Equal(2, Serves.EatersOf([], household: 2));
+        Guid a = Id(), b = Id();
+        Dictionary<Guid, decimal> two = new() { [a] = 1, [b] = 1 };
+        Assert.Equal(3, Serves.PortionsOf([Id(), Id(), Id()], two));   // people no longer in the household: a serve each
+        Assert.Equal(2, Serves.PortionsOf(null, two));
+        Assert.Equal(1, Serves.PortionsOf(null, new Dictionary<Guid, decimal>()));
+        Assert.Equal(2, Serves.PortionsOf([], two));
     }
+
+    [Fact]
+    public void A_toddler_on_half_a_serve_eats_half_and_everyone_is_the_household_added_up()
+    {
+        Guid adult1 = Id(), adult2 = Id(), toddler = Id();
+        Dictionary<Guid, decimal> household = new() { [adult1] = 1, [adult2] = 1, [toddler] = 0.5m };
+        Assert.Equal(2.5m, Serves.PortionsOf(null, household));
+        Assert.Equal(0.5m, Serves.PortionsOf([toddler], household));
+        Assert.Equal(1.5m, Serves.PortionsOf([adult1, toddler], household));
+
+        // A 4-serve stew for all three leaves 1½, not 1; the toddler's lunch of it the next day leaves 1.
+        ServesEntry cook  = Cook(Mon, made: 4, eaters: 2.5m);
+        ServesEntry lunch = Eat(Mon.AddDays(1), eaters: 0.5m);
+        ServesEntry two   = Eat(Mon.AddDays(2), eaters: 2m);
+        ServesLedger ledger = Serves.Count([cook, lunch, two]);
+        Assert.Equal([1.5m, 1m, 0m], ledger.Batches[cook.Id].Draws.Select(d => d.LeftAfter));
+        Assert.Equal((1m, LeftoversProblem.NotEnough), (ledger.Leftovers[two.Id].Got, ledger.Leftovers[two.Id].Problem));
+    }
+
+    [Theory]
+    [InlineData("2", 2), InlineData("2½", 2.5), InlineData("½", 0.5), InlineData("1¼", 1.25), InlineData("¾", 0.75), InlineData("0", 0), InlineData("1.1", 1.1)]
+    public void Serves_read_in_quarters(string text, double serves) => Assert.Equal(text, Serves.Format((decimal)serves));
 
     [Fact]
     public void Leftovers_with_nothing_left_say_so_and_a_part_says_how_much()

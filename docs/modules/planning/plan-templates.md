@@ -50,7 +50,7 @@ The calendar - a template applied to real dates, overrides, skipping - is [the c
 
 | Row | Fields | Notes |
 |---|---|---|
-| `Person` | `Name`, `Colour` | `Colour` is `#rrggbb`, lower case, from `PersonRules.Palette`; a new person gets the first nobody has |
+| `Person` | `Name`, `Colour`, `Portion` | `Colour` is `#rrggbb`, lower case, from `PersonRules.Palette`; a new person gets the first nobody has. `Portion`: how much of a serve they eat, a quarter to two in quarters; null is a full serve ([batches and serves](batches-and-serves.md)) |
 | `Slot` | `Name`, `Position` | a hand-set position like a meal group (`ListPosition`); seeded |
 | `PlanTemplate` | `Name`, `WeekCount`, `StartsOn`, `Earlier` | 1 to 12 weeks; `StartsOn` is the Monday week 1 began on the calendar, set by applying it; `Earlier` the rotations before a change of start or week count, which keep the days before it as they were ([the calendar](calendar.md)) |
 | `TemplateEntry` | `TemplateId`, `Week`, `Day`, `SlotId`, `People` | `Day` by name ("Monday"); `People` above |
@@ -83,7 +83,8 @@ itself counts too, and is named as "the calendar on Tue 27 Oct" ([the calendar](
 ## What the planner sees
 
 **People** (`/people`; on a phone More → Settings → People): a "New person" box; each person a row with their colour, tapped to
-change the name or pick one of eight colours, or Delete. One tap and a name to add someone.
+change the name, pick one of eight colours, choose what they **Eat** ("a full serve", "half a serve" - a native select), or
+Delete. Someone not on a full serve says so on their row: "eats half a serve". One tap and a name to add someone.
 
 **Slots of the day** (`/slots`): the same list as meal groups - add, rename, arrows, delete.
 

@@ -97,7 +97,7 @@ public sealed class PantryBook
         Dictionary<Guid, Meal> meals = await db.Set<Meal>().AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, cancellationToken);
         ILookup<Guid, MealIngredient> lines = (await db.Set<MealIngredient>().AsNoTracking().Where(l => !l.Deleted && l.Quantity != null)
             .ToListAsync(cancellationToken)).ToLookup(l => l.MealId);
-        int household = await db.Set<Person>().AsNoTracking().CountAsync(p => !p.Deleted, cancellationToken);
+        IReadOnlyDictionary<Guid, decimal> household = await Household.PortionsAsync(db, cancellationToken);
 
         List<StockUse> uses = [];
         for (DateOnly day = from; day <= to; day = day.AddDays(1))
@@ -106,10 +106,11 @@ public sealed class PantryBook
             {
                 if (entry.Skipped || entry.MealId is not { } mealId || meals.GetValueOrDefault(mealId) is not { } meal)
                     continue;
-                int times = meal.Kind switch
+                // A simple meal is made per serve: a toddler's half-serve bowl uses half the cereal.
+                decimal times = meal.Kind switch
                 {
                     MealKind.Cooked => 1,
-                    MealKind.Simple => Serves.EatersOf(entry.People, household),
+                    MealKind.Simple => Serves.PortionsOf(entry.People, household),
                     _               => 0,
                 };
                 if (times == 0)

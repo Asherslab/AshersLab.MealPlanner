@@ -21,6 +21,11 @@ public sealed class PersonEntity : SyncedEntity<Person>
             case PersonRules.ColourField:
                 row.Colour = field.Value ?? "";
                 break;
+            case PersonRules.PortionField:
+                row.Portion = field.Value is null ? null
+                    : OpValues.TryParseDecimal(field.Value, out decimal portion) ? portion
+                    : throw new ArgumentException($"The portion '{field.Value}' is not a number.", nameof(field));
+                break;
             default:
                 throw new ArgumentException($"A person has no field '{field.Name}'.", nameof(field));
         }
@@ -30,5 +35,6 @@ public sealed class PersonEntity : SyncedEntity<Person>
     [
         new(PersonRules.NameField, row.Name),
         new(PersonRules.ColourField, row.Colour),
+        new(PersonRules.PortionField, row.Portion is { } portion ? OpValues.FormatDecimal(portion) : null),
     ];
 }

@@ -176,7 +176,7 @@ public sealed class ShoppingBook
         ServesBook serves = await ServesBook.LoadAsync(db, from, to, cancellationToken);
         MealCostBook costs = await MealCostBook.LoadAsync(db, cancellationToken);
         Dictionary<Guid, Meal> meals = await db.Set<Meal>().AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, cancellationToken);
-        int household = await db.Set<Person>().AsNoTracking().CountAsync(p => !p.Deleted, cancellationToken);
+        IReadOnlyDictionary<Guid, decimal> household = await Household.PortionsAsync(db, cancellationToken);
 
         List<Cost> fixedMeals = [];
         List<Cost> eaten = [];
@@ -195,7 +195,7 @@ public sealed class ShoppingBook
                     continue;
                 }
 
-                Cost serve = ShoppingPlan.Serves(Serves.EatersOf(entry.People, household), costs.CostOf(meal).PerServe);
+                Cost serve = ShoppingPlan.Serves(Serves.PortionsOf(entry.People, household), costs.CostOf(meal).PerServe);
                 eaten.Add(serve);
                 if (meal.Kind == MealKind.FixedCost)
                     fixedMeals.Add(serve);

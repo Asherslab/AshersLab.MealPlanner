@@ -34,8 +34,13 @@ const day = n => { const d = new Date(mon); d.setDate(mon.getDate() + n); return
 // stew in the same week would be eaten first - which is the rule working, and not what this check is about.
 while (server(`select count(*) from CalendarEntry where coalesce(MovedDate, Date) between '${day(-14)}' and '${day(13)}'`) !== '0')
   mon.setDate(mon.getDate() + 7);
-// Everyone is the household: each entry for everyone eats a serve per person.
-const H = Math.max(1, Number(server(`select count(*) from Person where Deleted = 0`)));
+// Everyone is the household: each entry for everyone eats each person's portion (a full serve unless set). The serves
+// made below are whole multiples of it, so the portions must add up to whole serves.
+const H = Math.max(1, Number(server(`select coalesce(sum(coalesce(cast(Portion as real), 1)), 0) from Person where Deleted = 0`)));
+if (!Number.isInteger(H)) {
+  console.error(`the household's portions add up to ${H} serves - this check needs whole serves (set someone's portion so they do)`);
+  process.exit(2);
+}
 console.log(`  next week begins ${day(0)}; the household is ${H}`);
 
 // --- Meals ----------------------------------------------------------------------------------------------------------

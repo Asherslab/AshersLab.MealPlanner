@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AshersLab.MealPlanner.Shared.Data.Planning;
 
 /// <summary>A batch a leftovers entry can be set to eat: cooked before it, and what it has left by then.</summary>
-public sealed record BatchChoice(Guid Id, Guid? MealId, DateOnly Day, int LeftBefore);
+public sealed record BatchChoice(Guid Id, Guid? MealId, DateOnly Day, decimal LeftBefore);
 
 /// <summary>
 /// The serves around some days, from either database: every batch cooked and every leftovers entry, counted by
@@ -51,7 +51,7 @@ public sealed class ServesBook
         CalendarBook calendar = await CalendarBook.LoadAsync(db, first, last, cancellationToken);
         Dictionary<Guid, Meal> meals = await db.Set<Meal>().AsNoTracking().Where(m => !m.Deleted).ToDictionaryAsync(m => m.Id, cancellationToken);
         Dictionary<Guid, decimal> slots = await db.Set<Slot>().AsNoTracking().Where(s => !s.Deleted).ToDictionaryAsync(s => s.Id, s => s.Position, cancellationToken);
-        int household = await db.Set<Person>().AsNoTracking().CountAsync(p => !p.Deleted, cancellationToken);
+        IReadOnlyDictionary<Guid, decimal> household = await Household.PortionsAsync(db, cancellationToken);
 
         Dictionary<Guid, PlannedEntry> entries = [];
         Dictionary<Guid, ServesEntry>  counted = [];
@@ -70,7 +70,7 @@ public sealed class ServesBook
                 if (role == ServesRole.Other)
                     continue;
                 counted[entry.Id] = new ServesEntry(entry.Id, entry.Day, slots.GetValueOrDefault(entry.SlotId, decimal.MaxValue), role,
-                    entry.Skipped, Serves.EatersOf(entry.People, household), entry.Row.ServesMade ?? meal!.ServesPerBatch, entry.Row.EatsFrom);
+                    entry.Skipped, Serves.PortionsOf(entry.People, household), entry.Row.ServesMade ?? meal!.ServesPerBatch, entry.Row.EatsFrom);
             }
         }
         return new ServesBook(Serves.Count(counted.Values), entries, counted);

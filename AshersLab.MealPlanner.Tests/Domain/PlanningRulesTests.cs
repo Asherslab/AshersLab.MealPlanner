@@ -23,6 +23,18 @@ public class PlanningRulesTests
     }
 
     [Fact]
+    public void A_portion_is_a_quarter_to_two_serves_in_quarters_and_null_is_a_full_serve()
+    {
+        foreach (string ok in new[] { "0.25", "0.5", "0.75", "1", "1.5", "2" })
+            Assert.Null(PersonRules.OpProblem(OpKind.Update, [new("Portion", ok)]));
+        Assert.Null(PersonRules.OpProblem(OpKind.Update, [new("Portion", null)]));
+        foreach (string bad in new[] { "0", "-0.5", "0.3", "2.25", "half", "" })
+            Assert.NotNull(PersonRules.OpProblem(OpKind.Update, [new("Portion", bad)]));
+        Assert.Equal(["a quarter serve", "half a serve", "three quarters of a serve", "a full serve", "1¼ serves", "1½ serves", "2 serves"],
+            PersonRules.Portions.Select(PersonRules.PortionText));
+    }
+
+    [Fact]
     public void Someone_new_gets_the_first_colour_nobody_has()
     {
         Assert.Equal(PersonRules.Palette[0], PersonRules.NextColour([]));

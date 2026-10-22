@@ -113,12 +113,12 @@ The scope's two calendar cost views, on the list and under the calendar's week (
 week's list). They answer different questions; skipped entries count in neither.
 
 - **Spend** - what the shop costs, the one to compare with the budget: every line's packs (except those ticked "have it"
-  and those the pantry covers), every extra item, and the range's **fixed-cost meals** - a serve per eater at the meal's
+  and those the pantry covers), every extra item, and the range's **fixed-cost meals** - each eater's portion of a serve at the meal's
   amount shared over its serves (a $30 pizza feeding 3, eaten by 2, is $20). Leftovers and pantry stock cost nothing here:
   already bought. A staple ticked bought still counts, though it is no longer running low.
 - **Eaten** - what the food was worth: every serve eaten at its meal's per-serve cost ([meals](../meals/meals.md)), by
   quantity - half a jar of mayo costs half a jar the week it is eaten. A cooked, simple, fixed-cost or no-cost entry is a
-  serve per eater; a leftovers entry is the serves it got at the per-serve cost of the batch it eats.
+  serve per eater, each at their portion (a toddler's half costs half); a leftovers entry is the serves it got at the per-serve cost of the batch it eats.
 
 Both are a `Cost` that may be incomplete: an unpriced line, an extra with no price, or an entry whose per-serve cost is
 incomplete or unknown is **one missing each** ("from $3.12 + 1 unpriced"), never a silently low total. A Spend of nothing

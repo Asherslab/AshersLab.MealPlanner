@@ -169,6 +169,17 @@ public class ShoppingPlanTests
     }
 
     [Fact]
+    public void A_part_serve_costs_its_part_rounded_to_the_cent_once()
+    {
+        // Two adults and a toddler on half a serve: 2½ serves at $3.20.
+        Assert.Equal(new Cost(800, 0), ShoppingPlan.Serves(2.5m, new Cost(320, 0)));
+        // A quarter of $3.33 is 83.25c: 83c, not 84 or 83.25.
+        Assert.Equal(new Cost(83, 0), ShoppingPlan.Serves(0.25m, new Cost(333, 0)));
+        Assert.Equal(new Cost(167, 0), ShoppingPlan.Serves(0.5m, new Cost(333, 0)));   // 166.5c, rounded away from zero
+        Assert.Equal(new Cost(160, 1), ShoppingPlan.Serves(0.5m, new Cost(320, 3)));   // still incomplete
+    }
+
+    [Fact]
     public void Costs_add_their_cents_and_their_missing()
     {
         Assert.Equal(new Cost(3699, 2), ShoppingPlan.Sum([new Cost(2499, 0), ShoppingPlan.Priced(1200), ShoppingPlan.Priced(null), new Cost(0, 1)]));

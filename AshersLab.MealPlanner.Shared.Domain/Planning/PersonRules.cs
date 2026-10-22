@@ -17,6 +17,15 @@ public static partial class PersonRules
     /// <summary>"#rrggbb", lower case - one spelling per colour.</summary>
     public const string ColourField = "Colour";
 
+    /// <summary>
+    /// How much of a serve they eat: "1" a full one, "0.5" a toddler's half. Null (never set) is a full serve, so the
+    /// household's serves count as before until the planner says otherwise.
+    /// </summary>
+    public const string PortionField = "Portion";
+
+    /// <summary>What the editor offers: a quarter to two serves, in quarters.</summary>
+    public static readonly IReadOnlyList<decimal> Portions = [0.25m, 0.5m, 0.75m, 1m, 1.25m, 1.5m, 2m];
+
     public const string Noun = "A person";
 
     /// <summary>
@@ -27,7 +36,7 @@ public static partial class PersonRules
     public static readonly IReadOnlyList<string> Palette =
         ["#d9533c", "#f2c14e", "#7fb6cf", "#6fa27a", "#8e5b8c", "#e8893a", "#3e8e8a", "#8b6a4e"];
 
-    public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal) { NameField, ColourField };
+    public static readonly IReadOnlySet<string> Fields = new HashSet<string>(StringComparer.Ordinal) { NameField, ColourField, PortionField };
 
     private static readonly string[] RequiredOnCreate = [NameField, ColourField];
 
@@ -38,6 +47,23 @@ public static partial class PersonRules
 
     public static string? ColourProblem(string? colour) =>
         colour is not null && ColourShape().IsMatch(colour) ? null : "The colour is not one like #1e88e5.";
+
+    /// <summary>A portion is null (a full serve) or above nothing and at most two serves, in quarters.</summary>
+    public static string? PortionProblem(string? portion) =>
+        portion is null
+        || (OpValues.TryParseDecimal(portion, out decimal p) && p > 0 && p <= 2 && p * 4 == decimal.Truncate(p * 4))
+            ? null
+            : "The portion is not a quarter to two serves.";
+
+    /// <summary>"a full serve", "half a serve", "1½ serves" - how the People page words a portion.</summary>
+    public static string PortionText(decimal portion) => portion switch
+    {
+        1m     => "a full serve",
+        0.5m   => "half a serve",
+        0.25m  => "a quarter serve",
+        0.75m  => "three quarters of a serve",
+        _      => $"{Planning.Serves.Format(portion)} serves",
+    };
 
     /// <summary>The colour for someone new: the first in the palette nobody has, or the first when all are taken.</summary>
     public static string NextColour(IEnumerable<string> taken)
@@ -50,7 +76,8 @@ public static partial class PersonRules
         OpRules.Problem(kind, fields, Noun, Fields, RequiredOnCreate, field => field.Name switch
         {
             NameField   => Names.FieldProblem(field.Value, Noun),
-            ColourField => ColourProblem(field.Value),
-            _           => null,
+            ColourField  => ColourProblem(field.Value),
+            PortionField => PortionProblem(field.Value),
+            _            => null,
         });
 }

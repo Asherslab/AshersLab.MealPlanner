@@ -8,6 +8,9 @@ code:
   - AshersLab.MealPlanner.Shared.Domain/Planning/Serves.cs
   - AshersLab.MealPlanner.Shared.Domain/Planning/CalendarEntryRules.cs
   - AshersLab.MealPlanner.Shared.Data/Planning/ServesBook.cs
+  - AshersLab.MealPlanner.Shared.Data/Planning/Household.cs
+  - AshersLab.MealPlanner.Shared.Domain/Planning/PersonRules.cs
+  - .claude/tools/chrome-portion-check.mjs
   - AshersLab.MealPlanner.Shared.Data/Planning/CalendarEntry.cs
   - AshersLab.MealPlanner.WASM/Features/Planning/CalendarPage.razor
   - AshersLab.MealPlanner.WASM/Features/Planning/CalendarEntrySheet.razor
@@ -51,7 +54,8 @@ leftovers after it, and what a skip does to them. Read before touching anything 
 | Case | What happens |
 |---|---|
 | A cooked entry | Makes `ServesMade`, or the meal's `ServesPerBatch` when that is null. Its own eaters eat first; more eaters than serves is "short" |
-| Eaters | The people chosen, or everyone: the household's live people (at least 1). A serve each - no portion sizes |
+| Eaters | The people chosen, or everyone: the household's live people (at least 1 serve). **Each eats their portion** - a full serve unless set; a toddler on half a serve eats ½ (`Serves.PortionsOf`, `Household.PortionsAsync`). Someone chosen who has since left the household eats a full serve |
+| Part serves | Serves are decimals: two adults and a toddler on half eat 2½ of a 4-serve stew and leave 1½. Shown in quarters - "1½ left over", "only ½ of 2½ serves" (`Serves.Format`); a part serve costs its part, rounded to the cent once (`ShoppingPlan.Serves`); a simple meal's ingredients scale by the portions too (the pantry) |
 | A leftovers entry eating "whatever is left" (`EatsFrom` null) | The oldest batch cooked in the 7 days before it that has enough, else the oldest with any. Oldest first: what would spoil first is eaten first |
 | A leftovers entry with a chosen batch | Eats that batch, even when an older one has serves |
 | Order | The day, then the slot's position, then the entry id: lunch never eats that night's dinner |

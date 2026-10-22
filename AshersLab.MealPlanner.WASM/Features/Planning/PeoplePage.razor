@@ -11,7 +11,7 @@
 @inject IDialogService Dialogs
 
 @*
-    The household: a name and a colour each. Nobody is seeded - names are personal and the code is public - so the
+    The household: a name, a colour and a portion each - how much of a serve they eat, a toddler's half. Nobody is seeded - names are personal and the code is public - so the
     planner adds everyone here. A plan entry is for everyone unless it names some of them. Someone a plan names cannot
     be deleted.
 
@@ -57,6 +57,18 @@
                                             role="radio" @onclick="() => _editColour = colour" data-testid="person-colour" data-colour="@colour"></button>
                                 }
                             </div>
+                            @* A native select: one thumb, the phone's own picker. *@
+                            <label class="native-select person-portion">
+                                <span>Eats</span>
+                                <select value="@OpValues.FormatDecimal(_editPortion)" data-testid="person-portion"
+                                        @onchange="e => _editPortion = OpValues.TryParseDecimal(e.Value?.ToString(), out decimal p) ? p : _editPortion">
+                                    @foreach (decimal portion in PersonRules.Portions)
+                                    {
+                                        <option value="@OpValues.FormatDecimal(portion)">@PersonRules.PortionText(portion)</option>
+                                    }
+                                </select>
+                            </label>
+                            <p class="person-portion-help">What a meal's serves count them as: a toddler on half a serve leaves more of the batch.</p>
                             @if (_inUse.Count > 0)
                             {
                                 <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3" data-testid="person-in-use">
@@ -78,6 +90,10 @@
                              @onkeydown="e => RowKey(e, person)">
                             <span class="magnet person-magnet" style="@($"background:{person.Colour}")"></span>
                             <span class="person-name" data-testid="person-name">@person.Name</span>
+                            @if (person.Portion is { } portion && portion != 1)
+                            {
+                                <span class="person-portion-note" data-testid="person-portion-note">eats @PersonRules.PortionText(portion)</span>
+                            }
                             @if (_unsent.Contains(person.Id))
                             {
                                 <span class="person-unsent">Not sent yet</span>
@@ -103,6 +119,7 @@
     private Guid?        _editing;
     private string?      _editName;
     private string       _editColour = "";
+    private decimal      _editPortion = 1;
     private string?      _editError;
     private List<string> _inUse = [];
 
@@ -138,6 +155,7 @@
         _editing    = person.Id;
         _editName   = person.Name;
         _editColour = person.Colour;
+        _editPortion = person.Portion ?? 1;
         _editError  = null;
         _inUse      = [];
     }
@@ -162,6 +180,8 @@
             fields.Add(new OpField(PersonRules.NameField, name));
         if (_editColour != person.Colour)
             fields.Add(new OpField(PersonRules.ColourField, _editColour));
+        if (_editPortion != (person.Portion ?? 1))
+            fields.Add(new OpField(PersonRules.PortionField, OpValues.FormatDecimal(_editPortion)));
         _editing = null;
         if (fields.Count > 0)
             await WriteAsync(SyncedEntities.Person, person.Id, OpKind.Update, fields);

@@ -80,6 +80,23 @@
     overflow-wrap: anywhere;
 }
 
+.person-portion-note {
+    flex: 0 0 auto;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+}
+
+.person-portion {
+    margin-top: 16px;
+}
+
+.person-portion-help {
+    margin: 6px 0 0;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: var(--ink-soft);
+}
+
 .person-unsent {
     flex: 0 0 auto;
     font-size: 0.8125rem;

@@ -116,12 +116,13 @@ public static class ShoppingPlan
     public static Cost Priced(long? cents) => cents is { } c ? new Cost(c, 0) : new Cost(0, 1);
 
     /// <summary><paramref name="serves"/> serves at a per-serve cost; null (nothing to cost it by) is one missing, never $0.</summary>
-    public static Cost Serves(int serves, Cost? perServe)
+    public static Cost Serves(decimal serves, Cost? perServe)
     {
         if (serves < 0)
             throw new ArgumentOutOfRangeException(nameof(serves), serves, "Nobody eats fewer than no serves.");
+        // A part serve - a toddler's half - costs that part, rounded to the cent once.
         return serves == 0 ? new Cost(0, 0)
-            : perServe is { } each ? new Cost(each.Cents * serves, each.Complete ? 0 : 1)
+            : perServe is { } each ? new Cost((long)Math.Round(each.Cents * serves, MidpointRounding.AwayFromZero), each.Complete ? 0 : 1)
             : new Cost(0, 1);
     }
 
