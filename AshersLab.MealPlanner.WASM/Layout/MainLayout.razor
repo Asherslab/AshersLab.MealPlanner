@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using AshersLab.MealPlanner.WASM.Data
 
 @* The fridge-door pad in the kitchen bench's colours: Design/AppTheme.cs. Light or dark is the planner's choice
    (Design/AppearanceState.cs), never the phone's: left to the phone, one in dark mode got MudBlazor's own dark palette -
@@ -77,6 +78,7 @@
     <MudMainContent Class="pt-14">
         <MudContainer MaxWidth="MaxWidth.Medium" Class="py-4">
             <div class="page-body">
+                <DatabaseWaitBanner/>
                 <UpdateReadyBanner/>
                 <SignedOutBanner/>
                 @Body

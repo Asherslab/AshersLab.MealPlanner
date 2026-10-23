@@ -40,11 +40,20 @@ public sealed class LocalDatabase(
     /// <summary>Another window of the app committed a change. Re-read what you show.</summary>
     public event Func<Task>? ChangedElsewhere;
 
+    /// <summary>
+    /// This window has waited more than 10 s on another window of the app - most likely one Safari suspended because
+    /// it was not in view. Looking at that window, or closing it, lets this one carry on.
+    /// </summary>
+    public bool WaitingOnAnotherWindow { get; private set; }
+
+    /// <summary><see cref="WaitingOnAnotherWindow"/> changed.</summary>
+    public event Func<Task>? WaitingChanged;
+
     public Task<LocalDatabaseStart> StartAsync() => _start ??= Start();
 
     /// <summary>
     /// Whether this window runs the database (<c>"leader"</c>) or reaches it through another window
-    /// (<c>"follower"</c>). Changes when the leading window closes.
+    /// (<c>"follower"</c>). Changes when the leading window closes, or is hidden while another is in view.
     /// </summary>
     public ValueTask<string?> RoleAsync() => js.InvokeAsync<string?>("mealPlannerDatabase.role");
 
@@ -56,11 +65,23 @@ public sealed class LocalDatabase(
                 await handler();
     }
 
+    [JSInvokable]
+    public async Task OnWaitingChanged(bool waiting)
+    {
+        WaitingOnAnotherWindow = waiting;
+        if (WaitingChanged is { } handlers)
+            foreach (Func<Task> handler in handlers.GetInvocationList().Cast<Func<Task>>())
+                await handler();
+    }
+
     private async Task<LocalDatabaseStart> Start()
     {
         if (!await LoadSharedDatabaseScript())
             return new LocalDatabaseStart(DbInitState.FAILED,
                 "part of the app did not download. Reload the page.", null, null);
+
+        // Before the start's turn: the wait most likely to be on a suspended window is the first one.
+        await js.InvokeVoidAsync("mealPlannerDatabase.onWaiting", DotNetObjectReference.Create(this));
 
         await js.InvokeVoidAsync("mealPlannerDatabase.startBegin");
         try

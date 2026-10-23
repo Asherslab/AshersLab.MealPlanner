@@ -1,0 +1,28 @@
+@implements IDisposable
+@inject LocalDatabase Database
+
+@*
+    Across the top of every page while this window has waited more than 10 s on another window of the app, which holds
+    the database (wwwroot/js/shared-database.js). A leader hands over when it is hidden, so this is the case that slips
+    through: a window Safari suspended before it could, or one that never got the chance. Without it the page just
+    loads forever. Goes away by itself once the other window answers.
+*@
+
+@if (Database.WaitingOnAnotherWindow)
+{
+    <div class="db-waiting" role="status" data-testid="db-waiting">
+        <MudIcon Icon="@Icons.Material.Filled.HourglassTop" Size="Size.Small"/>
+        <span>
+            Waiting for another window of the meal planner. Switch to it for a moment, or close it - Safari pauses
+            windows you aren't looking at.
+        </span>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => Database.WaitingChanged += Changed;
+
+    private Task Changed() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Database.WaitingChanged -= Changed;
+}

@@ -1,5 +1,6 @@
 // The pure half of wwwroot/js/shared-database.js: how statements are classified, and how the transaction
-// gate orders requests from several windows onto one SQLite connection, and how a reset deletes the files. Run by SharedDatabaseScriptTests,
+// gate orders requests from several windows onto one SQLite connection, how a reset deletes the files, and when a
+// window has waited too long on another. Run by SharedDatabaseScriptTests,
 // or directly: node --test AshersLab.MealPlanner.Tests/Js/shared-database.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +11,7 @@ import vm from 'node:vm';
 const script = fileURLToPath(new URL('../../AshersLab.MealPlanner.WASM/wwwroot/js/shared-database.js', import.meta.url));
 const sandbox = {};
 vm.runInNewContext(readFileSync(script, 'utf8'), sandbox);   // no window: only the pure half is installed
-const { classify, TransactionGate, removeEntries } = sandbox.MealPlannerSharedDatabase;
+const { classify, TransactionGate, removeEntries, waitingOnAnotherWindow } = sandbox.MealPlannerSharedDatabase;
 
 test('classify: transaction boundaries as EF Core and SqliteWasmBlazor send them', () => {
     assert.equal(classify('BEGIN'), 'begin');
@@ -141,6 +142,32 @@ test('gate: a window that closes while waiting loses its queued requests and owe
     const commit = r('A', 'commit', 3); g.submit(commit);
     g.completed(commit, true);
     assert.deepEqual(sent.map(x => x.n), [1, 3]);
+});
+
+const waiting = (over, limit = 10_000) =>
+    waitingOnAnotherWindow({ now: 100_000, leading: false, startSince: null, leaderlessSince: null, sentSince: [], ...over }, limit);
+
+test('waiting: nothing outstanding is not waiting', () => {
+    assert.equal(waiting({}), false);
+});
+
+test('waiting: no leader announced for the limit - a suspended leader never answers hello', () => {
+    assert.equal(waiting({ leaderlessSince: 90_001 }), false);
+    assert.equal(waiting({ leaderlessSince: 90_000 }), true);
+});
+
+test('waiting: a request to another window unanswered for the limit, however many answered since', () => {
+    assert.equal(waiting({ sentSince: [99_000, 95_000] }), false);
+    assert.equal(waiting({ sentSince: [99_000, 85_000] }), true);
+});
+
+test('waiting: for the start\'s turn, held by a window itself waiting on a suspended one', () => {
+    assert.equal(waiting({ startSince: 80_000 }), true);
+});
+
+test('waiting: a leading window waits on nobody, but can still wait for the start\'s turn', () => {
+    assert.equal(waiting({ leading: true, leaderlessSince: 0, sentSince: [0] }), false);
+    assert.equal(waiting({ leading: true, startSince: 0 }), true);
 });
 
 // A stand-in OPFS directory: each name fails with the listed error names, in order, before it is removed.

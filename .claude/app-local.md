@@ -454,8 +454,10 @@ How it works is in `docs/modules/sync/browser-database.md`. How to look at it:
 
   Copy the `-wal` too: committed rows usually live there until a checkpoint.
 - **Several windows** — `node .claude/tools/chrome-multiwindow-check.mjs <scratch>/profile` drives a
-  separate headless Chrome through sharing, leader hand-overs, reloads, simultaneous starts and dropped
-  downloads, and prints PASS/FAIL per check (about a minute; give each run a fresh profile directory). A
+  separate headless Chrome through sharing, leader hand-overs, reloads, simultaneous starts, hidden and frozen
+  leaders and dropped downloads, and prints PASS/FAIL per check (about two minutes; give each run a fresh profile
+  directory). Headless Chrome hides every window but the newest, so the script makes each window report itself in
+  view (`__setVisible(false)` hides one on purpose) - without that the leader hands over to every new window. A
   failure is classified `boot-download`, `boot-unknown` or `shim-stall`; only `shim-stall` is a bug in
   `shared-database.js`, and it prints that window's shim events and Web Locks. A brand-new headless profile
   drops requests (`ERR_CERT_VERIFIER_CHANGED`) for about its first second, so the script waits 3 s first

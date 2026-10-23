@@ -3,11 +3,12 @@ title: The browser database
 kind: reference
 status: current
 module: sync
-verified: 2026-10-22
+verified: 2026-10-23
 code:
   - AshersLab.MealPlanner.LocalData
   - AshersLab.MealPlanner.WASM/Data/LocalDatabase.cs
   - AshersLab.MealPlanner.WASM/Data/LocalDataGate.razor
+  - AshersLab.MealPlanner.WASM/Data/DatabaseWaitBanner.razor
   - AshersLab.MealPlanner.WASM/Data/ResetDeviceDialog.razor
   - AshersLab.MealPlanner.WASM/Components/ThisDeviceCard.razor
   - AshersLab.MealPlanner.WASM/Pages/Diagnostics.razor
@@ -57,6 +58,14 @@ adding a local table, a local migration, or anything that waits on the local dat
   other windows' statements while one window's transaction is open. A transaction that waits on another
   window, or on the user, holds up every window — keep them short, and never await UI inside one. (The shim
   queues *other* windows; the trap above is about a window's own contexts.)
+- **A window that is not in view may stop running — and still hold the database.** Safari suspends a hidden tab
+  (one switched away from, or a minimised window): its page and worker stop, yet it keeps the leader lock and the
+  OPFS files. Every other window then waits on it. Seen 2026-10-23 in Safari on macOS: two windows side by side, the
+  leading one switched to another tab; a receipt import in the other hung, and after a reload that window never got a
+  database (`events` stopped at "said hello", `role()` `null`, the leader lock held by the hidden window) until the
+  hidden one was looked at. Taking the lock (`steal`) would not help: the suspended worker still holds the files.
+  So only a window in view leads or waits in line - see "Several windows". Chrome merely throttles a hidden tab, so
+  the Chrome checks never showed this.
 - **`shared-database.js` is coupled to SqliteWasmBlazor's bridge ↔ worker messages** (`{type:'init'}`,
   `{id, data:{type:'execute', sql}}`, `{type:'ready'|'error'}`, `streamId`). Re-run
   `.claude/tools/chrome-multiwindow-check.mjs` after upgrading the package.
@@ -131,7 +140,10 @@ stands in for the worker SqliteWasmBlazor creates:
 
 | Part | How |
 |---|---|
-| Who runs the worker | The window holding the Web Lock `mealplanner-db-leader`. Every other window queues on the same lock. |
+| Who runs the worker | The window holding the Web Lock `mealplanner-db-leader`. Every other window *in view* queues on the same lock; a hidden one leaves the line, and rejoins when it is looked at again. A suspended window next in line would be granted a lock it cannot use. If every window is hidden and the leader closes, none leads until one is looked at. |
+| The leader is hidden | It broadcasts `who-is-visible`; a window in view answers `visible` (and says so unprompted when it comes into view, or in its `hello`). A hidden leader that hears one hands over: it stops starting anything new, waits for statements in flight and for *another* window's open transaction, then says `leader-gone` with `clean`, stops its worker and lets go of the lock. Its own open transaction is not waited for - hidden, its .NET runs on throttled timers and a sync round's transaction can take many seconds - so it breaks, as on a close, and the sync round tries again. About half a second, measured in headless Chrome. |
+| A clean hand-over | Nothing was in flight, so nothing a window still waits on ran: every window sends its unanswered requests again, to the next leader. That includes requests that crossed the `leader-gone` on the channel. Without it, a window starting while the leader hid failed its whole start. |
+| Waiting on a window anyway | One suspended before it could hand over, a follower suspended mid-transaction (it holds every window until it wakes), or an older build. After 10 s of waiting on another window - for the start's turn, for a leader, or for an answer - `DatabaseWaitBanner` (`db-waiting`) shows across the top of every page: "Waiting for another window of the meal planner. Switch to it for a moment, or close it". It goes away by itself. |
 | How the others reach it | `BroadcastChannel('mealplanner-db')`: requests out, answers back by window id. Request ids are renumbered at the leader so two windows' ids cannot collide. |
 | Transactions | `TransactionGate`: from the moment a window's `BEGIN` is sent until its `COMMIT`/`ROLLBACK` answers, other windows' statements wait in arrival order. `ROLLBACK TO` a savepoint does not end it. |
 | A window closes mid-transaction | Each window holds its own Web Lock; when the leader is granted it, that window has gone, and the leader rolls its transaction back. |
@@ -151,6 +163,13 @@ windows starting at once (each counted once, one `Device` row), and a window who
 shim *and* first request for the worker script were dropped (both retried; it opened leading and shared).
 Also checked by hand in Chrome: a follower that sent `BEGIN IMMEDIATE` and was closed had its transaction
 rolled back, and the leader's queued statement then ran.
+
+Since 2026-10-23 the check also hides and freezes windows (30 checks in all): three hand-overs timed to land during another
+window's start; a hidden leader handing over, then frozen (`Page.setWebLifecycleState`, standing in for Safari's
+suspension) while the window in view reloads beside it; and a leader frozen *without* hiding first, where the
+reloaded window must show `db-waiting` and open once the leader thaws. Headless Chrome hides every window but the
+newest, so the check makes each window report itself in view unless it hides it on purpose. Six clean runs on
+2026-10-23. It is Chrome standing in for Safari; the hand-over in Safari itself is not yet confirmed.
 
 Two failures were seen while building this, both the same cause: a request dropped at the network level
 (`net::ERR_CERT_VERIFIER_CHANGED` from a brand-new headless profile in its first second). When the dropped

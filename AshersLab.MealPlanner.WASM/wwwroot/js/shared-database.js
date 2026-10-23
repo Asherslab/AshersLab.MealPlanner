@@ -8,7 +8,9 @@
 //   - every window gets a client that looks like that Worker to the bridge;
 //   - the window holding the "mealplanner-db-leader" Web Lock also runs the one real worker;
 //   - the others send their requests to it over a BroadcastChannel and get the answers back;
-//   - when that window closes its lock passes to another window, which starts a worker and takes over.
+//   - when that window closes its lock passes to another window, which starts a worker and takes over;
+//   - when it is hidden while another window is in view, it hands the database over the same way - Safari
+//     suspends a hidden tab, and a suspended leader keeps the lock and the files but answers nobody.
 //
 // Every window shares one SQLite connection, so the leader gates transactions: once a window's BEGIN is
 // sent, the other windows' statements wait until its COMMIT or ROLLBACK. See
@@ -114,7 +116,17 @@
         }
     }
 
-    root.MealPlannerSharedDatabase = { classify, TransactionGate, removeEntries };
+    /**
+     * Whether this window has waited `limit` ms on another one: for a start's turn, for a leader to be announced, or
+     * for an answer to a request it sent another window. Each `since` is a performance.now() time, or null for not
+     * waiting. A window that leads waits on nobody - its own worker starting is not another window's fault.
+     */
+    function waitingOnAnotherWindow({ now, leading, startSince, leaderlessSince, sentSince }, limit) {
+        const since = [startSince, leading ? null : leaderlessSince, ...(leading ? [] : sentSince)].filter(s => s !== null);
+        return since.some(s => now - s >= limit);
+    }
+
+    root.MealPlannerSharedDatabase = { classify, TransactionGate, removeEntries, waitingOnAnotherWindow };
 
     if (typeof window === 'undefined' || !root.navigator?.locks || typeof BroadcastChannel === 'undefined') return;
     // Loaded again by a retry after a load that did run: one Worker patch only.
@@ -132,6 +144,11 @@
     const RESET_TAKE_OVER_MS = 20_000;
     const WORKER_FILE = 'sqlite-wasm-worker.js';
     const START_ATTEMPTS = 6;     // 0.25 + 0.5 + 1 + 2 + 4 s between them: about 8 s before giving up
+    // A hidden leader handing over waits this long at most for what is in flight and an open transaction to end;
+    // anything still unanswered then fails "try again" in its window, as when a leader closes.
+    const HAND_OVER_DRAIN_MS = 10_000;
+    // Longer than a leader's worker takes to start through all its retries, so a hand-over is never mistaken for it.
+    const WAITING_LIMIT_MS = 10_000;
     const forever = () => new Promise(() => {});
     const RealWorker = root.Worker;
 
@@ -161,6 +178,9 @@
             this.isReady = false;
             this.attempt = 0;
             this.ready = new Promise(resolve => this.resolveReady = resolve);
+            this.handedOver = new Promise(resolve => this.resolveHandedOver = resolve);
+            this.leaving = false;
+            this.watching = new AbortController();
             this.startWorker();
         }
 
@@ -190,6 +210,49 @@
             note('worker stopped for a reset');
         }
 
+        /**
+         * Let go of the database for another window, losing nothing. From now on only an open transaction's own
+         * statements run; everything else is dropped unrun. Once nothing is in flight - or HAND_OVER_DRAIN_MS have
+         * passed - `gone(clean)` says so while this window still can, the worker stops, which frees the files, and
+         * `handedOver` resolves, which gives back the lock.
+         *
+         * `clean` is nothing in flight: then every request a window still waits on was never run, and it sends them
+         * all again to the next leader. Not simply fail what is unanswered, as when a leader closes: a hidden window
+         * hands over just as another opens - a background tab is hidden - and a failed request fails the whole start.
+         */
+        handOver(gone) {
+            if (this.leaving) return;
+            this.leaving = true;
+            const dropped = this.gate.waiting.length;
+            this.gate.waiting = [];
+            const owner = this.gate.owner;
+            note(`handing over: ${this.routes.size} in flight, ${dropped} held back, `
+                + `transaction ${owner === null ? 'none' : owner === this.client.tabId ? 'this window\'s' : owner.slice(0, 8) + '\'s'}`);
+            this.leave = () => {
+                if (this.stopped) return;
+                this.stopped = true;
+                gone(this.routes.size === 0);
+                this.watching.abort();
+                this.worker.terminate();
+                note(`worker stopped, handed over${this.routes.size ? ` with ${this.routes.size} unanswered` : ''}`);
+                this.resolveHandedOver();
+            };
+            setTimeout(this.leave, HAND_OVER_DRAIN_MS);
+            this.leaveIfIdle();
+        }
+
+        /**
+         * Leaves once nothing is in flight - so no statement is cut off not knowing whether it ran - and no other
+         * window's transaction is open. This window's own is not waited for: hidden, its .NET runs on throttled
+         * timers, about one continuation a second, so a sync round's transaction could hold every other window for
+         * many seconds. It is broken instead, as when a leader closes: its next statement fails, EF rolls back, and
+         * the sync round tries again.
+         */
+        leaveIfIdle() {
+            if (!this.leaving || this.routes.size > 0) return;
+            if (this.gate.owner === null || this.gate.owner === this.client.tabId) this.leave();
+        }
+
         startFailed(reason) {
             this.worker.terminate();
             if (this.stopped) return;
@@ -208,6 +271,8 @@
             if (tab !== this.client.tabId) this.watch(tab);
             if (message.data?.database) this.databases.set(tab, message.data.database);
             const kind = message.data?.type === 'execute' ? classify(message.data.sql) : 'read';
+            // Handing over: only the open transaction may carry on, to its end. Anything else is for the next leader.
+            if (this.leaving && this.gate.owner !== tab) return;
             this.gate.submit({ tab, kind, message, transfer });
         }
 
@@ -232,18 +297,19 @@
 
             const changed = this.gate.completed(request, succeeded(data));
             if (changed) this.client.announceChange(request.tab);
-            if (request.tab === null) return;                                    // the leader's own ROLLBACK
+            if (request.tab === null) { this.leaveIfIdle(); return; }            // the leader's own ROLLBACK
 
             const answer = { ...data, id: request.message.id };
             if (request.tab === this.client.tabId) this.client.deliver(answer);
             else this.client.channel.postMessage({ t: 'res', to: request.tab, msg: answer });
+            this.leaveIfIdle();
         }
 
         /** Learn when a follower window closes: its own lock becomes free. */
         watch(tab) {
             if (this.watched.has(tab)) return;
             this.watched.add(tab);
-            navigator.locks.request(TAB_LOCK + tab, () => {
+            navigator.locks.request(TAB_LOCK + tab, { signal: this.watching.signal }, () => {
                 this.watched.delete(tab);
                 const database = this.databases.get(tab);
                 this.databases.delete(tab);
@@ -251,7 +317,7 @@
                     this.gate.submit({ tab: null, kind: 'rollback',
                         message: { data: { type: 'execute', database, sql: 'ROLLBACK', parameters: {} } } });
                 }
-            });
+            }).catch(() => {});   // aborted: this window handed the database over, and the next leader watches
         }
     }
 
@@ -265,8 +331,10 @@
             this.onerror = null;
             this.leaderId = null;        // the window whose worker answers, once it is ready
             this.leader = null;          // set in the window that is the leader
+            this.inLine = null;          // aborts this window's place in line for the leader lock
             this.bridgeReady = false;
-            this.pending = new Map();    // request id -> { leaderId, kind } sent and not yet answered
+            this.pending = new Map();    // request id -> { leaderId, kind, at, message, transfer } sent, not yet answered
+            this.leaderlessSince = null; // when this window, started, last found no leader to send to
             this.queued = [];            // requests waiting for a leader
             this.transaction = 'none';   // none | open | broken
             this.transactionLeader = null;
@@ -320,9 +388,26 @@
         }
 
         send(message, transfer, kind) {
-            this.pending.set(message.id, { leaderId: this.leaderId, kind });
+            this.pending.set(message.id, { leaderId: this.leaderId, kind, at: performance.now(), message, transfer });
             if (this.leader) this.leader.submit(this.tabId, message, transfer);
             else this.channel.postMessage({ t: 'req', from: this.tabId, to: this.leaderId, msg: message });
+        }
+
+        /**
+         * The leader `id` has gone. If it handed over cleanly, nothing still waiting on it ran: it goes again, to whoever
+         * leads next - through request(), so a transaction that was open on it still fails, once the next is known.
+         * Otherwise it fails then, in leaderIs: nobody can say whether it ran.
+         */
+        leaderGone(id, clean) {
+            if (this.leaderId !== id) return;
+            this.leaderId = null;
+            this.leaderlessSince = performance.now();
+            if (!clean) return;
+            for (const [requestId, sent] of [...this.pending]) {
+                if (sent.leaderId !== id) continue;
+                this.pending.delete(requestId);
+                this.request(sent.message, sent.transfer);
+            }
         }
 
         /** An answer for this window, from its own leader or another window's. */
@@ -344,19 +429,71 @@
             // opened meanwhile, must not open them first.
             await navigator.locks.request(RESET_LOCK, { mode: 'shared' }, () => {});
             this.started = true;
+            this.leaderlessSince = performance.now();
             navigator.locks.request(TAB_LOCK + this.tabId, forever);
-            navigator.locks.request(LEADER_LOCK, async () => {
+            this.queueForLead();
+            addEventListener('pagehide', () => { if (this.leader) this.channel.postMessage({ t: 'leader-gone', id: this.tabId }); });
+            document.addEventListener('visibilitychange', () => this.visibilityChanged());
+            this.channel.postMessage({ t: 'hello', from: this.tabId, visible: !document.hidden });
+            note(`started as ${this.tabId.slice(0, 8)}, said hello`);
+        }
+
+        /**
+         * Wait in line for the leader lock; holding it, run the worker until this window closes or hands over. Only
+         * while in view: a suspended window next in line would be given the lock it cannot use - seen when the window
+         * in view reloaded beside a suspended one. A hidden window joins the line when it is looked at again, and a
+         * profile whose every window is hidden has no leader until one is.
+         */
+        queueForLead() {
+            if (this.inLine || this.leader || document.hidden) return;
+            const line = this.inLine = new AbortController();
+            navigator.locks.request(LEADER_LOCK, { signal: line.signal }, async () => {
+                this.inLine = null;
                 if (this.resetting) { note('leader lock granted during a reset'); return this.resetting(); }
                 note('leader lock granted, starting worker');
-                this.leader = new Leader(this);
-                await this.leader.ready;
+                const leader = this.leader = new Leader(this);
+                await leader.ready;
                 this.channel.postMessage({ t: 'leader', id: this.tabId });
                 this.leaderIs(this.tabId);
-                return forever();
+                if (document.hidden) this.channel.postMessage({ t: 'who-is-visible' });
+                await leader.handedOver;
+                // Back in line - if in view - before the lock goes, behind every window already waiting.
+                this.queueForLead();
+            }).catch(() => { if (this.inLine === line) this.inLine = null; });   // aborted: hidden while in line
+        }
+
+        leaveLine() {
+            this.inLine?.abort();
+            this.inLine = null;
+        }
+
+        get leading() { return this.leader !== null && this.leaderId === this.tabId; }
+
+        /**
+         * Safari suspends a tab that is not in view: its page and worker stop, yet it keeps the leader lock and the
+         * database files, so every other window waits on it until it is looked at again. Seen 2026-10-23 with two
+         * windows side by side and the leading one switched to another tab. So the window leading only while it is
+         * in view, if another one is: a hidden leader asks who is visible, and hands over when one answers.
+         */
+        visibilityChanged() {
+            if (!this.started) return;
+            if (document.hidden) {
+                if (this.leading) this.channel.postMessage({ t: 'who-is-visible' });
+                else this.leaveLine();
+            } else if (!this.leader) {
+                this.queueForLead();
+                this.channel.postMessage({ t: 'visible', from: this.tabId });
+            }
+        }
+
+        visibleElsewhere(tab) {
+            if (!this.leading || !document.hidden || this.leader.leaving) return;
+            note(`hidden, and ${tab.slice(0, 8)} is in view: handing the database over`);
+            this.leader.handOver(clean => {
+                this.channel.postMessage({ t: 'leader-gone', id: this.tabId, clean });
+                this.leader = null;
+                this.leaderGone(this.tabId, clean);
             });
-            addEventListener('pagehide', () => { if (this.leader) this.channel.postMessage({ t: 'leader-gone', id: this.tabId }); });
-            this.channel.postMessage({ t: 'hello', from: this.tabId });
-            note(`started as ${this.tabId.slice(0, 8)}, said hello`);
         }
 
         /** Another window is resetting the database: let go of it and reload, to wait for the fresh one. */
@@ -372,6 +509,7 @@
             if (this.leaderId === id) return;
             note(`leader is ${id === this.tabId ? 'this window' : id.slice(0, 8)}`);
             this.leaderId = id;
+            this.leaderlessSince = null;
 
             // Sent to a leader that has gone: nobody can say whether they ran, so they fail.
             for (const [requestId, sent] of [...this.pending]) {
@@ -403,16 +541,23 @@
         fromChannel(m) {
             switch (m.t) {
                 case 'hello':
-                    if (this.leader && this.leaderId === this.tabId) {
+                    if (this.leading) {
                         note(`answered hello from ${m.from.slice(0, 8)}`);
                         this.channel.postMessage({ t: 'leader', id: this.tabId });
+                        if (m.visible) this.visibleElsewhere(m.from);
                     }
+                    break;
+                case 'who-is-visible':
+                    if (this.started && !this.leader && !document.hidden) this.channel.postMessage({ t: 'visible', from: this.tabId });
+                    break;
+                case 'visible':
+                    this.visibleElsewhere(m.from);
                     break;
                 case 'leader':
                     if (!this.leader) this.leaderIs(m.id);
                     break;
                 case 'leader-gone':
-                    if (this.leaderId === m.id) this.leaderId = null;
+                    if (!this.leader) this.leaderGone(m.id, m.clean === true);
                     break;
                 case 'req':
                     if (this.leader && m.to === this.tabId) this.leader.submit(m.from, m.msg);
@@ -453,8 +598,31 @@
          * lasts until startDone(), or until the window goes.
          */
         startBegin() {
+            this.startSince = performance.now();
             return new Promise(granted => navigator.locks.request(START_LOCK,
-                () => new Promise(done => { this.endStart = done; granted(); })));
+                () => new Promise(done => { this.endStart = done; this.startSince = null; granted(); })));
+        },
+        startSince: null,
+        /**
+         * Calls dotnetRef.OnWaitingChanged(bool) when this window starts or stops waiting on another window for more
+         * than WAITING_LIMIT_MS - most likely one Safari has suspended, which only looking at it, or closing it, wakes.
+         */
+        onWaiting(dotnetRef) {
+            let waiting = false;
+            setInterval(() => {
+                const c = this.client;
+                const now = waitingOnAnotherWindow({
+                    now: performance.now(),
+                    leading: c?.leader != null,
+                    startSince: this.startSince,
+                    leaderlessSince: c?.leaderlessSince ?? null,
+                    sentSince: c ? [...c.pending.values()].filter(p => p.leaderId !== c.tabId).map(p => p.at) : [],
+                }, WAITING_LIMIT_MS);
+                if (now === waiting) return;
+                waiting = now;
+                note(waiting ? 'waiting on another window' : 'no longer waiting on another window');
+                dotnetRef.invokeMethodAsync('OnWaitingChanged', waiting);
+            }, 1000);
         },
         startDone() {
             this.endStart?.();

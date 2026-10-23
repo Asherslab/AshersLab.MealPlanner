@@ -1,7 +1,8 @@
 // Several windows of the app on one browser database, in a separate headless Chrome on a throwaway
 // profile (never the user's Chrome). Checks that windows share the database and see each other's changes,
-// that the database survives the leading window closing or reloading, and that windows starting at once
-// each count their start exactly once.
+// that the database survives the leading window closing or reloading, that windows starting at once
+// each count their start exactly once, and that a hidden leader hands over and a frozen one (Safari's
+// suspension) leaves the others working or saying what they wait on.
 //
 //   node .claude/tools/chrome-multiwindow-check.mjs <profileDir>
 //
@@ -74,10 +75,21 @@ function cdp(url) {
 const read = `(() => {
   const t = s => document.querySelector('[data-testid=' + s + ']')?.textContent.trim();
   return { id: t('device-id'), count: t('device-open-count'), role: t('device-role'), state: t('local-db-state'),
-           shim: globalThis.mealPlannerDatabase?.role?.() ?? null };
+           shim: globalThis.mealPlannerDatabase?.role?.() ?? null, waiting: !!document.querySelector('[data-testid=db-waiting]') };
 })()`;
 const evaluate = async (w, expression) =>
   (await w.page.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.result?.value;
+
+// Headless Chrome puts every window but the newest in the background, and a background page is hidden - so a
+// leader would hand over to each new window, and which window leads would depend on the order they opened. Every
+// window says it is in view unless a check hides it on purpose (`setVisible`), which dispatches visibilitychange
+// as the browser does.
+const VISIBLE = `(() => {
+  let hidden = false;
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' });
+  globalThis.__setVisible = visible => { hidden = !visible; document.dispatchEvent(new Event('visibilitychange')); return true; };
+})()`;
 
 // Opens a window on the app. `before` runs after DevTools is attached and before the app is requested, so
 // it can set up request interception.
@@ -97,6 +109,8 @@ async function open(before, direct = false) {
   await page.opened;
   await page.send('Runtime.enable');
   await page.send('Network.enable');
+  await page.send('Page.enable');
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: VISIBLE });
   const w = { target, page };
   if (before) await before(w);
   await page.send('Page.navigate', { url: APP });
@@ -207,6 +221,67 @@ try {
   const after = await card(windows[0], x => count(x) >= last + 3, 'after simultaneous starts');
   check('three windows starting at once each count once, one device row', count(after) === last + 3 && cards.every(x => x.id === ca.id), { after, started: cards.map(x => x.count) });
   last += 3;
+
+  // Safari suspends a tab that is not in view, and a suspended leader keeps the lock and the files but answers
+  // nobody (seen 2026-10-23). Hiding goes through VISIBLE's override; Safari's suspension is
+  // Page.setWebLifecycleState frozen.
+  const hide = w => evaluate(w, '__setVisible(false)');
+  const show = w => evaluate(w, '__setVisible(true)');
+  const freeze = (w, frozen) => w.page.send('Page.setWebLifecycleState', { state: frozen ? 'frozen' : 'active' });
+  for (const w of [...windows.slice(1), ...many]) await close(w);
+  windows = [windows[0]];
+
+  // Hidden just as another window opens - a background tab is hidden - the hand-over must not fail that start.
+  for (let round = 1; round <= 3; round++) {
+    const leader = await leaderOf(windows);
+    const opening = await open();
+    await sleep(round * 400);
+    await hide(leader);
+    const co = await card(opening, c => (c.count && c.shim === 'leader') || c.state, `window opening during hand-over ${round}`)
+      .catch(async e => { throw new Error(`${e.message}\n  hidden leader's events: ${await evaluate(leader, 'JSON.stringify(mealPlannerDatabase.events)')}`); });
+    check(`hand-over during a start ${round}: the new window opens, counted, and leads`,
+      count(co) === last + 1 && co.shim === 'leader' && !co.state, co);
+    last = count(co);
+    await show(leader);
+    await close(leader);
+    windows = [opening];
+  }
+  const second = await open();
+  const cs = await card(second, undefined, 'second window for the hidden pair');
+  last = count(cs);
+  const pair = [windows[0], second];
+  windows = pair;
+
+  // Hidden: it hands over to the window in view, which then keeps working with the hidden one frozen.
+  const hidden = await leaderOf(pair);
+  const inView = pair.find(w => w !== hidden);
+  await hide(hidden);
+  const took = await leaderOf([inView]);
+  check('hidden leader hands over to the window in view', took === inView, null);
+  await freeze(hidden, true);
+  inView.page.errors.length = 0;
+  await inView.page.send('Page.reload');
+  await sleep(300);
+  const cv = await card(inView, c => (c.count && count(c) === last + 1) || c.state, 'reload beside a frozen hidden window');
+  check('with the hidden window frozen, the one in view reloads and gets the database', count(cv) === last + 1 && cv.shim === 'leader', cv);
+  last = count(cv);
+  await freeze(hidden, false);
+  await show(hidden);
+  const ch = await card(hidden, c => c.shim === 'follower' && count(c) === last, 'hidden window shown again');
+  check('the hidden window, shown again, follows', ch.shim === 'follower', ch);
+
+  // Suspended before it could hand over (or an old build): the waiting window says so, and carries on once it wakes.
+  const asleep = inView, waiter = hidden;
+  await freeze(asleep, true);
+  waiter.page.errors.length = 0;
+  await waiter.page.send('Page.reload');
+  await sleep(300);
+  const cw = await card(waiter, c => c.waiting || c.count || c.state, 'window waiting on a frozen leader');
+  check('a window waiting on a frozen leader says so after about 10 s', cw.waiting && !cw.count, cw);
+  await freeze(asleep, false);
+  const cr = await card(waiter, c => (c.count && count(c) === last + 1 && !c.waiting) || c.state, 'waiting window once the leader wakes');
+  check('once the leader wakes, the waiting window opens and the notice goes', count(cr) === last + 1 && !cr.waiting, cr);
+  last = count(cr);
 
   // Fault injection, with no other window open so this one must lead: drop its first request for the
   // cross-window script and its first request for the worker script. Both are retried; the database must
