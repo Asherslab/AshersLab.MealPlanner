@@ -181,6 +181,8 @@
             this.handedOver = new Promise(resolve => this.resolveHandedOver = resolve);
             this.leaving = false;
             this.watching = new AbortController();
+            this.opened = new Set();     // databases this worker has open
+            this.opening = null;         // while one is being opened: the requests that came meanwhile, in order
             this.startWorker();
         }
 
@@ -273,7 +275,30 @@
             const kind = message.data?.type === 'execute' ? classify(message.data.sql) : 'read';
             // Handing over: only the open transaction may carry on, to its end. Anything else is for the next leader.
             if (this.leaving && this.gate.owner !== tab) return;
-            this.gate.submit({ tab, kind, message, transfer });
+            const request = { tab, kind, message, transfer };
+            if (this.opening) { this.opening.push(request); return; }
+            const database = message.data?.database;
+            if (database && message.data.type !== 'open' && !this.opened.has(database)) { this.open(database, request); return; }
+            this.gate.submit(request);
+        }
+
+        /**
+         * A window's bridge sends `open` once, when its connection first opens; the worker keeps what is open in memory.
+         * A worker started by a hand-over or a close has never been sent it, and answers every statement from a window
+         * that was already running "Database mealplanner.db not open" - seen 2026-10-23 on Receipts after switching away
+         * from the leading tab. So this opens it first (the worker's open is idempotent), and holds everything after,
+         * in order, until it answers: the worker does not finish one message before starting the next.
+         */
+        open(database, first) {
+            note(`opening ${database} for a window that opened it on an earlier worker`);
+            this.opening = [first];
+            this.post({ tab: null, kind: 'read', message: { data: { type: 'open', database } }, done: ok => {
+                if (ok) this.opened.add(database);
+                else note(`opening ${database} failed`);
+                const held = this.opening;
+                this.opening = null;
+                for (const r of held) this.submit(r.tab, r.message, r.transfer);
+            } });
         }
 
         post(request) {
@@ -294,6 +319,10 @@
             const request = this.routes.get(data.id);
             if (!request) return;
             this.routes.delete(data.id);
+            if (request.done) { request.done(succeeded(data)); this.leaveIfIdle(); return; }   // the leader's own open
+            const type = request.message.data?.type, database = request.message.data?.database;
+            if (type === 'open' && succeeded(data)) this.opened.add(database);
+            else if (type === 'close') this.opened.delete(database);
 
             const changed = this.gate.completed(request, succeeded(data));
             if (changed) this.client.announceChange(request.tab);

@@ -154,6 +154,18 @@ const close = w => fetch(`http://127.0.0.1:${PORT}/json/close/${w.target.id}`).t
 const count = c => parseInt(c.count, 10);
 let failures = 0;
 const check = (label, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label} ${JSON.stringify(detail)}`); if (!ok) failures++; };
+// A statement sent through the window's shim as SqliteWasmBlazor's bridge sends one, on its already-open connection:
+// what a page does after a hand-over, without the reload that would open the database afresh.
+const query = async w => JSON.parse(await evaluate(w, `new Promise(resolve => {
+  const c = mealPlannerDatabase.client, bridge = c.onmessage, id = 900000 + Math.floor(Math.random() * 1000);
+  const done = r => { c.onmessage = bridge; resolve(JSON.stringify(r)); };
+  c.onmessage = e => e.data?.id === id                                  // rows come back as MessagePack: binary
+    ? done({ ok: e.data.binary === true || e.data.data?.success === true, error: e.data.data?.error ?? e.data.error })
+    : bridge?.(e);
+  c.postMessage({ id, data: { type: 'execute', database: 'mealplanner.db', sql: 'SELECT COUNT(*) FROM "Device"', parameters: {} } });
+  setTimeout(() => done({ ok: false, error: 'no answer in 4 s' }), 4000);
+})`) ?? '{"ok":false,"error":"page did not answer"}');
+
 async function leaderOf(windows) {
   for (let i = 0; i < 100; i++) {
     for (const w of windows) if ((await evaluate(w, read))?.shim === 'leader') return w;
@@ -184,6 +196,8 @@ try {
     windows = windows.filter(w => w !== leader);
     const next = await leaderOf(windows);
     check(`failover ${round}: a remaining window takes over`, next !== null, null);
+    const qs = await Promise.all(windows.map(query));
+    check(`failover ${round}: every remaining window still reads without reloading`, qs.every(q => q.ok), qs);
     const fresh = await open();
     const cf = await card(fresh, undefined, `failover ${round} new window`);
     check(`failover ${round}: a new window is counted`, cf.shim === 'follower' && count(cf) === last + 1, cf);
@@ -255,9 +269,19 @@ try {
   // Hidden: it hands over to the window in view, which then keeps working with the hidden one frozen.
   const hidden = await leaderOf(pair);
   const inView = pair.find(w => w !== hidden);
+  await sleep(3000);   // settled: both windows' connections opened on the hidden one's worker, long before it goes
   await hide(hidden);
   const took = await leaderOf([inView]);
   check('hidden leader hands over to the window in view', took === inView, null);
+  // Both windows opened the database on the old worker and never send `open` again (2026-10-23: "Database
+  // mealplanner.db not open" on Receipts after switching away from the leading tab). The new worker must serve them.
+  for (const [w, label] of [[inView, 'the new leader'], [hidden, 'the old leader']]) {
+    const q = await query(w);
+    check(`after a hand-over, ${label} still reads without reloading`, q.ok, q);
+  }
+  const leaderEvents = JSON.parse(await evaluate(inView, 'JSON.stringify(mealPlannerDatabase.events)'));
+  check('the new leader opened the database itself for windows that had it open already',
+    leaderEvents.some(e => /opening mealplanner\.db for a window/.test(e)), leaderEvents.slice(-6));
   await freeze(hidden, true);
   inView.page.errors.length = 0;
   await inView.page.send('Page.reload');

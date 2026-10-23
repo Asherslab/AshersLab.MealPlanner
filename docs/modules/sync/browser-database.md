@@ -142,6 +142,7 @@ stands in for the worker SqliteWasmBlazor creates:
 |---|---|
 | Who runs the worker | The window holding the Web Lock `mealplanner-db-leader`. Every other window *in view* queues on the same lock; a hidden one leaves the line, and rejoins when it is looked at again. A suspended window next in line would be granted a lock it cannot use. If every window is hidden and the leader closes, none leads until one is looked at. |
 | The leader is hidden | It broadcasts `who-is-visible`; a window in view answers `visible` (and says so unprompted when it comes into view, or in its `hello`). A hidden leader that hears one hands over: it stops starting anything new, waits for statements in flight and for *another* window's open transaction, then says `leader-gone` with `clean`, stops its worker and lets go of the lock. Its own open transaction is not waited for - hidden, its .NET runs on throttled timers and a sync round's transaction can take many seconds - so it breaks, as on a close, and the sync round tries again. About half a second, measured in headless Chrome. |
+| A new worker and open connections | A window's bridge sends `open` once, when its connection first opens, and the worker keeps what is open only in memory. So a worker started by a hand-over or a close has never been sent `open` by the windows already running, and would answer them all `Database mealplanner.db not open` - seen 2026-10-23 on Receipts after switching away from the leading tab, and latent on a close before that. The leader tracks what its worker has open; the first statement for anything else makes it open it first (the worker's open is idempotent) and hold what follows, in order, until that answers. |
 | A clean hand-over | Nothing was in flight, so nothing a window still waits on ran: every window sends its unanswered requests again, to the next leader. That includes requests that crossed the `leader-gone` on the channel. Without it, a window starting while the leader hid failed its whole start. |
 | Waiting on a window anyway | One suspended before it could hand over, a follower suspended mid-transaction (it holds every window until it wakes), or an older build. After 10 s of waiting on another window - for the start's turn, for a leader, or for an answer - `DatabaseWaitBanner` (`db-waiting`) shows across the top of every page: "Waiting for another window of the meal planner. Switch to it for a moment, or close it". It goes away by itself. |
 | How the others reach it | `BroadcastChannel('mealplanner-db')`: requests out, answers back by window id. Request ids are renumbered at the leader so two windows' ids cannot collide. |
@@ -164,12 +165,15 @@ shim *and* first request for the worker script were dropped (both retried; it op
 Also checked by hand in Chrome: a follower that sent `BEGIN IMMEDIATE` and was closed had its transaction
 rolled back, and the leader's queued statement then ran.
 
-Since 2026-10-23 the check also hides and freezes windows (30 checks in all): three hand-overs timed to land during another
+Since 2026-10-23 the check also hides and freezes windows (38 checks in all). After every close hand-over and the
+hidden one, each remaining window sends a statement on its already-open connection, as a page does without reloading -
+the earlier checks only ever read from freshly loaded windows, which open the database anew, so they missed the
+"not open" failure above. Then: three hand-overs timed to land during another
 window's start; a hidden leader handing over, then frozen (`Page.setWebLifecycleState`, standing in for Safari's
 suspension) while the window in view reloads beside it; and a leader frozen *without* hiding first, where the
 reloaded window must show `db-waiting` and open once the leader thaws. Headless Chrome hides every window but the
-newest, so the check makes each window report itself in view unless it hides it on purpose. Six clean runs on
-2026-10-23. It is Chrome standing in for Safari; the hand-over in Safari itself is not yet confirmed.
+newest, so the check makes each window report itself in view unless it hides it on purpose. Three clean runs on
+2026-10-23; against the build without the leader's `open`, the reads after a hand-over fail with the "not open" error. It is Chrome standing in for Safari; the hand-over in Safari itself is not yet confirmed.
 
 Two failures were seen while building this, both the same cause: a request dropped at the network level
 (`net::ERR_CERT_VERIFIER_CHANGED` from a brand-new headless profile in its first second). When the dropped
