@@ -31,9 +31,9 @@
     small green print, each with its products ruled under it and the latest price at the right.
 *@
 
-<LocalDataGate Start="Start">
-    <div class="prices">
-        <PadSheet Title="Prices" Subtitle="What things cost, and where. Tap a product to write in a price.">
+<div class="prices">
+    <LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
+        <PadSheet Title="@SheetTitle" Subtitle="@SheetSubtitle">
             <div class="price-tools">
                 <div class="price-search-line">
                     <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined"
@@ -126,10 +126,14 @@
                 </p>
             }
         </PadSheet>
-    </div>
-</LocalDataGate>
+    </LocalDataGate>
+</div>
 
 @code {
+    // The sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "Prices";
+    private const string SheetSubtitle = "What things cost, and where. Tap a product to write in a price.";
+
     private List<Ingredient>          _ingredients = [];
     private List<Category>            _categories  = [];
     private Dictionary<Guid, string>  _stores      = [];

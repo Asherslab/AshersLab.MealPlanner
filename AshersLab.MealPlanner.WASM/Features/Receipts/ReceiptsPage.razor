@@ -36,11 +36,11 @@
     so far.
 *@
 
-<LocalDataGate Start="Start">
 <div class="receipts">
+<LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
     @if (_review is null)
     {
-        <PadSheet Title="Add a receipt" Subtitle="Its prices update, and what came home goes into the pantry.">
+        <PadSheet Title="@SheetTitle" Subtitle="@SheetSubtitle">
             <div class="pick">
                 <p class="pick-help">
                     A Woolworths invoice (the PDF from the order's page), a Woolworths eReceipt (the PDF the Woolworths app
@@ -347,10 +347,14 @@
             }
         </PadSheet>
     }
-</div>
 </LocalDataGate>
+</div>
 
 @code {
+    // The first sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "Add a receipt";
+    private const string SheetSubtitle = "Its prices update, and what came home goes into the pantry.";
+
     private const long MaxFileBytes = 10 * 1024 * 1024;
 
     private sealed record ReceiptRow(Receipt Receipt, int Lines, int Unmatched);

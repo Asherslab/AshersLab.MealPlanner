@@ -29,15 +29,27 @@
 
 <PageTitle>Shopping - Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
-<div class="shop">
-    <section class="pad shop-head" data-testid="shop-head">
-        <header class="pad-head">
-            <h1 data-testid="shop-range" title="@ShoppingText.Range(_from, _to)">@ShoppingText.ShortRange(_from, _to)</h1>
+@{
+    // The band, for the head sheet and for the one LocalDataGate shows until the list's data lands. Before then the days
+    // are the address's, or - with none there - the ones shown last (LastBand); the food's cost is last time's for them.
+    (DateOnly From, DateOnly To)? days = _chosen ? (_from, _to) : LastBand is { } last ? (last.From, last.To) : null;
+    // The stand-in's copy carries no test ids: it is inert, and a check waiting for one must find the real band.
+    string? eaten = _book?.Eaten.Format() ?? (LastBand is { } band && days == (band.From, band.To) ? band.Eaten : null);
+    string? Id(string testId) => _book is not null ? testId : null;
+    RenderFragment head =
+        @<text>
+            @if (days is { } d)
+            {
+                <h1 data-testid="@Id("shop-range")" title="@ShoppingText.Range(d.From, d.To)">@ShoppingText.ShortRange(d.From, d.To)</h1>
+            }
+            else
+            {
+                <h1>&nbsp;</h1>
+            }
             <p>
-                @if (_book is not null)
+                @if (eaten is not null)
                 {
-                    <span class="shop-eaten-line">The food for these days: <span data-testid="shop-eaten">@_book.Eaten.Format()</span></span>
+                    <span class="shop-eaten-line">The food for these days: <span data-testid="@Id("shop-eaten")">@eaten</span></span>
                 }
                 else
                 {
@@ -45,7 +57,15 @@
                 }
             </p>
             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.DateRange"
-                       Class="shop-range-edit" OnClick="() => _editingRange = !_editingRange" data-testid="shop-range-edit">Change days</MudButton>
+                       Class="shop-range-edit" OnClick="() => _editingRange = !_editingRange" data-testid="@Id("shop-range-edit")">Change days</MudButton>
+        </text>;
+}
+
+<div class="shop">
+<LocalDataGate Start="Start" Head="head" Class="shop-head">
+    <section class="pad shop-head" data-testid="shop-head">
+        <header class="pad-head">
+            @head
         </header>
         @if (_editingRange)
         {
@@ -263,14 +283,19 @@
             </PadSheet>
         }
     }
-</div>
 </LocalDataGate>
+</div>
 
 @code {
     /// <summary>"2026-10-26": the list's first day, so a link or a reload keeps it.</summary>
     [SupplyParameterFromQuery(Name = "from")] public string? FromParameter { get; set; }
 
     [SupplyParameterFromQuery(Name = "to")] public string? ToParameter { get; set; }
+
+    // What the band said when the page last loaded, this app session: the band LocalDataGate shows while the next load
+    // runs says it again - the days (Shop with none in the address works them out in the load) and the food's cost,
+    // whose line wraps on a phone. The fresh data then replaces it.
+    private static (DateOnly From, DateOnly To, string Eaten)? LastBand;
 
     private ShoppingBook?      _book;
     private List<Store>        _stores = [];
@@ -336,6 +361,7 @@
         _lists  = [.. lists.Where(l => l.Id != _book.ListId && l.EndsOn >= Today.AddDays(-28)).OrderByDescending(l => l.StartsOn).Take(8)];
         _unsent = [.. await db.Outbox.AsNoTracking().Select(o => o.EntityId).ToListAsync()];
         (_newFrom, _newTo) = (_from, _to);
+        LastBand = (_from, _to, _book.Eaten.Format());
     }
 
     /// <summary>What is left to get and what is done: every line ticked either way, and the extras bought.</summary>

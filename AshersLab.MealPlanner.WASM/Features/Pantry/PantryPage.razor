@@ -26,9 +26,9 @@
 
 <PageTitle>Pantry - Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
 <div class="pantry">
-    <PadSheet Title="Pantry" Subtitle="About how much is at home. Tap one to put it right." TestId="pantry-list">
+<LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
+    <PadSheet Title="@SheetTitle" Subtitle="@SheetSubtitle" TestId="pantry-list">
         <div class="pantry-search">
             <MudTextField T="string" @bind-Value="_search" Label="Find an ingredient" Variant="Variant.Outlined"
                           Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength"
@@ -102,10 +102,14 @@
             }
         }
     </PadSheet>
-</div>
 </LocalDataGate>
+</div>
 
 @code {
+    // The sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "Pantry";
+    private const string SheetSubtitle = "About how much is at home. Tap one to put it right.";
+
     /// <summary>How far ahead the plan is drawn down: "runs out" looks a week ahead, the sheet's "coming up" two.</summary>
     private const int AheadDays = 14;
 

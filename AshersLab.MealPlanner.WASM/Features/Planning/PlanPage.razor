@@ -30,8 +30,8 @@
                data-testid="plan-back">Plans</MudButton>
 </div>
 
-<LocalDataGate Start="Start">
 <div class="plan">
+<LocalDataGate Start="Start">
     @if (_template is null)
     {
         <PadSheet>
@@ -161,8 +161,8 @@
             </ChildContent>
         </PadSheet>
     }
-</div>
 </LocalDataGate>
+</div>
 
 @code {
     [Parameter] public Guid Id { get; set; }

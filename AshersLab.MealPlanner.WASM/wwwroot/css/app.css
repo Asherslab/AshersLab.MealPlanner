@@ -384,6 +384,38 @@ table, .num { font-variant-numeric: tabular-nums; }
     color: var(--ink-soft);
 }
 
+/* The sheet that stands in for a page until its first read lands (Data/LocalDataGate.razor): the page's head band over
+   blank paper. Nothing moves for a fast read. A slow one gets a line under the band, half a second in, sliding like the
+   pen across the sheet - a fast read is over before it would show, so it never flickers. */
+.local-data-pending-line {
+    position: relative;
+    height: 3px;
+    overflow: hidden;
+    opacity: 0;
+    animation: pending-show 240ms ease-out 500ms forwards;
+}
+.local-data-pending-line::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 40%;
+    background: var(--butter);   /* not the band's own green: against the band it read as the band twitching */
+    border-radius: 0 2px 2px 0;
+    animation: pending-slide 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.local-data-pending-paper { min-height: 7rem; }
+/* A page that is one pad wide (a NameList's), so the sheet standing in for it is too. */
+.pad-column { max-width: 640px; margin: 0 auto; }
+/* Room for the scrollbar always: where scrollbars take space (a desktop's classic ones, not a phone's or a Mac's), a page
+   growing past the window as it loads would otherwise shift the whole page sideways. */
+html { scrollbar-gutter: stable; }
+@keyframes pending-show { to { opacity: 1; } }
+@keyframes pending-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+    .local-data-pending-line { animation-duration: 1ms; }
+    .local-data-pending-line::after { animation: none; width: 100%; opacity: 0.45; }
+}
+
 /* Signed out: across the top of every page, in the unsent edge's colours - nothing is lost, it is waiting. */
 .signed-out, .update-ready, .db-waiting {
     display: flex;

@@ -281,7 +281,7 @@ try {
   }
   const leaderEvents = JSON.parse(await evaluate(inView, 'JSON.stringify(mealPlannerDatabase.events)'));
   check('the new leader opened the database itself for windows that had it open already',
-    leaderEvents.some(e => /opening mealplanner\.db for a window/.test(e)), leaderEvents.slice(-6));
+    leaderEvents.some(e => /opening mealplanner\.db on this worker/.test(e)), leaderEvents.slice(-6));
   await freeze(hidden, true);
   inView.page.errors.length = 0;
   await inView.page.send('Page.reload');

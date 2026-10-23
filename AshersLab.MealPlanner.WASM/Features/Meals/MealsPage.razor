@@ -27,7 +27,7 @@
 <PageTitle>Meals - Meal Planner</PageTitle>
 
 <div class="meals">
-    <LocalDataGate Start="Start">
+    <LocalDataGate Start="Start" Title="Meals">
         <PadSheet Title="Meals" Subtitle="@CountText()" TestId="meals-sheet">
             <form class="meals-find" @onsubmit="Add" @onsubmit:preventDefault>
                 <MudTextField T="string" @bind-Value="_newName" Label="New meal, or search" Variant="Variant.Outlined"

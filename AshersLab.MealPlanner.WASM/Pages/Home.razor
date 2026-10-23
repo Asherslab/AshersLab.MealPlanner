@@ -20,8 +20,8 @@
 
 <PageTitle>Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
 <div class="today">
+<LocalDataGate Start="Start" Title="@CalendarText.LongDay(Today)" Subtitle="@CalendarText.Week(Rotation.MondayOf(Today))">
     <PadSheet Title="@CalendarText.LongDay(Today)" Subtitle="@CalendarText.Week(Rotation.MondayOf(Today))" TestId="home-today">
         <Head>
             @if (_people.Count > 0)
@@ -82,8 +82,8 @@
 
     <MudButton Href="receipts" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Receipt"
                Class="mt-3" data-testid="home-receipts">Import a receipt</MudButton>
-</div>
 </LocalDataGate>
+</div>
 
 @code {
     private sealed record TodayEntry(Guid Id, string Meal, IReadOnlyList<Person> People, bool Skipped, bool Unsent);

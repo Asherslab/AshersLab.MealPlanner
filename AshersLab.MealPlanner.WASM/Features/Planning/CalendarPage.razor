@@ -36,8 +36,81 @@
 
 <PageTitle>Calendar - Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
+@{
+    // The band, for the sheet and for the one LocalDataGate shows until the week's data lands. Before _calendar is read,
+    // what comes from the data is what the band said last time (LastSaid, LastPeople), or a blank line the first time.
+    // The stand-in's copy carries no test ids: it is inert, and a check waiting for one must find the real band.
+    bool loaded = _calendar is not null;
+    List<Person> people = loaded ? _people : LastPeople;
+    string? said = loaded ? null : LastSaid.GetValueOrDefault(BandKey, " ");
+    string? Id(string testId) => loaded ? testId : null;
+    RenderFragment head =
+        @<text>
+            @if (_month is { } month)
+            {
+                <h2 data-testid="@Id("cal-month-title")">@month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</h2>
+                <p data-testid="@Id("cal-month-summary")">@(said ?? MonthSummary())</p>
+                <div class="cal-step">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The month before"
+                                   OnClick="() => GoToMonth(month.AddMonths(-1))" data-testid="@Id("cal-prev")"/>
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The month after"
+                                   OnClick="() => GoToMonth(month.AddMonths(1))" data-testid="@Id("cal-next")"/>
+                </div>
+            }
+            else
+            {
+                <h2 data-testid="@Id("cal-week")">@CalendarText.Week(_monday)</h2>
+                @if (said is not null)
+                {
+                    @if (said.Length > 0)
+                    {
+                        <p>@said</p>
+                    }
+                }
+                else if (WeeksOnScreen() is { Length: > 0 } weeks)
+                {
+                    <p data-testid="cal-plan-weeks">@weeks</p>
+                }
+                <div class="cal-step">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The week before"
+                                   OnClick="() => GoToWeek(_monday.AddDays(-7))" data-testid="@Id("cal-prev")"/>
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The week after"
+                                   OnClick="() => GoToWeek(_monday.AddDays(7))" data-testid="@Id("cal-next")"/>
+                </div>
+            }
+            <div class="cal-head-actions">
+                @* Week or month: two links, so the view is in the address and a reload keeps it. *@
+                <nav class="cal-views" aria-label="View">
+                    <a href="@WeekLink()" class="@(_month is null ? "is-on" : null)" aria-current="@(_month is null ? "page" : null)"
+                       data-testid="@Id("cal-view-week")">Week</a>
+                    <a href="@MonthLink()" class="@(_month is not null ? "is-on" : null)" aria-current="@(_month is not null ? "page" : null)"
+                       data-testid="@Id("cal-view-month")">Month</a>
+                </nav>
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.EventRepeat" OnClick="ApplyPlan"
+                           data-testid="@Id("cal-apply")">Fill from a plan</MudButton>
+                @if (_month is { } shown && shown != MonthGrid.MonthOf(Today))
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
+                               OnClick="() => GoToMonth(MonthGrid.MonthOf(Today))" data-testid="@Id("cal-this-month")">This month</MudButton>
+                }
+                else if (_month is null && _monday != Rotation.MondayOf(Today))
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
+                               OnClick="() => GoToWeek(Rotation.MondayOf(Today))" data-testid="@Id("cal-this-week")">This week</MudButton>
+                }
+                @* The household's magnets, as on Today: an entry carries its own only when it is for some of them. *@
+                @if (people.Count > 0)
+                {
+                    <span class="cal-household" title="@string.Join(", ", people.Select(p => p.Name))">
+                        <PeopleDots People="people"/>
+                    </span>
+                }
+            </div>
+        </text>;
+}
+
 <div class="cal">
+<LocalDataGate Start="Start" Head="head" Class="cal-pad">
     @if (_applied is not null)
     {
         <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _applied = null"
@@ -45,61 +118,7 @@
     }
 
     <PadSheet Class="cal-pad">
-        <Head>
-            @if (_month is { } month)
-            {
-                <h2 data-testid="cal-month-title">@month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</h2>
-                <p data-testid="cal-month-summary">@MonthSummary()</p>
-                <div class="cal-step">
-                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The month before"
-                                   OnClick="() => GoToMonth(month.AddMonths(-1))" data-testid="cal-prev"/>
-                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The month after"
-                                   OnClick="() => GoToMonth(month.AddMonths(1))" data-testid="cal-next"/>
-                </div>
-            }
-            else
-            {
-                <h2 data-testid="cal-week">@CalendarText.Week(_monday)</h2>
-                @if (WeeksOnScreen() is { Length: > 0 } weeks)
-                {
-                    <p data-testid="cal-plan-weeks">@weeks</p>
-                }
-                <div class="cal-step">
-                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Color="Color.Inherit" aria-label="The week before"
-                                   OnClick="() => GoToWeek(_monday.AddDays(-7))" data-testid="cal-prev"/>
-                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Inherit" aria-label="The week after"
-                                   OnClick="() => GoToWeek(_monday.AddDays(7))" data-testid="cal-next"/>
-                </div>
-            }
-            <div class="cal-head-actions">
-                @* Week or month: two links, so the view is in the address and a reload keeps it. *@
-                <nav class="cal-views" aria-label="View">
-                    <a href="@WeekLink()" class="@(_month is null ? "is-on" : null)" aria-current="@(_month is null ? "page" : null)"
-                       data-testid="cal-view-week">Week</a>
-                    <a href="@MonthLink()" class="@(_month is not null ? "is-on" : null)" aria-current="@(_month is not null ? "page" : null)"
-                       data-testid="cal-view-month">Month</a>
-                </nav>
-                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.EventRepeat" OnClick="ApplyPlan"
-                           data-testid="cal-apply">Fill from a plan</MudButton>
-                @if (_month is { } shown && shown != MonthGrid.MonthOf(Today))
-                {
-                    <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
-                               OnClick="() => GoToMonth(MonthGrid.MonthOf(Today))" data-testid="cal-this-month">This month</MudButton>
-                }
-                else if (_month is null && _monday != Rotation.MondayOf(Today))
-                {
-                    <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Today"
-                               OnClick="() => GoToWeek(Rotation.MondayOf(Today))" data-testid="cal-this-week">This week</MudButton>
-                }
-                @* The household's magnets, as on Today: an entry carries its own only when it is for some of them. *@
-                @if (_people.Count > 0)
-                {
-                    <span class="cal-household" title="@string.Join(", ", _people.Select(p => p.Name))">
-                        <PeopleDots People="_people"/>
-                    </span>
-                }
-            </div>
-        </Head>
+        <Head>@head</Head>
         <ChildContent>
             @if (_slots.Count == 0)
             {
@@ -326,8 +345,8 @@
             }
         </PadSheet>
     }
-</div>
 </LocalDataGate>
+</div>
 
 @code {
     /// <summary>"2026-10-26": the week shown, so a link or a reload keeps it.</summary>
@@ -377,7 +396,22 @@
             await Reload();
     }
 
+    // What the band said when the page last loaded, this app session: the band LocalDataGate shows while the next load
+    // runs says it again, so on a page change the band is the height it will be - the people's magnets are on a line of
+    // their own on a phone, and the week's plan line or the month's summary can wrap. The fresh data then replaces it.
+    private static List<Person> LastPeople = [];
+    private static readonly Dictionary<string, string> LastSaid = [];
+
+    private string BandKey => _month is { } month ? $"month {month}" : $"week {_monday}";
+
     protected override async Task LoadAsync(LocalDbContext db)
+    {
+        await LoadShownAsync(db);
+        LastPeople         = _people;
+        LastSaid[BandKey]  = _month is null ? WeeksOnScreen() : MonthSummary();
+    }
+
+    private async Task LoadShownAsync(LocalDbContext db)
     {
         _slots    = [.. Slot.InOrder(await db.Slots.AsNoTracking().Where(s => !s.Deleted).ToListAsync())];
         _people   = [.. Person.InOrder(await db.People.AsNoTracking().Where(p => !p.Deleted).ToListAsync())];

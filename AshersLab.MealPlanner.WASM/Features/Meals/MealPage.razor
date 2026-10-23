@@ -36,7 +36,16 @@
                    data-testid="meal-back">Meals</MudButton>
     </div>
 
+    @* Until the meal is read: its band, the name and summary lines held blank, so the band does not move when they land. *@
     <LocalDataGate Start="Start">
+        <Head>
+            <h1 class="marker meal-title">&nbsp;</h1>
+            <p class="meal-summary">&nbsp;</p>
+            <div class="meal-edit">
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Edit">Edit</MudButton>
+            </div>
+        </Head>
+        <ChildContent>
         @if (_meal is null)
         {
             <PadSheet Title="Meal not found">
@@ -141,6 +150,7 @@
                 </ChildContent>
             </PadSheet>
         }
+        </ChildContent>
     </LocalDataGate>
 </div>
 

@@ -6,11 +6,37 @@
     What a LocalDataPage shows until the browser database has opened, or when it could not - with the way out. The
     failure is a sheet of its own, said plainly in big print with the technical reason small under it, and the reset
     on the same sheet: nothing else on the page works until it is dealt with.
+
+    Until the page's first read lands, the page's own top sheet stands in for it: the head band with the page's title
+    (Title, Subtitle - the same words as the real sheet's, so the band does not change) over blank paper. Most reads
+    land in under 200 ms, measured 2026-10-23, so the rows simply fill in under a band that stays put. A progress bar there
+    flashed for 40-60 ms on every page change - a blink, not news. Only a slow read - a page's first visit after the
+    app starts can take seconds - shows a thin line under the band, and only after 500 ms (app.css,
+    .local-data-pending-line), so a fast one never flickers it.
 *@
 
 @if (Start is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4"/>
+    @if (ChildContent is not null)
+    {
+        @* Inert: a band carrying the page's own controls (Head) looks ready, but nothing on it may be used yet. *@
+        <section class="@($"pad local-data-pending {Class}".TrimEnd())" aria-busy="true" inert data-testid="local-data-loading">
+            <header class="pad-head">
+                @if (Head is not null)
+                {
+                    @Head
+                }
+                else
+                {
+                    @* Both lines always, a no-break space when unknown: the band is as tall as the real one. *@
+                    <h2>@(Title ?? " ")</h2>
+                    <p>@(Subtitle ?? " ")</p>
+                }
+            </header>
+            <div class="local-data-pending-line" role="progressbar" aria-label="Loading"></div>
+            <div class="local-data-pending-paper"></div>
+        </section>
+    }
 }
 else if (Start.State != DbInitState.READY)
 {
@@ -63,6 +89,21 @@ else
     [Parameter, EditorRequired] public LocalDatabaseStart? Start { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The page's top sheet's title, for the sheet that stands in while it loads; none when it comes from the data.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>Its subtitle, likewise.</summary>
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>
+    /// In place of Title and Subtitle, the band's whole content - for a band built from the data, like the calendar's. It
+    /// renders before the data has loaded, so whatever comes from the data must keep its line and leave it blank.
+    /// </summary>
+    [Parameter] public RenderFragment? Head { get; set; }
+
+    /// <summary>The real sheet's classes, where its band is styled by them.</summary>
+    [Parameter] public string? Class { get; set; }
 
     private bool    _asking;
     private bool    _resetting;

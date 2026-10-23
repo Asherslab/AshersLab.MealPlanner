@@ -19,8 +19,9 @@
 
 <PageTitle>Slots - Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
-    <NameList Title="Slots of the day" Subtitle="A plan shows each day's meals in this order." Unsent="_unsent"
+<div class="pad-column">
+<LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
+    <NameList Title="@SheetTitle" Subtitle="@SheetSubtitle" Unsent="_unsent"
               Items="_items" Noun="slot" TestId="slot" NewLabel="New slot" UsedByNoun="plan" AllowSameName="true"
               NameProblem="SlotRules.NameProblem"
               InUseHint="Move its entries to another slot first."
@@ -48,8 +49,13 @@
         </RowDetail>
     </NameList>
 </LocalDataGate>
+</div>
 
 @code {
+    // The sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "Slots of the day";
+    private const string SheetSubtitle = "A plan shows each day's meals in this order.";
+
     private List<Slot>         _slots = [];
     private List<Person>       _people = [];
     private List<NameListItem> _items = [];

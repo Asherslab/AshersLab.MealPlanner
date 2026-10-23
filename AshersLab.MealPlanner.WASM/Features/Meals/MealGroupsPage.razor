@@ -18,8 +18,8 @@
 <PageTitle>Meal groups - Meal Planner</PageTitle>
 
 <div class="meal-groups">
-    <LocalDataGate Start="Start">
-        <NameList Title="Meal groups" Subtitle="The Meals list shows its groups in this order." Unsent="_unsent"
+    <LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
+        <NameList Title="@SheetTitle" Subtitle="@SheetSubtitle" Unsent="_unsent"
                   Items="_items" Noun="meal group" TestId="meal-group" NewLabel="New meal group" UsedByNoun="meal"
                   NameProblem="MealGroupRules.NameProblem"
                   InUseHint="Move them to another group first."
@@ -28,6 +28,10 @@
 </div>
 
 @code {
+    // The sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "Meal groups";
+    private const string SheetSubtitle = "The Meals list shows its groups in this order.";
+
     private List<MealGroup>    _groups = [];
     private List<NameListItem> _items  = [];
     private HashSet<Guid>      _unsent = [];

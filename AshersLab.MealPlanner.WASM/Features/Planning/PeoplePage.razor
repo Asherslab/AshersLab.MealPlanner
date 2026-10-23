@@ -21,9 +21,9 @@
 
 <PageTitle>People - Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
-    <div class="people">
-        <PadSheet Title="People" Subtitle="Everyone who eats from the plan. An entry is for everyone unless it says who.">
+<div class="people">
+    <LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
+        <PadSheet Title="@SheetTitle" Subtitle="@SheetSubtitle">
             <form class="person-add" @onsubmit="Add" @onsubmit:preventDefault>
                 <MudTextField T="string" @bind-Value="_newName" Label="New person" Variant="Variant.Outlined"
                               Margin="Margin.Dense" Immediate="true" MaxLength="Names.MaxLength" Class="person-field"
@@ -104,10 +104,14 @@
                 </div>
             }
         </PadSheet>
-    </div>
-</LocalDataGate>
+    </LocalDataGate>
+</div>
 
 @code {
+    // The sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "People";
+    private const string SheetSubtitle = "Everyone who eats from the plan. An entry is for everyone unless it says who.";
+
     private List<Person> _people = [];
     private PlanBook     _plans  = null!;
     private List<CalendarEntry> _coming = [];

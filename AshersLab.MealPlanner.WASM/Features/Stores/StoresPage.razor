@@ -16,15 +16,21 @@
 
 <PageTitle>Stores - Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
-    <NameList Title="Stores" Subtitle="Where you shop: prices and the shopping list are split by store." Unsent="_unsent"
+<div class="pad-column">
+<LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
+    <NameList Title="@SheetTitle" Subtitle="@SheetSubtitle" Unsent="_unsent"
               Items="_stores" Noun="store" TestId="store" NewLabel="New store"
               NameProblem="StoreRules.NameProblem"
               InUseHint="Give the ingredients another usual store, and delete the products, first."
               OnAdd="Add" OnRename="Rename" OnDelete="Delete"/>
 </LocalDataGate>
+</div>
 
 @code {
+    // The sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "Stores";
+    private const string SheetSubtitle = "Where you shop: prices and the shopping list are split by store.";
+
     private List<NameListItem> _stores = [];
     private HashSet<Guid>      _unsent = [];
 

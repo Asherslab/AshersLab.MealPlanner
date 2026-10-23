@@ -3,3 +3,9 @@
     max-width: 640px;
     margin: 0 auto;
 }
+
+/* The people's magnets ride on the week line, not beside the date: beside it, five of them broke "Friday 23 October"
+   over two lines on a phone - and the band, as tall as however many people there are, jumped when the page's data
+   landed under the sheet that stood in for it (LocalDataGate), which cannot know them. */
+.today ::deep .pad-head > h2 { grid-column: 1 / -1; }
+.today ::deep .pad-head > .pad-head-magnets { grid-row: 2; }

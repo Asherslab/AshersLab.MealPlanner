@@ -11,13 +11,15 @@
 .shop-head { margin-top: 6px; }
 
 /* ---- The head sheet: the days on the band, then (when changing them) two dates ------------------------------------ */
-.shop-head .pad-head h1 {
+/* Through .shop, not from .shop-head: the sheet LocalDataGate shows while the list loads carries the band too, and is
+   not this page's element, so it is reached only from the wrapper. */
+.shop ::deep .shop-head .pad-head h1 {
     font-size: 1.375rem;
     line-height: 1.15;
     text-wrap: balance;
 }
 .shop-eaten-line { white-space: normal; }
-.shop-head .pad-head ::deep .shop-range-edit {
+.shop ::deep .shop-head .pad-head .shop-range-edit {
     min-height: 44px;
     color: var(--on-band);
 }

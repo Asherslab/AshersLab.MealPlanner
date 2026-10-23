@@ -290,7 +290,7 @@
          * in order, until it answers: the worker does not finish one message before starting the next.
          */
         open(database, first) {
-            note(`opening ${database} for a window that opened it on an earlier worker`);
+            note(`opening ${database} on this worker before its first statement`);
             this.opening = [first];
             this.post({ tab: null, kind: 'read', message: { data: { type: 'open', database } }, done: ok => {
                 if (ok) this.opened.add(database);

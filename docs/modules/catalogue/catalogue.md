@@ -11,6 +11,7 @@ code:
   - AshersLab.MealPlanner.Shared.Domain/Stores
   - AshersLab.MealPlanner.Shared.Domain/Categories
   - AshersLab.MealPlanner.WASM/Layout
+  - AshersLab.MealPlanner.WASM/Data/LocalDataGate.razor
   - AshersLab.MealPlanner.Shared.Domain/Ingredients
   - AshersLab.MealPlanner.Shared.Domain/Sync/OpValues.cs
   - AshersLab.MealPlanner.Shared.Data/Ingredients
@@ -173,6 +174,24 @@ and nothing is archived.
 after the first render, reloads on another window's or a sync round's change, and its `WriteAsync` is the only
 write path (`LocalOps.WriteAsync`, then a sync kick). `LocalDataGate` shows the loading and failed states, and the reset for a copy that cannot be opened
 ([browser database](../sync/browser-database.md)).
+
+**Loading is the page's own top sheet, not a progress bar.** Until a page's first read lands, the gate shows the head
+band the page's top sheet will have over blank paper (`local-data-loading`, inert); the rows fill in under a band that
+does not move. Measured 2026-10-23 in Chrome, a page change reads in 75-200 ms (Calendar about 450), so the progress
+bar that used to stand there flashed for 40-60 ms on every page change. Only a slow read - a page's first visit after
+the app starts can take seconds - gets a thin line under the band, and only after 500 ms. So a new page:
+
+- passes the gate its top sheet's `Title` and `Subtitle` (a constant both use), or, for a band built from the data,
+  `Head` - the same fragment the sheet uses, which must render before the data is read and hold a data line blank;
+  Calendar and Shopping repeat what their band said on the last visit this session, so the band is the right height;
+- puts any wrapper that sets the page's width (`.today`, `.shop`, `.pad-column`) *outside* the gate, so the stand-in
+  sheet is the real one's width; and styles the band through that wrapper (`.shop ::deep .shop-head …`), since the
+  stand-in is the gate's element, not the page's;
+- leaves the stand-in's copy of the band without `data-testid`s (`Id(...)` in Calendar and Shopping), so a check never
+  clicks an inert button.
+
+Seen with the CPU slowed sixfold, the band's box is the same in both states on every page at 390 and 1280 px, except a
+first visit to Calendar or Shopping on a phone, before there is a last visit to repeat.
 `Components/NameList.razor` is the add / rename / delete (and reorder) list stores and categories share.
 
 **Every menu reads one list, `Layout/NavModel.cs`** - route, title, icon, group, parent and the one line More and

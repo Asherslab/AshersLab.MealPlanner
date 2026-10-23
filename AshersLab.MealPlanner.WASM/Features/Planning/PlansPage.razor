@@ -16,9 +16,9 @@
 
 <PageTitle>Plans - Meal Planner</PageTitle>
 
-<LocalDataGate Start="Start">
 <div class="plans">
-    <PadSheet Title="Plans" Subtitle="Weeks of meals that repeat - the calendar is filled from them.">
+<LocalDataGate Start="Start" Title="@SheetTitle" Subtitle="@SheetSubtitle">
+    <PadSheet Title="@SheetTitle" Subtitle="@SheetSubtitle">
         @if (_plans is null || !_plans.Templates.Any())
         {
             <p class="pad-note" data-testid="plan-empty">
@@ -54,10 +54,14 @@
                        Class="plans-new-add" data-testid="plan-add">Add</MudButton>
         </form>
     </PadSheet>
-</div>
 </LocalDataGate>
+</div>
 
 @code {
+    // The sheet's head, which LocalDataGate also shows while the page loads.
+    private const string SheetTitle    = "Plans";
+    private const string SheetSubtitle = "Weeks of meals that repeat - the calendar is filled from them.";
+
     private PlanBook? _plans;
 
     private string? _newName;
