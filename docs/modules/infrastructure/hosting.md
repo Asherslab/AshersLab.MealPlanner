@@ -29,7 +29,7 @@ How to *run* it locally is in `.claude/app-local.md`; why it is one image is in 
   implicit, routing runs at the very start of the pipeline, matches every `_framework/` file to a
   `MapStaticAssets` endpoint, and the framework-files branch then ends without executing it: every
   runtime file is a 500 ("The request reached the end of the pipeline without executing the
-  endpoint"), `index.html` is still a 200, and the phone shows "Loading…" forever. The in-process test
+  endpoint"), `index.html` is still a 200, and the phone shows the splash forever. The in-process test
   host has no static-assets manifest and **cannot catch this**; check a `_framework/` file against the
   running app.
 - **gRPC clients use the app's base URI, never `/` and never a host name**

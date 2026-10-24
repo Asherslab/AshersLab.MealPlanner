@@ -1,6 +1,6 @@
 // Light or dark: this device's copy of the planner's choice (Design/AppearanceState.cs keeps it with their sign-in).
 // Loaded in <head>, before the stylesheets paint anything, so a phone left on dark never flashes the light while
-// Blazor starts - the "Loading…" page is already the night's. Never the phone's own dark mode: the choice is theirs.
+// Blazor starts - the splash is already the night's. Never the phone's own dark mode: the choice is theirs.
 (() => {
     const themeKey = 'mealplanner.appearance';
     const unsentKey = 'mealplanner.appearance.unsent';

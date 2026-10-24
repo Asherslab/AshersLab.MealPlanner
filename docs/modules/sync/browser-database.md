@@ -31,7 +31,7 @@ adding a local table, a local migration, or anything that waits on the local dat
 - **Building needs the `wasm-tools` workload, at the workload set that matches the SDK's runtime.**
   `WasmBuildNative` relinks `dotnet.native.wasm` on every build. If the workload's runtime packs are a
   newer patch than the managed runtime the SDK targets, the build succeeds and the app dies at boot with
-  `RuntimeError: function signature mismatch` in `mono_wasm_load_runtime`, page stuck on "Loading…". On a
+  `RuntimeError: function signature mismatch` in `mono_wasm_load_runtime`, page stuck on the splash. On a
   machine whose SDK lags the newest workload set (Homebrew's `dotnet`), pin it:
   `dotnet workload update --version <sdk version>` — 10.0.401 ships runtime 10.0.12 and workload manifests
   10.0.112. `dotnet workload list` shows the pinned version.

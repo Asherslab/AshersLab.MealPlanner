@@ -113,7 +113,7 @@ app.Use((context, next) =>
 // very start of the pipeline, so a _framework/ request has already been matched to a MapStaticAssets
 // endpoint when it enters that branch, the branch never executes it, and every runtime file is a 500:
 // "The request reached the end of the pipeline without executing the endpoint". The page then sits on
-// "Loading…" forever. The test host cannot catch this - it has no static-assets manifest, so the endpoint
+// the splash forever. The test host cannot catch this - it has no static-assets manifest, so the endpoint
 // that causes it never exists there. Check a _framework/ file against the running app instead.
 app.UseRouting();
 

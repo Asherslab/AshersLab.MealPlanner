@@ -77,10 +77,61 @@ body { background: var(--laminate); color: var(--ink); font-family: var(--font-b
 input, textarea { caret-color: var(--bottle); }
 table, .num { font-variant-numeric: tabular-nums; }
 
+/* ---- The splash: the home-screen icon, blown up on the laminate, while the runtime starts (index.html) -------------
+   The laminate is the manifest's background_color, so Android's own splash hands over to this one without a change of
+   colour, and this one to the app. The tile keeps the icon's fixed colours at night, as the home screen does. */
 .boot {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    background: var(--laminate);
     font-family: var(--font-body);
-    padding: 2rem;
-    color: var(--ink-soft);
+}
+.boot-tile {
+    width: min(44vw, 184px);
+    aspect-ratio: 1;
+    border-radius: 22.5%;   /* the iOS icon's corner */
+    background: #2F5D50;
+    box-shadow: var(--lifted);
+    animation: boot-rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.boot-tile svg { display: block; width: 100%; height: 100%; }
+.boot-strike { stroke-dasharray: 1; stroke-dashoffset: 1; animation: boot-strike 480ms 420ms ease-out forwards; }
+.boot-magnet { transform-box: fill-box; transform-origin: center; animation: boot-magnet 420ms 260ms cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.boot-name {
+    font: 700 1.875rem/1 var(--font-marker);
+    color: var(--bottle);
+    animation: boot-fade 400ms 180ms ease-out both;
+}
+/* The download's progress, from Blazor; it waits at full while the runtime starts. */
+.boot-bar {
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--rule);
+    overflow: hidden;
+    animation: boot-fade 400ms 600ms ease-out both;
+}
+.boot-bar span {
+    display: block;
+    height: 100%;
+    width: var(--blazor-load-percentage, 0%);
+    background: var(--tomato);
+    border-radius: inherit;
+    transition: width 200ms ease-out;
+}
+@keyframes boot-rise { from { opacity: 0; transform: translateY(12px) scale(0.94); } }
+@keyframes boot-fade { from { opacity: 0; } }
+@keyframes boot-strike { to { stroke-dashoffset: 0; } }
+@keyframes boot-magnet { from { opacity: 0; transform: translateY(-40%) scale(1.2); } }
+@media (prefers-reduced-motion: reduce) {
+    .boot-tile, .boot-name, .boot-bar, .boot-magnet { animation: none; }
+    .boot-strike { animation: none; stroke-dashoffset: 0; }
 }
 
 /* A pad sheet: white enamel paper, a bottle-green printed head band, a perforated tear along its top. */
