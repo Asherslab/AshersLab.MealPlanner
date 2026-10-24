@@ -53,11 +53,15 @@
             <rect x="152" y="226" width="150" height="14" rx="7" fill="#1D2B27"/>
             <rect x="152" y="282" width="196" height="14" rx="7" fill="#1D2B27" opacity="0.55"/>
             <rect x="152" y="338" width="122" height="14" rx="7" fill="#1D2B27" opacity="0.55"/>
-            <path class="boot-strike" d="M150 254 C 200 246, 260 250, 314 244" stroke="#D9533C" stroke-width="10" stroke-linecap="round" fill="none"/>
-            <g class="boot-magnet">
-                <circle cx="352" cy="154" r="34" fill="#D9533C"/>
-                <circle cx="352" cy="148" r="34" fill="#E46A55"/>
-            </g>
+        </svg>
+        <!-- The two that move, each its own layer over the tile: a shape inside an SVG animates on the main thread, which
+             stalls while the runtime starts; a whole element animates on the compositor. -->
+        <svg class="boot-strike" viewBox="0 0 512 512" aria-hidden="true">
+            <path d="M150 254 C 200 246, 260 250, 314 244" stroke="#D9533C" stroke-width="10" stroke-linecap="round" fill="none"/>
+        </svg>
+        <svg class="boot-magnet" viewBox="0 0 512 512" aria-hidden="true">
+            <circle cx="352" cy="154" r="34" fill="#D9533C"/>
+            <circle cx="352" cy="148" r="34" fill="#E46A55"/>
         </svg>
     </div>
     <div class="boot-name">Meal Planner</div>
