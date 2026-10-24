@@ -35,36 +35,36 @@
 </head>
 
 <body>
-<div id="app">
-    <!--
-        The splash while the runtime downloads and starts; Blazor replaces it on first render. The icon is drawn inline
-        (icons/icon.svg without its square) so it paints with the HTML, before any other request. The bar follows the
-        download through --blazor-load-percentage, which Blazor sets on <html>.
-    -->
-    <div class="boot" role="status" aria-label="Loading Meal Planner">
-        <div class="boot-tile">
-            <svg viewBox="0 0 512 512" aria-hidden="true">
-                <rect x="124" y="118" width="264" height="292" rx="18" fill="#FBFBF6"/>
-                <rect x="124" y="118" width="264" height="70" rx="18" fill="#DDE9DF"/>
-                <rect x="124" y="160" width="264" height="28" fill="#DDE9DF"/>
-                <g fill="#2F5D50">
-                    <circle cx="146" cy="118" r="7"/><circle cx="176" cy="118" r="7"/><circle cx="206" cy="118" r="7"/><circle cx="236" cy="118" r="7"/>
-                    <circle cx="266" cy="118" r="7"/><circle cx="296" cy="118" r="7"/><circle cx="326" cy="118" r="7"/><circle cx="356" cy="118" r="7"/>
-                </g>
-                <rect x="152" y="226" width="150" height="14" rx="7" fill="#1D2B27"/>
-                <rect x="152" y="282" width="196" height="14" rx="7" fill="#1D2B27" opacity="0.55"/>
-                <rect x="152" y="338" width="122" height="14" rx="7" fill="#1D2B27" opacity="0.55"/>
-                <path class="boot-strike" d="M150 254 C 200 246, 260 250, 314 244" stroke="#D9533C" stroke-width="10" stroke-linecap="round" fill="none" pathLength="1"/>
-                <g class="boot-magnet">
-                    <circle cx="352" cy="154" r="34" fill="#D9533C"/>
-                    <circle cx="352" cy="148" r="34" fill="#E46A55"/>
-                </g>
-            </svg>
-        </div>
-        <div class="boot-name">Meal Planner</div>
-        <div class="boot-bar"><span></span></div>
+<!--
+    The splash, over the app rather than inside #app, so it outlives Blazor's first render: js/splash.js lifts it once
+    the app has rendered and its few seconds are up. The icon is drawn inline (icons/icon.svg without its square) so it
+    paints with the HTML, before any other request. The bar is a fixed fill for those seconds, not the download.
+-->
+<div class="boot" role="status" aria-label="Loading Meal Planner">
+    <div class="boot-tile">
+        <svg viewBox="0 0 512 512" aria-hidden="true">
+            <rect x="124" y="118" width="264" height="292" rx="18" fill="#FBFBF6"/>
+            <rect x="124" y="118" width="264" height="70" rx="18" fill="#DDE9DF"/>
+            <rect x="124" y="160" width="264" height="28" fill="#DDE9DF"/>
+            <g fill="#2F5D50">
+                <circle cx="146" cy="118" r="7"/><circle cx="176" cy="118" r="7"/><circle cx="206" cy="118" r="7"/><circle cx="236" cy="118" r="7"/>
+                <circle cx="266" cy="118" r="7"/><circle cx="296" cy="118" r="7"/><circle cx="326" cy="118" r="7"/><circle cx="356" cy="118" r="7"/>
+            </g>
+            <rect x="152" y="226" width="150" height="14" rx="7" fill="#1D2B27"/>
+            <rect x="152" y="282" width="196" height="14" rx="7" fill="#1D2B27" opacity="0.55"/>
+            <rect x="152" y="338" width="122" height="14" rx="7" fill="#1D2B27" opacity="0.55"/>
+            <path class="boot-strike" d="M150 254 C 200 246, 260 250, 314 244" stroke="#D9533C" stroke-width="10" stroke-linecap="round" fill="none"/>
+            <g class="boot-magnet">
+                <circle cx="352" cy="154" r="34" fill="#D9533C"/>
+                <circle cx="352" cy="148" r="34" fill="#E46A55"/>
+            </g>
+        </svg>
     </div>
+    <div class="boot-name">Meal Planner</div>
+    <div class="boot-bar"><span></span></div>
 </div>
+
+<div id="app"></div>
 
 <div id="blazor-error-ui">
     An unhandled error has occurred.
@@ -72,6 +72,7 @@
     <span class="dismiss">x</span>
 </div>
 
+<script src="js/splash.js"></script>
 <!-- Plain name, no fingerprint marker - see OverrideHtmlAssetPlaceholders in the csproj. -->
 <script src="_framework/blazor.webassembly.js"></script>
 <script src="_content/MudBlazor/MudBlazor.min.js"></script>

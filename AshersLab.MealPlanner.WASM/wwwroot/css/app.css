@@ -79,10 +79,15 @@ table, .num { font-variant-numeric: tabular-nums; }
 
 /* ---- The splash: the home-screen icon, blown up on the laminate, while the runtime starts (index.html) -------------
    The laminate is the manifest's background_color, so Android's own splash hands over to this one without a change of
-   colour, and this one to the app. The tile keeps the icon's fixed colours at night, as the home screen does. */
+   colour, and this one to the app. The tile keeps the icon's fixed colours at night, as the home screen does. It lies
+   over the app for --boot-hold at least, then fades (js/splash.js reads the same value). Everything that moves is
+   opacity or transform, which the compositor runs while the main thread is busy starting the runtime. */
 .boot {
+    --boot-hold: 4500ms;
     position: fixed;
     inset: 0;
+    z-index: 1900;   /* over MudBlazor's dialogs and snackbars; under #blazor-error-ui, so a failed start still shows */
+    transition: opacity 360ms ease-out;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -101,14 +106,15 @@ table, .num { font-variant-numeric: tabular-nums; }
     animation: boot-rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .boot-tile svg { display: block; width: 100%; height: 100%; }
-.boot-strike { stroke-dasharray: 1; stroke-dashoffset: 1; animation: boot-strike 480ms 420ms ease-out forwards; }
+.boot-strike { transform-box: fill-box; transform-origin: left; animation: boot-strike 480ms 420ms ease-out both; }
 .boot-magnet { transform-box: fill-box; transform-origin: center; animation: boot-magnet 420ms 260ms cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 .boot-name {
     font: 700 1.875rem/1 var(--font-marker);
     color: var(--bottle);
     animation: boot-fade 400ms 180ms ease-out both;
 }
-/* The download's progress, from Blazor; it waits at full while the runtime starts. */
+.boot.boot-done { opacity: 0; pointer-events: none; }
+/* A fixed fill over the hold, not the download: Blazor's percentage arrives in a few large steps and read as a stutter. */
 .boot-bar {
     width: 120px;
     height: 4px;
@@ -120,18 +126,19 @@ table, .num { font-variant-numeric: tabular-nums; }
 .boot-bar span {
     display: block;
     height: 100%;
-    width: var(--blazor-load-percentage, 0%);
     background: var(--tomato);
     border-radius: inherit;
-    transition: width 200ms ease-out;
+    transform-origin: left;
+    animation: boot-fill var(--boot-hold) cubic-bezier(0.45, 0.05, 0.35, 1) both;
 }
 @keyframes boot-rise { from { opacity: 0; transform: translateY(12px) scale(0.94); } }
 @keyframes boot-fade { from { opacity: 0; } }
-@keyframes boot-strike { to { stroke-dashoffset: 0; } }
+@keyframes boot-fill { from { transform: scaleX(0); } }
+@keyframes boot-strike { from { transform: scaleX(0); } }
 @keyframes boot-magnet { from { opacity: 0; transform: translateY(-40%) scale(1.2); } }
 @media (prefers-reduced-motion: reduce) {
-    .boot-tile, .boot-name, .boot-bar, .boot-magnet { animation: none; }
-    .boot-strike { animation: none; stroke-dashoffset: 0; }
+    .boot { transition: none; }
+    .boot-tile, .boot-name, .boot-bar, .boot-magnet, .boot-strike { animation: none; }
 }
 
 /* A pad sheet: white enamel paper, a bottle-green printed head band, a perforated tear along its top. */
